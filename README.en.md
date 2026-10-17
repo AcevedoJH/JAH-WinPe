@@ -15,8 +15,10 @@ just the `menu.bat` file.
 
 ```
 +--------------------------------------------------------------+
+|   Elige idioma / Choose language:  [1] Español   [2] English |
++--------------------------------------------------------------+
 |   JAH-WinPe  -  Herramienta de Soporte Técnico               |
-|   Versión 1.1.0  -  Fase 2  -  Entorno: Windows / WinPE      |
+|   Versión 1.2.0  -  Fase 2.5  -  Entorno: Windows / WinPE    |
 +--------------------------------------------------------------+
 |   [1]  Preparación rápida de disco   limpieza y formato      |
 |   [2]  Borrado seguro / Sanitización destrucción lógica      |
@@ -26,9 +28,8 @@ just the `menu.bat` file.
 +--------------------------------------------------------------+
 ```
 
-> *Note:* the on-screen UI text is currently in **Spanish**. The UI itself is
-> a separate concern from this documentation; localization is planned on the
-> roadmap below.
+> *Note:* the on-screen UI text is available in **Spanish and English**;
+> pick the language on the first screen when the tool starts.
 
 ---
 
@@ -38,13 +39,15 @@ just the `menu.bat` file.
 |-------|---------|--------|
 | **1** | Interface: welcome screen, menu, help, advanced console, shutdown | ✅ Done |
 | **2** | `diskpart` disk modules: quick preparation and secure erase | ✅ Done |
-| **3** | Activity log, BIOS/UEFI detection, ES/EN localization | ⏳ Pending |
+| **2.5** | **Multilingual** UI (Español / English) + bilingual README | ✅ Done |
+| **3** | Activity log, BIOS/UEFI detection, more languages | ⏳ Pending |
 
 > **Important:** options **[1]** and **[2]** now perform **real destructive
 > operations** on the selected disk. Nothing runs unless you type a
-> confirmation word (`PREPARAR` or `BORRAR`), and the secure erase also asks
-> you to retype the disk number. Before confirming, the program **shows the
-> `diskpart` script** it is about to run.
+> confirmation word (`PREPARAR` / `BORRAR` in Spanish, `PREPARE` / `ERASE` in
+> English), and the secure erase also asks you to retype the disk number.
+> Before confirming, the program **shows the `diskpart` script** it is about
+> to run.
 >
 > If you only want to inspect the machine without changing anything, use
 > option **[3] Advanced Console**.
@@ -69,9 +72,11 @@ just the `menu.bat` file.
 2. Run it:
    - double-click `menu.bat`, or
    - from a console: `menu.bat`
-3. Navigate the menus by typing the option number
+3. **Pick a language** on the first screen (`[1] Español` / `[2] English`).
+   If you don't, the tool continues in Spanish.
+4. Navigate the menus by typing the option number
    (if your console does not react to a single key, press `ENTER` afterwards).
-4. From **[3] Advanced Console** you can run any command;
+5. From **[3] Advanced Console** you can run any command;
    type `exit` to return to the main menu.
 
 ---
@@ -85,6 +90,30 @@ just the `menu.bat` file.
 | `[3]` | Advanced Console | Opens an interactive `cmd`; `exit` returns to the menu | Working |
 | `[4]` | System help | Quick guide to `diskpart`, `chkdsk`, `format`, `wmic`… + native `help` | Working |
 | `[5]` | Exit / Shut down | Leave the script or power off (with confirmation) | Working |
+
+---
+
+## UI language (Español / English)
+
+On start-up the tool shows a language selection screen:
+
+```
+  Selecciona el idioma / Select the language:
+
+     [1]  Español
+     [2]  English
+```
+
+- All **visible text** (menus, help, warnings and confirmations) switches
+  language. **Code comments** stay in Spanish: they are project
+  documentation, not interface.
+- The **logic is single**: disk modules, validations and confirmations behave
+  exactly the same in both languages (only the text changes). Translating
+  cannot introduce behavioural differences.
+- The language is **not remembered** between runs: it is always asked. This
+  is intentional (a workshop USB drive is used by several people).
+- To **add or fix texts**, edit the `:IDIOMA_ES` or `:IDIOMA_EN` block at the
+  end of `menu.bat` (see "Technical notes", item 12).
 
 ---
 
@@ -102,7 +131,8 @@ them in order. `menu.bat` leverages that and always does the same:
 3. **Generates the script** in the system temp folder (`_jah_diskpart.txt`).
 4. **Prints the script on screen** so you can read it before it runs.
 5. **Asks for written confirmation**: the word `PREPARAR` or `BORRAR`
-   (for the secure erase, plus retyping the disk number).
+   (`PREPARE` / `ERASE` when the UI is in English). For the secure erase you
+   must also retype the disk number.
 6. **Runs** `diskpart /s` without capturing the output, so you can see the
    progress (`clean all` can take hours).
 7. **Verifies** by listing disks and volumes again.
@@ -127,7 +157,9 @@ menu's UTF-8).
 
 ```
 JAH-WinPe/
-├─ menu.bat        Main workshop interface (Batch, fully commented)
+├─ menu.bat        Main workshop interface (Batch, fully commented).
+│                  It contains both language dictionaries at the end
+│                  (:IDIOMA_ES and :IDIOMA_EN).
 ├─ README.md       Documentation (Español, default)
 ├─ README.en.md    Documentation (English)
 ├─ .gitignore      What must NOT be versioned (junk, images, logs…)
@@ -171,7 +203,18 @@ These conventions are explained in detail inside `menu.bat`:
     Lines written into that file must not contain redirection symbols, because
     `cmd.exe` would interpret them.
 11. **Before any destructive action** you must type a literal word
-    (`PREPARAR` / `BORRAR`): one extra `ENTER` deletes nothing.
+    (`PREPARAR` / `BORRAR`, or `PREPARE` / `ERASE` in English): one extra
+    `ENTER` deletes nothing.
+12. **Multilingual UI (i18n) through variable dictionaries.** There are no
+    translation files: the language is resolved with **two blocks of text
+    variables** (`:IDIOMA_ES` and `:IDIOMA_EN`) that define **the same names**
+    (`T_MENU_01`, `T_D2_21`…) with different values. On start-up the
+    `:CARGAR_IDIOMA` subroutine runs the block of the active language using a
+    **label built on the fly** (`goto IDIOMA_%LANG%`), and from then on the
+    whole program prints `%T_xxx%`. The logic is not duplicated: if a new text
+    is missing in one language, it only shows up blank there. When editing the
+    blocks, remember they **cannot contain** double quotes `"` or the `%`
+    sign inside the value, and arrows are still written `-^>`.
 
 ---
 
@@ -179,8 +222,8 @@ These conventions are explained in detail inside `menu.bat`:
 
 - Every irreversible action asks for **double confirmation**; on any doubtful
   answer the script **does nothing** and goes back to the menu. Specifically:
-  you type the word `PREPARAR`/`BORRAR` and, for the secure erase, also retype
-  the disk number.
+  you type the word `PREPARAR`/`BORRAR` (`PREPARE`/`ERASE` in English) and,
+  for the secure erase, also retype the disk number.
 - **Golden rule:** always verify the correct disk
   (`diskpart` → `list disk` → `detail disk` / `list volume`) before touching
   anything. Compare its size against the label on the physical disk.
@@ -197,6 +240,9 @@ These conventions are explained in detail inside `menu.bat`:
 
 ## Manual test checklist
 
+- [ ] The language screen appears before the welcome screen and `[1] Español`
+      / `[2] English` switches every text (menu, help, warnings).
+- [ ] In English, the destructive confirmation asks for `PREPARE` / `ERASE`.
 - [ ] The menu footer shows `Modo de entrada: CHOICE` (or `SETP` on WinPE
       without `choice.exe`).
 - [ ] Pressing an invalid key: just a *beep*, the script does **not** close.
@@ -227,11 +273,14 @@ These conventions are explained in detail inside `menu.bat`:
       `convert gpt`, primary partition, quick NTFS, drive letter).
 - [x] **Secure erase** flow for **[2]** (`clean all` + verification).
 - [x] Written confirmation (keyword) before every destructive action.
+- [x] **Multilingual** UI Español / English (dictionaries inside `menu.bat` +
+      language selector on start-up).
 - [ ] **BIOS/UEFI** firmware detection to choose the **MBR/GPT** scheme alone.
 - [ ] Activity **log** (on the boot volume or `%TEMP%`).
 - [ ] Read the real disk size to estimate `clean all` duration.
 - [ ] Read-only mode / machine inventory (`systeminfo`, `wmic`).
-- [ ] **UI localization** (Español / English) via a language file.
+- [ ] Remember the chosen language between runs (file next to the script).
+- [ ] More languages: add an `:IDIOMA_xx` block and its option in the selector.
 
 ---
 

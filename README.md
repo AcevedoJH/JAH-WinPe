@@ -15,8 +15,10 @@ dependencias externas: solo el archivo `menu.bat`.
 
 ```
 +--------------------------------------------------------------+
+|   Elige idioma / Choose language:  [1] Español   [2] English |
++--------------------------------------------------------------+
 |   JAH-WinPe  -  Herramienta de Soporte Técnico               |
-|   Versión 1.1.0  -  Fase 2  -  Entorno: Windows / WinPE      |
+|   Versión 1.2.0  -  Fase 2.5  -  Entorno: Windows / WinPE    |
 +--------------------------------------------------------------+
 |   [1]  Preparación rápida de disco   limpieza y formato      |
 |   [2]  Borrado seguro / Sanitización destrucción lógica      |
@@ -34,13 +36,15 @@ dependencias externas: solo el archivo `menu.bat`.
 |------|-----------|--------|
 | **1** | Interfaz: bienvenida, menú, ayuda, consola avanzada, apagado | ✅ Completada |
 | **2** | Módulos de disco con `diskpart`: maquetación rápida y borrado seguro | ✅ Completada |
-| **3** | Log de actividad, detección BIOS/UEFI, localización ES/EN | ⏳ Pendiente |
+| **2.5** | Interfaz **multilenguaje** (Español / English) + README bilingüe | ✅ Completada |
+| **3** | Log de actividad, detección BIOS/UEFI, más idiomas | ⏳ Pendiente |
 
 > **Importante:** las opciones **[1]** y **[2]** ya ejecutan operaciones
 > **destructivas reales** sobre el disco elegido. Ninguna actúa sin que
-> teclees una palabra de confirmación (`PREPARAR` o `BORRAR`), y el borrado
-> seguro pide además repetir el número de disco. Antes de confirmar, el
-> programa **muestra el guion de `diskpart`** que va a ejecutar.
+> teclees una palabra de confirmación (`PREPARAR` / `BORRAR` en Español,
+> `PREPARE` / `ERASE` en English), y el borrado seguro pide además repetir
+> el número de disco. Antes de confirmar, el programa **muestra el guion de
+> `diskpart`** que va a ejecutar.
 >
 > Si solo quieres mirar el equipo sin modificar nada, usa la opción
 > **[3] Consola Avanzada**.
@@ -65,9 +69,11 @@ dependencias externas: solo el archivo `menu.bat`.
 2. Ejecútalo:
    - Doble clic sobre `menu.bat`, o
    - desde una consola: `menu.bat`
-3. Muévete por los menús tecleando el número de la opción
+3. **Elige idioma** en la primera pantalla (`[1] Español` / `[2] English`).
+   Si no eliges, el programa continúa en Español.
+4. Muévete por los menús tecleando el número de la opción
    (si tu consola no reacciona a una sola tecla, termina con `ENTER`).
-4. Desde **[3] Consola Avanzada** puedes ejecutar cualquier comando;
+5. Desde **[3] Consola Avanzada** puedes ejecutar cualquier comando;
    escribe `exit` para volver al menú principal.
 
 ---
@@ -81,6 +87,31 @@ dependencias externas: solo el archivo `menu.bat`.
 | `[3]` | Consola Avanzada | Abre un `cmd` interactivo y vuelve al menú con `exit` | Operativa |
 | `[4]` | Ayuda del sistema | Guía rápida de `diskpart`, `chkdsk`, `format`, `wmic`… + `help` nativo | Operativa |
 | `[5]` | Salir / Apagar equipo | Salir del script o apagar (con confirmación) | Operativa |
+
+---
+
+## Idioma de la interfaz (Español / English)
+
+Al arrancar, el programa muestra una pantalla de selección de idioma:
+
+```
+  Selecciona el idioma / Select the language:
+
+     [1]  Español
+     [2]  English
+```
+
+- Todo el **texto visible** (menús, ayuda, avisos y confirmaciones) cambia de
+  idioma. Los **comentarios del código** se quedan en Español: son
+  documentación del proyecto, no interfaz.
+- La **lógica es única**: los módulos de disco, las validaciones y las
+  confirmaciones se ejecutan exactamente igual en los dos idiomas (solo
+  cambia el texto). Traducir no puede introducir diferencias de
+  comportamiento.
+- El idioma **no se recuerda** entre ejecuciones: se pregunta siempre. Es
+  intencionado (un USB de taller lo usan varias personas).
+- Para **añadir o corregir textos**, edita el bloque `:IDIOMA_ES` o
+  `:IDIOMA_EN` al final de `menu.bat` (ver "Notas técnicas", punto 12).
 
 ---
 
@@ -99,7 +130,8 @@ igual:
 3. **Genera el guion** en la carpeta temporal del sistema (`_jah_diskpart.txt`).
 4. **Muestra el guion en pantalla** para que lo leas antes de ejecutarlo.
 5. **Pide confirmación escrita**: la palabra `PREPARAR` o `BORRAR`
-   (en el borrado seguro, además, repetir el número de disco).
+   (`PREPARE` / `ERASE` si la interfaz está en English). En el borrado
+   seguro, además, hay que repetir el número de disco.
 6. **Ejecuta** `diskpart /s` sin capturar la salida, para que veas el avance
    (en `clean all` puede tardar horas).
 7. **Verifica** volviendo a listar discos y volúmenes.
@@ -124,7 +156,9 @@ viera con caracteres raros en la consola, puede corregirse con
 
 ```
 JAH-WinPe/
-├─ menu.bat        Interfaz principal del taller (Batch, comentado)
+├─ menu.bat        Interfaz principal del taller (Batch, comentado).
+│                  Incluye, al final, los dos diccionarios de idioma
+│                  (:IDIOMA_ES y :IDIOMA_EN).
 ├─ README.md       Documentación (Español, por defecto)
 ├─ README.en.md    Documentación (English)
 ├─ .gitignore      Qué NO debe versionarse (basura, imágenes, logs…)
@@ -169,7 +203,19 @@ Estas convenciones están explicadas en detalle dentro de `menu.bat`:
     al terminar. En las líneas que se escriben hacia el fichero no puede
     haber símbolos de redirección, porque `cmd.exe` los interpretaría.
 11. **Antes de toda acción destructiva** hay que teclear una palabra
-    literal (`PREPARAR` / `BORRAR`): un `ENTER` de más no borra nada.
+    literal (`PREPARAR` / `BORRAR`, o `PREPARE` / `ERASE` en English): un
+    `ENTER` de más no borra nada.
+12. **Multilenguaje (i18n) con diccionarios de variables.** No hay ficheros
+    de traducción: el idioma se resuelve con **dos bloques de variables de
+    texto** (`:IDIOMA_ES` y `:IDIOMA_EN`) que definen **los mismos nombres**
+    (`T_MENU_01`, `T_D2_21`…) con distinto valor. Al arrancar, la subrutina
+    `:CARGAR_IDIOMA` ejecuta el bloque del idioma activo mediante una
+    **etiqueta construida al vuelo** (`goto IDIOMA_%LANG%`), y a partir de
+    ahí todo el programa imprime `%T_xxx%`. La lógica no se duplica: si un
+    texto nuevo falta en un idioma, solo sale en blanco ahí. Al editar los
+    bloques, recuerda que **no pueden contener** comillas dobles `"` ni el
+    signo `%` dentro del valor, y que las flechas se siguen escribiendo
+    `-^>`.
 
 ---
 
@@ -177,8 +223,9 @@ Estas convenciones están explicadas en detalle dentro de `menu.bat`:
 
 - Toda acción irreversible pide **doble confirmación**; ante cualquier
   respuesta dudosa, el script **no ejecuta nada** y vuelve al menú.
-  Concretamente: teclear la palabra `PREPARAR`/`BORRAR` y, en el borrado
-  seguro, repetir además el número de disco.
+  Concretamente: teclear la palabra `PREPARAR`/`BORRAR`
+  (`PREPARE`/`ERASE` en English) y, en el borrado seguro, repetir además el
+  número de disco.
 - **Regla de oro:** verifica siempre el disco correcto
   (`diskpart` → `list disk` → `detail disk` / `list volume`) antes de tocar
   nada. Compara el tamaño con la etiqueta física del disco.
@@ -196,6 +243,9 @@ Estas convenciones están explicadas en detalle dentro de `menu.bat`:
 
 ## Cómo probar (checklist manual)
 
+- [ ] La pantalla de idioma aparece antes de la bienvenida y `[1] Español`
+      / `[2] English` cambia todos los textos (menú, ayuda, avisos).
+- [ ] Con English, la confirmación destructiva pide `PREPARE` / `ERASE`.
 - [ ] El pie del menú muestra `Modo de entrada: CHOICE` (o `SETP` en WinPE
       sin `choice.exe`).
 - [ ] Pulsar una tecla no válida: solo *beep*, el script **no** se cierra.
@@ -226,11 +276,14 @@ Estas convenciones están explicadas en detalle dentro de `menu.bat`:
       `clean`, `convert gpt`, partición primaria, NTFS rápido, letra).
 - [x] Flujo de **borrado seguro** para **[2]** (`clean all` + verificación).
 - [x] Confirmación escrita (palabra clave) antes de toda acción destructiva.
+- [x] Interfaz **multilenguaje** Español / English (diccionarios dentro de
+      `menu.bat` + selector de idioma al arrancar).
 - [ ] Detección de firmware **BIOS/UEFI** para elegir esquema **MBR/GPT** solo.
 - [ ] **Log** de actividad (en la unidad de arranque o `%TEMP%`).
 - [ ] Lectura del tamaño real del disco para estimar el tiempo de `clean all`.
 - [ ] Modo "solo lectura" / inventario del equipo (`systeminfo`, `wmic`).
-- [ ] **Localización de la interfaz** (Español / English) por archivo de idioma.
+- [ ] Guardar el idioma elegido entre ejecuciones (fichero junto al script).
+- [ ] Más idiomas: añadir un bloque `:IDIOMA_xx` y su opción en el selector.
 
 ---
 

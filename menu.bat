@@ -4,16 +4,18 @@ REM  JAH-WinPe  ::  menu.bat  -  INTERFAZ PRINCIPAL DEL TALLER
 REM =====================================================================
 REM  PROYECTO   : JAH-WinPe - herramienta de soporte tecnico en consola
 REM               (Windows completo y WinPE de arranque).
-REM  COMPONENTE : menu.bat -^> pantalla de bienvenida, menu principal,
-REM               ayuda del sistema, modulos de disco con diskpart y
-REM               salida ordenada.
-REM  FASE       : 2 (modulos de disco ACTIVOS: maquetacion rapida y
-REM               borrado seguro, siempre con confirmacion escrita).
-REM  VERSION    : 1.1.0
+REM  COMPONENTE : menu.bat -^> seleccion de idioma, pantalla de bienvenida,
+REM               menu principal, ayuda del sistema, modulos de disco con
+REM               diskpart y salida ordenada.
+REM  FASE       : 2.5 (modulos de disco ACTIVOS: maquetacion rapida y
+REM               borrado seguro, siempre con confirmacion escrita, y
+REM               programa MULTILENGUAJE: castellano / ingles).
+REM  VERSION    : 1.2.0
 REM
 REM  --------------------------------------------------------------------
 REM  MAPA DE NAVEGACION (etiquetas del script)
 REM  --------------------------------------------------------------------
+REM    SELECCION_IDIOMA -^> elegir castellano/ingles -^> BIENVENIDA
 REM    BIENVENIDA  -^> bienvenida una sola vez -^> MENU
 REM    MENU        -^> [1] OP_DISCO ......... maquetacion guiada (diskpart)
 REM                -^> [2] OP_SANITIZAR ..... borrado seguro    (diskpart)
@@ -23,6 +25,13 @@ REM                -^> [5] OP_SALIR ......... apagar / salir (con confirmacion)
 REM    FIN_SCRIPT  -^> salida limpia del script
 REM    FIN_APAGADO -^> salida tras solicitar el apagado
 REM    (al final)  -^> subrutinas internas invocadas con 'call :etiqueta'
+REM
+REM    MULTILENGUAJE (i18n) -^> ver PASO 2 y ANEXO A:
+REM      CARGAR_IDIOMA ..... carga el bloque de textos del idioma activo
+REM      IDIOMA_ES ......... diccionario castellano (%LANG%=ES)
+REM      IDIOMA_EN ......... diccionario ingles    (%LANG%=EN)
+REM      (todo el texto visible sale de variables %T_xxx%: la logica de
+REM       los modulos de disco es UNICA y no se duplica por idioma)
 REM
 REM    FLUJO DE LAS OPCIONES DE DISCO (comparten las mismas piezas):
 REM      PREPARAR_ENTORNO .. carpeta escribible + diskpart + permisos
@@ -54,13 +63,44 @@ REM      de toda la asignacion): evita espacios finales accidentales.
 REM   4) Expansion retrasada (DelayedExpansion) NO se usa en Fase 1:
 REM      asi los signos de exclamacion del texto se imprimen tal cual.
 REM   5) Ninguna accion destructiva se ejecuta sin confirmacion previa.
-REM      Ademas de pulsar la opcion hay que TECLEAR una palabra literal
-REM      (PREPARAR / BORRAR): un tecleo al azar jamas borra un disco.
+REM      Ademas de pulsar la opcion hay que TECLEAR una palabra literal:
+REM      en castellano PREPARAR / BORRAR, en ingles PREPARE / ERASE (se
+REM      guardan en T_CFM_05 y T_CFM_06). Un tecleo al azar jamas borra
+REM      un disco. Nota: son palabras SIN espacios, porque el script las
+REM      compara tras quitar espacios al texto tecleado.
 REM   6) Los comandos de diskpart se escriben en ficheros TEMPORALES con
 REM      'echo'. En esas lineas no pueden aparecer simbolos de
 REM      redireccion sueltos: cmd los interpretaria como parte del
 REM      redireccionamiento y no como texto. Por eso los guiones que
 REM      generamos contienen solo comandos simples, sin caracteres raros.
+REM   7) MULTILENGUAJE: ningun texto visible para el tecnico se escribe
+REM      'a pelo' en las secciones de flujo. Todo sale de variables
+REM      %T_xxx% del diccionario (ANEXO A). Si anades un texto, anadelo
+REM      con el MISMO nombre en los DOS idiomas o quedara en blanco en el
+REM      idioma que no lo tenga. Las variables de idioma se llaman igual
+REM      en ambos bloques a proposito: asi el codigo es unico.
+REM --------------------------------------------------------------------
+REM
+REM  INTERNACIONALIZACION (i18n) - RESUMEN PARA MANTENIMIENTO:
+REM   Patron usado: DOS diccionarios de variables + despacho por etiqueta
+REM   dinamica. Al arrancar, el PASO 1 hace:
+REM       set "LANG=ES"          (idioma por defecto)
+REM       call :CARGAR_IDIOMA    (ejecuta el bloque del idioma activo)
+REM   y CARGAR_IDIOMA resuelve el bloque con un salto de nombre construido
+REM   en el momento:
+REM       goto IDIOMA_%LANG%     -^> IDIOMA_ES  o  IDIOMA_EN
+REM   Cada bloque asigna las MISMAS variables T_xxx con su texto; el
+REM   bloque termina en 'exit /b 0' y devuelve el control al 'call'.
+REM   Ventajas de este diseno frente a duplicar el flujo por idioma:
+REM     - La logica (diskpart, validaciones, confirmaciones) existe UNA
+REM       sola vez: imposible que un idioma y otro se comporten distinto.
+REM     - Traducir = editar un unico anexo, sin tocar el flujo.
+REM     - Sin expansion retrasada y sin doble expansion ('call set'): el
+REM       texto jamas se re-interpreta y no hay sorpresas con acentos,
+REM       exclamaciones ni signos especiales.
+REM   Alternativa documentada y descartada: nombres de variable dinamicos
+REM       call set "T_MENU_01=%%%LANG%_MENU_01%%"
+REM   (funciona, pero es menos legible y mas fragil; ver PASO 2).
 REM
 REM  COMO HABLA ESTE SCRIPT CON DISKPART (resumen para mantenimiento):
 REM   diskpart admite un guion en texto plano mediante la opcion /s:
@@ -75,7 +115,10 @@ REM  PENDIENTE PARA FASES SIGUIENTES:
 REM   - Registro de actividad (log) persistente en la unidad de arranque.
 REM   - Deteccion de firmware (BIOS/UEFI) para elegir GPT o MBR solo.
 REM   - Lectura del tamano real del disco para estimar el 'clean all'.
-REM   - Localizacion de textos (castellano / ingles).
+REM   - Recordar el idioma elegido entre ejecuciones (hoy se pregunta
+REM     siempre; seria guardarlo en un fichero junto al script).
+REM   - Traducir tambien los comentarios del codigo (hoy van en
+REM     castellano a proposito: son documentacion del proyecto).
 REM =====================================================================
 
 REM =====================================================================
@@ -105,8 +148,8 @@ REM --- Identidad de la herramienta --------------------------------------
 REM Centralizamos los textos repetidos: si manana cambiamos de version
 REM solo tocamos aqui y se actualiza cabecera, titulo y mensajes.
 set "TOOL_NAME=JAH-WinPe"
-set "TOOL_VER=1.1.0"
-set "TOOL_FASE=2"
+set "TOOL_VER=1.2.0"
+set "TOOL_FASE=2.5"
 
 REM --- Apariencia de la consola -----------------------------------------
 REM title  -^> texto de la barra de titulo de la ventana.
@@ -119,7 +162,7 @@ REM color  -^> DOS digitos hexadecimales: PRIMERO el fondo, SEGUNDO el
 REM            texto.  0 = fondo negro, A = texto verde claro.
 REM            Otros ejemplos: 07 gris, 0B cian, 0E amarillo,
 REM            0F blanco brillante. Solo hay que cambiar esta linea.
-title %TOOL_NAME% - Soporte Tecnico v%TOOL_VER% - Fase %TOOL_FASE%
+title %TOOL_NAME% v%TOOL_VER%
 mode con: cols=94 lines=44 >nul 2>&1
 color 0A
 
@@ -145,62 +188,169 @@ REM       el disco del sistema en ejecucion (el que NO hay que borrar).
 set "ES_WINPE=NO"
 if exist "%SystemRoot%\System32\wpeutil.exe" set "ES_WINPE=SI"
 
-REM De aqui saltamos directamente a la pantalla de bienvenida. Se usa
-REM 'goto' (salto sin retorno) porque es el flujo normal del programa.
-goto BIENVENIDA
+REM --- Idioma por defecto ----------------------------------------------
+REM 'LANG' guarda el idioma activo: ES (castellano) o EN (ingles). Se
+REM deja en ES desde el primer instante y se cargan sus textos ANTES de
+REM preguntar nada, para que incluso los mensajes de error de la pantalla
+REM de idioma salgan en un idioma conocido (castellano) y nunca en blanco.
+set "LANG=ES"
+call :CARGAR_IDIOMA
+
+REM De aqui saltamos a la pantalla de seleccion de idioma. Se usa 'goto'
+REM (salto sin retorno) porque es el flujo normal del programa: una vez
+REM elegido el idioma ya no se vuelve a esta pantalla.
+goto SELECCION_IDIOMA
 
 REM =====================================================================
-REM  PASO 2 - PANTALLA DE BIENVENIDA (se muestra UNA sola vez)
+REM  PASO 2 - SELECCION DE IDIOMA (internacionalizacion / i18n)
+REM =====================================================================
+REM  Esta pantalla se muestra UNA sola vez, antes de la bienvenida, y es
+REM  la unica del programa que NO puede estar traducida todavia: cuando
+REM  se pinta aun no sabemos que idioma quiere el tecnico, asi que sus
+REM  propios textos van escritos aqui en LOS DOS idiomas (bilingues).
+REM
+REM  COMO SE HACE UN PROGRAMA MULTILENGUAJE EN BATCH (patron i18n):
+REM   1) DICCIONARIO POR IDIOMA. No existen "ficheros de traduccion": se
+REM      usa un bloque de variables de texto por idioma, con EXACTAMENTE
+REM      los mismos nombres en ambos bloques y distinto valor:
+REM          :IDIOMA_ES
+REM          set "T_MENU_01=MENU PRINCIPAL"
+REM          :IDIOMA_EN
+REM          set "T_MENU_01=MAIN MENU"
+REM   2) CARGA UNICA AL ARRANCAR. La subrutina CARGAR_IDIOMA ejecuta UNO
+REM      de los dos bloques. A partir de ahi, todo el programa imprime
+REM      siempre las mismas variables (%T_MENU_01%) sin saber en que
+REM      idioma esta: la logica no cambia, cambia el CONTENIDO.
+REM   3) DESPACHO CON ETIQUETA DINAMICA. El bloque correcto se elige con
+REM      una etiqueta construida al vuelo:  goto IDIOMA_%LANG%
+REM      cmd sustituye %LANG% (ES o EN) y salta a IDIOMA_ES o IDIOMA_EN.
+REM      Esta es la tecnica de "nombre dinamico" aplicada a ETIQUETAS,
+REM      que es la que usa este script por ser la mas clara y segura.
+REM   4) VARIANTE DE NOMBRE DE VARIABLE DINAMICO (documentada, NO usada
+REM      aqui). Si se quisiera un unico diccionario con prefijo de idioma
+REM      se leeria asi, sin expansion retrasada:
+REM          set "ES_MENU_01=MENU PRINCIPAL"
+REM          set "EN_MENU_01=MAIN MENU"
+REM          set "LANG=ES"
+REM          call set "T_MENU_01=%%%LANG%_MENU_01%%"
+REM      Primera pasada: %LANG% -^> ES y queda %%ES_MENU_01%%. El 'call'
+REM      fuerza una SEGUNDA pasada de expansion que lo convierte en el
+REM      texto final. Es correcta, pero mas dificil de leer, mas lenta y
+REM      fragil si el texto lleva signos especiales; por eso el proyecto
+REM      usa el bloque por idioma y reserva el nombre dinamico para el
+REM      'goto IDIOMA_%LANG%'.
+REM
+REM  REGLA DE MANTENIMIENTO (importante): todo texto nuevo debe anadirse
+REM  con el MISMO nombre en IDIOMA_ES y en IDIOMA_EN. Si falta en uno, ese
+REM  idioma imprimira una linea en blanco (variable vacia). Los bloques
+REM  viven en el ANEXO A (final del archivo) y deben tener el mismo numero
+REM  de lineas 'set "T_'. Comprobacion rapida desde CMD:
+REM      findstr /n /c:"T_" menu.bat
+REM  (los dos bloques deben devolver el mismo numero de lineas)
+REM =====================================================================
+:SELECCION_IDIOMA
+cls
+call :MOSTRAR_CABECERA_BASE
+echo(
+echo   Selecciona el idioma / Select the language:
+echo(
+echo      [1]  Español
+echo      [2]  English
+echo(
+call :LEER_OPCION "   Opción / Option [1-2]:  " "1 2"
+REM Solo hay que CAMBIAR la variable si el tecnico elige ingles: si pulsa
+REM [1] (o la entrada no es valida) seguimos en castellano, que es el
+REM valor por defecto ya asignado en el PASO 1.
+if "%OPCION%"=="2" set "LANG=EN"
+REM Recargamos el diccionario: ahora si, con el idioma definitivo. A
+REM partir de esta linea todas las pantallas salen en el idioma elegido.
+call :CARGAR_IDIOMA
+cls
+goto BIENVENIDA
+
+REM ---------------------------------------------------------------------
+REM  CARGAR_IDIOMA - carga el bloque de textos del idioma activo.
+REM  -------------------------------------------------------------------
+REM  USO:     call :CARGAR_IDIOMA
+REM  ENTRADA: %LANG%  -^>  ES o EN
+REM  SALIDA:  todas las variables T_xxx del idioma elegido.
+REM
+REM  El 'goto IDIOMA_%LANG%' salta a la etiqueta del bloque; ese bloque
+REM  termina con 'exit /b 0'. Aunque el 'goto' haya salido de esta
+REM  subrutina, el punto de retorno del 'call' sigue apilado, asi que el
+REM  'exit /b' devuelve el control justo a la linea siguiente del 'call'.
+REM  Es la forma limpia de ejecutar codigo "en bloque" sin parentesis.
+REM ---------------------------------------------------------------------
+:CARGAR_IDIOMA
+if /i "%LANG%"=="EN" goto IDIOMA_EN
+goto IDIOMA_ES
+
+REM ---------------------------------------------------------------------
+REM  MOSTRAR_CABECERA_BASE - cabecera SIN texto traducible.
+REM  -------------------------------------------------------------------
+REM  Se usa donde el diccionario todavia no es utilizable: la pantalla de
+REM  seleccion de idioma (no hay idioma elegido aun) y el arranque.
+REM  Solo muestra datos neutros (marca y version): ni una palabra que
+REM  hubiera que traducir.
+REM ---------------------------------------------------------------------
+:MOSTRAR_CABECERA_BASE
+echo   ==========================================================================
+echo     %TOOL_NAME%   -   v%TOOL_VER%
+echo   ==========================================================================
+exit /b 0
+
+REM =====================================================================
+REM  PASO 3 - PANTALLA DE BIENVENIDA (se muestra UNA sola vez)
 REM =====================================================================
 :BIENVENIDA
 cls
 call :MOSTRAR_CABECERA
 echo(
-echo   Bienvenido, técnico.
-echo   Esta herramienta centraliza las operaciones más usadas del taller
-echo   para dar soporte a equipos Windows y preparar discos de forma
-echo   (rápida, repetible y sin sorpresas).
+echo   %T_BIEN_01%
+echo   %T_BIEN_02%
+echo   %T_BIEN_03%
+echo   %T_BIEN_04%
 echo(
-echo   REGLAS DE ORO antes de tocar un disco:
-echo     1. Identifica SIEMPRE el disco correcto antes de borrar nada.
-echo        Las opciones 1 y 2 listan los discos antes de preguntar.
-echo     2. Las opciones 1 y 2 son DESTRUCTIVAS: borran la tabla de
-echo        particiones (y en la opción 2, todo el contenido del disco).
-echo        Ninguna actúa sin que tú teclees una palabra de confirmación.
-echo     3. Ante la duda, consulta primero la opción 4 (Ayuda) y no
-echo        improvises con comandos que no conoces.
+echo   %T_BIEN_05%
+echo     %T_BIEN_06%
+echo        %T_BIEN_07%
+echo     %T_BIEN_08%
+echo        %T_BIEN_09%
+echo        %T_BIEN_10%
+echo     %T_BIEN_11%
+echo        %T_BIEN_12%
 echo(
-echo   Forma de uso: teclea el número de la opción que aparece en el
-echo   menú. Según el entorno bastará con la tecla o con pulsar ENTER.
+echo   %T_BIEN_13%
+echo   %T_BIEN_14%
 echo(
-call :PULSA_TECLA "Pulsa cualquier tecla para entrar en el menú principal..."
+call :PULSA_TECLA "%T_BIEN_15%"
 goto MENU
 
 REM =====================================================================
-REM  PASO 3 - MENU PRINCIPAL (bucle infinito: SIEMPRE vuelve aqui)
+REM  PASO 4 - MENU PRINCIPAL (bucle infinito: SIEMPRE vuelve aqui)
 REM =====================================================================
 :MENU
 cls
 call :MOSTRAR_CABECERA
 echo(
-echo   MENÚ PRINCIPAL
+echo   %T_MENU_01%
 echo   ------------------------------------------------------------------
 echo(
-echo      [1]  Preparación rápida de disco        limpieza y formato básico
-echo      [2]  Borrado seguro / Sanitización      destrucción lógica de datos
-echo      [3]  Consola Avanzada                   salir a CMD interactivo
-echo      [4]  Ayuda del sistema                  guía rápida del técnico
-echo      [5]  Salir / Apagar equipo
+echo      %T_MENU_02%
+echo      %T_MENU_03%
+echo      %T_MENU_04%
+echo      %T_MENU_05%
+echo      %T_MENU_06%
 echo(
 echo   ------------------------------------------------------------------
-echo   Aviso: [1] y [2] modifican DISCOS de verdad y piden confirmación
-echo          escrita. [3], [4] y [5] no tocan el hardware por sí solas.
+echo   %T_MENU_07%
+echo          %T_MENU_08%
 echo   ------------------------------------------------------------------
-echo      Fecha y hora: %date%  %time:~0,5%
-echo      Modo de entrada: %MODO_ENTRADA%
+echo      %T_MENU_12% %date%  %time:~0,5%
+echo      %T_MENU_13% %MODO_ENTRADA%
 echo(
-echo   (Si la consola no reacciona a una sola tecla, teclea el número
-echo    y termina con ENTER.)
+echo   %T_MENU_09%
+echo    %T_MENU_10%
 echo(
 
 REM --- Captura segura de la seleccion -----------------------------------
@@ -209,7 +359,7 @@ REM cuando esta cierra con 'exit /b'. Le pasamos dos argumentos:
 REM   1) el texto que vera el tecnico,
 REM   2) los digitos permitidos (lista blanca).
 REM El resultado queda en la variable global %OPCION%.
-call :LEER_OPCION "   Su opción [1-5]:  " "1 2 3 4 5"
+call :LEER_OPCION "%T_MENU_11%" "1 2 3 4 5"
 
 REM --- Despacho (reparto de la opcion elegida) --------------------------
 REM Comparamos %OPCION% con cada tecla posible y saltamos a la seccion
@@ -238,10 +388,10 @@ REM repintamos el menu y volvemos a pedir la opcion.
 goto MENU
 
 REM =====================================================================
-REM  PASO 4 - OPCION [1] PREPARACION RAPIDA DE DISCO (maquetacion)
+REM  PASO 5 - OPCION [1] PREPARACION RAPIDA DE DISCO (maquetacion)
 REM =====================================================================
 REM  Este bloque es solo el "interruptor": todo el trabajo real vive en
-REM  la subrutina MODULO_PREPARAR (PASO 11). Asi el flujo principal se
+REM  la subrutina MODULO_PREPARAR (PASO 12). Asi el flujo principal se
 REM  lee de un vistazo: se elige opcion, se llama al modulo y se vuelve.
 REM  'call' ejecuta la subrutina y REGRESA aqui cuando esta cierra con
 REM  'exit /b'; despues volvemos al menu, pase lo que pase.
@@ -251,7 +401,7 @@ call :MODULO_PREPARAR
 goto MENU
 
 REM =====================================================================
-REM  PASO 5 - OPCION [2] BORRADO SEGURO / SANITIZACION
+REM  PASO 6 - OPCION [2] BORRADO SEGURO / SANITIZACION
 REM =====================================================================
 REM  Mismo esquema que la opcion 1: el flujo vive en MODULO_SANITIZAR.
 REM =====================================================================
@@ -260,26 +410,26 @@ call :MODULO_SANITIZAR
 goto MENU
 
 REM =====================================================================
-REM  PASO 6 - OPCION [3] CONSOLA AVANZADA (CMD interactivo)
+REM  PASO 7 - OPCION [3] CONSOLA AVANZADA (CMD interactivo)
 REM =====================================================================
 :OP_CONSOLA
 cls
 call :MOSTRAR_CABECERA
 echo(
-echo   [3] CONSOLA AVANZADA
+echo   %T_CONS_01%
 echo   ------------------------------------------------------------------
 echo(
-echo   Abriendo una consola CMD interactiva en la MISMA ventana.
+echo   %T_CONS_02%
 echo(
-echo   - Escribe 'exit' para volver al menú principal.
-echo   - Heredas el entorno actual (unidad de trabajo, variables).
-echo   - OJO: los cambios que hagas en variables NO afectan al menú.
+echo   %T_CONS_03%
+echo   %T_CONS_04%
+echo   %T_CONS_05%
 REM     Cada cmd.exe es un proceso con su propio bloque de variables en
 REM     memoria; ademas este script esta dentro de 'setlocal', que crea
 REM     un ambito aislado que se destruye al terminar.
 echo(
-echo   Recuerda: primero mira, después actúa. Para discos:
-echo       diskpart  -^>  list disk  -^>  detail disk  -^>  exit
+echo   %T_CONS_06%
+echo       %T_CONS_07%
 echo(
 
 REM 'cmd' sin argumentos lanza un shell hijo interactivo y ESPERA a que
@@ -293,119 +443,119 @@ cmd
 goto MENU
 
 REM =====================================================================
-REM  PASO 7 - OPCION [4] AYUDA DEL SISTEMA (2 paginas + help nativo)
+REM  PASO 8 - OPCION [4] AYUDA DEL SISTEMA (2 paginas + help nativo)
 REM =====================================================================
 :OP_AYUDA
 cls
 call :MOSTRAR_CABECERA
 echo(
-echo   [4] AYUDA DEL SISTEMA - Página 1 de 2: discos y almacenamiento
+echo   %T_AYU1_01%
 echo   ------------------------------------------------------------------
 echo(
-echo   DISKPART ........................ gestor de discos de Windows
-echo       Formas de uso:
-echo         diskpart                    abre la consola interactiva
-echo         diskpart /s guion.txt       ejecuta un guion de comandos
-echo                                     (es lo que hacen las opciones 1 y 2)
-echo       list disk                    discos físicos y su tamaño
-echo       list volume                  volúmenes/unidades y sus letras
-echo       select disk N                elige el disco N (ÍNDICE, no letra)
-echo       detail disk                  informe del disco seleccionado
-echo       clean                        borra la tabla de particiones
-echo                                     (rápido: los datos siguen ahí)
-echo       clean all                    sobrescribe TODO con ceros
-echo                                     (lento: destrucción lógica)
-echo       convert gpt                  pasa el disco a esquema GPT
-echo       convert mbr                  pasa el disco a esquema MBR
-echo       create partition primary     crea una partición primaria
-echo                                     (opcional: size=100000 en MB)
-echo       format fs=ntfs quick         formateo rápido en NTFS
-echo                                     (opcional: label="SISTEMA")
-echo       assign letter=Z              asigna una letra concreta
-echo                                     ('assign' solo = letra libre)
-echo       exit                         salir de diskpart
-echo     Nota: diskpart exige permisos de administrador. En modo /s no
-echo     admite teclado: el guion manda y se ejecuta línea a línea.
+echo   %T_AYU1_02%
+echo       %T_AYU1_03%
+echo         %T_AYU1_04%
+echo         %T_AYU1_05%
+echo                                     %T_AYU1_06%
+echo       %T_AYU1_07%
+echo       %T_AYU1_08%
+echo       %T_AYU1_09%
+echo       %T_AYU1_10%
+echo       %T_AYU1_11%
+echo                                     %T_AYU1_12%
+echo       %T_AYU1_13%
+echo                                     %T_AYU1_14%
+echo       %T_AYU1_15%
+echo       %T_AYU1_16%
+echo       %T_AYU1_17%
+echo                                     %T_AYU1_18%
+echo       %T_AYU1_19%
+echo                                     %T_AYU1_20%
+echo       %T_AYU1_21%
+echo                                     %T_AYU1_22%
+echo       %T_AYU1_23%
+echo     %T_AYU1_24%
+echo     %T_AYU1_25%
 echo(
-echo     CHKDSK X: /f .................. repara errores de la tabla de archivos
-echo     CHKDSK X: /r .................. busca sectores dañados (MUY lento)
-echo     CHKDSK X: /scan ............... análisis sin desmontar la unidad
-echo     FORMAT X: /fs:ntfs /q ......... formateo rápido (sin usar diskpart)
-echo     FORMAT X: /fs:ntfs /q /p:1 .... + un pase de ceros (Windows completo)
+echo     %T_AYU1_26%
+echo     %T_AYU1_27%
+echo     %T_AYU1_28%
+echo     %T_AYU1_29%
+echo     %T_AYU1_30%
 echo(
-echo     Los guiones temporales de las opciones 1 y 2 se crean en la
-echo     carpeta temporal del sistema y se borran al terminar.
+echo     %T_AYU1_31%
+echo     %T_AYU1_32%
 echo(
-call :PULSA_TECLA "Pulsa cualquier tecla para continuar con la página 2..."
+call :PULSA_TECLA "%T_AYU1_33%"
 
 :OP_AYUDA_P2
 cls
 call :MOSTRAR_CABECERA
 echo(
-echo   [4] AYUDA DEL SISTEMA - Página 2 de 2: sistema, red y utilidades
+echo   %T_AYU2_01%
 echo   ------------------------------------------------------------------
 echo(
-echo   SISTEMA E INVENTARIO
-echo     systeminfo .................... ficha técnica completa del equipo
-echo     wmic bios get serialnumber .... número de serie del equipo
-echo     wmic os get caption,version ... versión exacta del sistema operativo
-echo     sfc /scannow .................. integridad de archivos del sistema
+echo   %T_AYU2_02%
+echo     %T_AYU2_03%
+echo     %T_AYU2_04%
+echo     %T_AYU2_05%
+echo     %T_AYU2_06%
 echo(
-echo   ESTADO DE LOS DISCOS (aviso SMART)
-echo     wmic diskdrive get status ......... devuelve uno de estos valores:
-echo         OK          el disco responde sin avisos de fallo
-echo         Pred Fail   aviso de fallo inminente: COPIA los datos YA y
-echo                     sustituye el disco (no lo formatees ni lo borres)
-echo     wmic diskdrive get model,size,status ... modelo + tamaño + estado
-echo     Nota: 'wmic' está en desuso en Windows 11. Su equivalente en
-echo     PowerShell es:  Get-CimInstance Win32_DiskDrive
+echo   %T_AYU2_07%
+echo     %T_AYU2_08%
+echo         %T_AYU2_09%
+echo         %T_AYU2_10%
+echo                     %T_AYU2_11%
+echo     %T_AYU2_12%
+echo     %T_AYU2_13%
+echo     %T_AYU2_14%
 echo(
-echo   RED
-echo     ipconfig /all ................. configuración IP detallada
-echo     ping 8.8.8.8 .................. prueba de salida a Internet
-echo     nslookup ejemplo.com .......... prueba de resolución DNS
-echo     netstat -an ................... puertos y conexiones abiertas
+echo   %T_AYU2_15%
+echo     %T_AYU2_16%
+echo     %T_AYU2_17%
+echo     %T_AYU2_18%
+echo     %T_AYU2_19%
 echo(
-echo   FICHEROS Y PROCESOS
-echo     dir /s /b nombre.ext .......... busca archivos en subcarpetas
-echo     findstr /i "texto" fichero .... busca texto dentro de un fichero
-echo     robocopy ORIGEN DESTINO /E .... copia recursiva robusta
-echo     tasklist ...................... procesos en marcha
-echo     taskkill /IM nombre.exe /F .... fuerza el cierre de un proceso
+echo   %T_AYU2_20%
+echo     %T_AYU2_21%
+echo     %T_AYU2_22%
+echo     %T_AYU2_23%
+echo     %T_AYU2_24%
+echo     %T_AYU2_25%
 echo(
-echo   Notas para el taller:
-echo    - En WinPE solo existen los comandos incluidos en la imagen.
-echo      Si un comando no aparece, no está: pruébalo en la opción 3.
-echo    - Antes de formatear un disco, mira su estado SMART con la orden
-echo      de arriba: un disco con 'Pred Fail' no merece una instalación
-echo      nueva (el trabajo se perdería en semanas, no en años).
+echo   %T_AYU2_26%
+echo    %T_AYU2_27%
+echo      %T_AYU2_28%
+echo    %T_AYU2_29%
+echo      %T_AYU2_30%
+echo      %T_AYU2_31%
 echo(
-call :LEER_OPCION "   Ejecutar también el 'help' nativo de CMD? [1=Sí / 2=No]:  " "1 2"
+call :LEER_OPCION "%T_AYU2_32%" "1 2"
 if not "%OPCION%"=="1" goto OP_AYUDA_FIN
 echo(
-echo   --- AYUDA NATIVA DE CMD (rueda del ratón para hacer scroll) ---
+echo   %T_AYU2_33%
 echo(
 help
 :OP_AYUDA_FIN
-call :PULSA_TECLA "Pulsa cualquier tecla para volver al menú principal..."
+call :PULSA_TECLA "%T_AYU3_01%"
 goto MENU
 
 REM =====================================================================
-REM  PASO 8 - OPCION [5] SALIR / APAGAR EQUIPO
+REM  PASO 9 - OPCION [5] SALIR / APAGAR EQUIPO
 REM  (todas las acciones de esta seccion piden confirmacion previa)
 REM =====================================================================
 :OP_SALIR
 cls
 call :MOSTRAR_CABECERA
 echo(
-echo   [5] SALIR / APAGAR EQUIPO
+echo   %T_SAL_01%
 echo   ------------------------------------------------------------------
 echo(
-echo      [1]  Apagar el equipo
-echo      [2]  Salir de la herramienta y volver al sistema
-echo      [3]  Volver al menú principal (me he equivocado)
+echo      %T_SAL_02%
+echo      %T_SAL_03%
+echo      %T_SAL_04%
 echo(
-call :LEER_OPCION "   Su opción [1-3]:  " "1 2 3"
+call :LEER_OPCION "%T_SAL_05%" "1 2 3"
 if "%OPCION%"=="1" goto CONFIRMAR_APAGADO
 if "%OPCION%"=="2" goto FIN_SCRIPT
 if "%OPCION%"=="3" goto MENU
@@ -422,15 +572,15 @@ REM ---------------------------------------------------------------------
 cls
 call :MOSTRAR_CABECERA
 echo(
-echo   !!!  ATENCIÓN  !!!
+echo   %T_SAL_06%
 echo   ------------------------------------------------------------------
 echo(
-echo   Vas a apagar el equipo. Se interrumpirá cualquier trabajo en
-echo   curso y, si arrancaste desde WinPE, terminará la sesión de
-echo   recuperación actual (los cambios ya guardados en el arranque RAM
-echo   no se conservan).
+echo   %T_SAL_07%
+echo   %T_SAL_08%
+echo   %T_SAL_09%
+echo   %T_SAL_10%
 echo(
-call :LEER_OPCION "   Confirmar apagado? [1=Sí / 2=No]:  " "1 2"
+call :LEER_OPCION "%T_SAL_11%" "1 2"
 if "%OPCION%"=="1" goto DETECTAR_ENTORNO_APAGADO
 REM "No" o cualquier respuesta no valida -^> no apagamos y volvemos.
 goto MENU
@@ -447,7 +597,7 @@ goto APAGAR_WINDOWS
 
 :APAGAR_WINPE
 echo(
-echo   Enviando señal de apagado con wpeutil (entorno WinPE detectado)...
+echo   %T_SAL_12%
 REM wpeutil es la herramienta oficial de WinPE: solo admite un comando
 REM por linea y 'shutdown' apaga la sesion inmediatamente.
 wpeutil shutdown
@@ -455,8 +605,8 @@ goto FIN_APAGADO
 
 :APAGAR_WINDOWS
 echo(
-echo   Apagado programado en 5 segundos.
-echo   Si te arrepientes desde OTRA consola escribe:  shutdown /a
+echo   %T_SAL_13%
+echo   %T_SAL_14%
 REM   /s   = shutdown (apagar).  /reboot seria para reiniciar.
 REM   /t 5 = espera de 5 segundos antes de apagar (tiempo para abortar).
 REM   /f   = fuerza el cierre de aplicaciones abiertas.
@@ -465,16 +615,16 @@ shutdown /s /t 5 /f /c "%TOOL_NAME%: apagado solicitado por el tecnico."
 goto FIN_APAGADO
 
 REM =====================================================================
-REM  PASO 9 - SALIDAS ORDENADAS DEL SCRIPT
+REM  PASO 10 - SALIDAS ORDENADAS DEL SCRIPT
 REM =====================================================================
 
 REM Salida normal (opcion 2 del submenu salir): despedida + pausa para
 REM que el tecnico pueda leerla antes de que la ventana se cierre.
 :FIN_SCRIPT
 echo(
-echo   Sesión finalizada. Gracias por usar %TOOL_NAME% v%TOOL_VER%.
+echo   %T_SAL_16% %TOOL_NAME% v%TOOL_VER%.
 echo(
-call :PULSA_TECLA "Pulsa cualquier tecla para cerrar..."
+call :PULSA_TECLA "%T_SAL_15%"
 endlocal
 REM 'exit /b' devuelve el control a quien llamo este script SIN cerrar la
 REM ventana: es lo correcto si menu.bat se ejecuta desde otro .bat.
@@ -488,7 +638,7 @@ endlocal
 exit /b 0
 
 REM =====================================================================
-REM  PASO 10 - SUBRUTINAS INTERNAS (se invocan con 'call :etiqueta')
+REM  PASO 11 - SUBRUTINAS INTERNAS (se invocan con 'call :etiqueta')
 REM =====================================================================
 REM  Una subrutina en batch es simplemente un bloque con etiqueta que se
 REM  llama con   call :nombre   y se cierra con   exit /b.
@@ -507,8 +657,8 @@ REM  texto duplicado por el archivo, que es donde nacen los errores.)
 REM ---------------------------------------------------------------------
 :MOSTRAR_CABECERA
 echo   ==========================================================================
-echo     %TOOL_NAME%   -   Herramienta de Soporte Técnico
-echo     Versión %TOOL_VER%   -   Fase %TOOL_FASE%   -   Entorno: Windows / WinPE
+echo     %TOOL_NAME%   -   %T_COM_42%
+echo     %T_COM_43% %TOOL_VER%   -   %T_COM_44% %TOOL_FASE%   -   %T_COM_45% Windows / WinPE
 echo   ==========================================================================
 exit /b 0
 
@@ -608,11 +758,11 @@ if defined VALIDA exit /b 0
 REM Entrada invalida (vacia, de mas de un caracter o fuera de la lista):
 REM avisamos y VOLVEMOS A PEDIR sin repintar el menu entero.
 echo(
-echo   [!] Entrada no válida. Teclea solo uno de los digitos permitidos.
+echo   %T_COM_01%
 goto LEER_CON_SETP
 
 REM =====================================================================
-REM  PASO 11 - SUBRUTINAS DE LOS MODULOS DE DISCO (Fase 2)
+REM  PASO 12 - SUBRUTINAS DE LOS MODULOS DE DISCO (Fase 2)
 REM =====================================================================
 REM  Aqui vive el trabajo "de verdad": las opciones [1] y [2] del menu
 REM  solo hacen 'call :MODULO_...' y vuelven al menu.
@@ -694,9 +844,9 @@ set "NUM_OK=CANCELAR"
 exit /b 0
 :LEER_NUMERO_ERROR
 echo(
-echo   [!] Entrada no válida: escribe SOLO el número de disco (por
-echo       ejemplo: 0, 1, 2, 10), sin ceros a la izquierda, o la letra
-echo       A para cancelar y volver al menú.
+echo   %T_COM_02%
+echo       %T_COM_03%
+echo       %T_COM_04%
 set "NUM_OK=NO"
 exit /b 0
 
@@ -781,11 +931,11 @@ if not exist "%SystemRoot%\System32\diskpart.exe" goto PREPARAR_ENTORNO_SIN_DISK
 REM --- 5) Permisos ----------------------------------------------------
 call :COMPROBAR_ADMIN
 if "%ES_ADMIN%"=="SI" goto PREPARAR_ENTORNO_LISTO
-echo   [!] Esta consola NO parece tener permisos de administrador.
-echo       diskpart podrá listar los discos, pero NO podrá modificarlos
-echo       (devolverá "acceso denegado" en 'clean').
+echo   %T_COM_05%
+echo       %T_COM_06%
+echo       %T_COM_07%
 echo(
-call :LEER_OPCION "   Continuar de todos modos? [1=Sí / 2=No]:  " "1 2"
+call :LEER_OPCION "%T_COM_08%" "1 2"
 if not "%OPCION%"=="1" exit /b 0
 :PREPARAR_ENTORNO_LISTO
 set "ENTORNO_OK=SI"
@@ -793,18 +943,18 @@ exit /b 0
 
 :PREPARAR_ENTORNO_SIN_ESCRITURA
 echo(
-echo   [!] No he podido crear ficheros de trabajo en:
+echo   %T_COM_09%
 echo           %DIR_TRABAJO%
-echo       Sin una carpeta escribible no puedo generar el guion de
-echo       diskpart, y sin guion no se ejecuta nada. ABORTAMOS sin
-echo       tocar ningún disco (la seguridad primero).
+echo       %T_COM_10%
+echo       %T_COM_11%
+echo       %T_COM_12%
 echo(
 exit /b 0
 
 :PREPARAR_ENTORNO_SIN_DISKPART
 echo(
-echo   [!] No encuentro diskpart.exe en esta imagen.
-echo       ¿Es un WinPE muy recortado? Este módulo no puede continuar.
+echo   %T_COM_13%
+echo       %T_COM_14%
 echo(
 exit /b 0
 
@@ -870,25 +1020,25 @@ if not "%LISTADO_OK%"=="SI" exit /b 0
 :PEDIR_DISCO_BUCLE
 echo(
 echo   ------------------------------------------------------------------
-echo   Teclea el NUMERO de disco sobre el que quieres trabajar.
-echo   Ese numero es la PRIMERA columna del listado de arriba
-echo   (Disk 0 / Disco 0, Disk 1 / Disco 1...). Nunca es una letra.
-echo   Para cancelar y volver al menu: teclea  A  y pulsa ENTER.
+echo   %T_COM_15%
+echo   %T_COM_16%
+echo   %T_COM_17%
+echo   %T_COM_18%
 echo   ------------------------------------------------------------------
-call :LEER_NUMERO "   Número de disco:  " DISCO
+call :LEER_NUMERO "%T_COM_19%" DISCO
 if "%NUM_OK%"=="CANCELAR" exit /b 0
 if not "%NUM_OK%"=="SI" goto PEDIR_DISCO_BUCLE
 REM --- Contraste con el listado ya capturado --------------------------
 call :DISCO_EXISTE
 if "%EXISTE%"=="SI" goto PEDIR_DISCO_OK
 echo(
-echo   [!] NO he podido confirmar que el Disco %DISCO% aparezca en el
-echo       listado. Puede ser por dos motivos:
-echo         a) el número no existe (te has equivocado al leerlo), o
-echo         b) tu Windows traduce el listado con otras palabras y la
-echo            comprobación automática no sabe reconocerlo.
+echo   %T_COM_46% %DISCO%
+echo       %T_COM_20%
+echo         %T_COM_21%
+echo         %T_COM_22%
+echo            %T_COM_23%
 echo(
-call :LEER_OPCION "   ¿Qué hacemos? [1=Corregir / 2=Continuar / 3=Cancelar]:  " "1 2 3"
+call :LEER_OPCION "%T_COM_24%" "1 2 3"
 if "%OPCION%"=="1" goto PEDIR_DISCO_BUCLE
 if "%OPCION%"=="2" goto PEDIR_DISCO_OK
 exit /b 0
@@ -916,7 +1066,7 @@ REM ---------------------------------------------------------------------
 :CONFIRMAR_DESTRUCTIVO
 set "CONFIRMADO=NO"
 set "CONF_TXT="
-set /p "CONF_TXT=   Para continuar, teclea %~1 y pulsa ENTER (ENTER vacío cancela): "
+set /p "CONF_TXT=   %T_CFM_02% %~1 %T_CFM_03%"
 if not defined CONF_TXT exit /b 0
 set "CONF_TXT=%CONF_TXT:"=%"
 set "CONF_TXT=%CONF_TXT: =%"
@@ -926,7 +1076,7 @@ set "CONFIRMADO=SI"
 exit /b 0
 :CONFIRMAR_DESTRUCTIVO_DISCO
 set "CONF_DISCO="
-set /p "CONF_DISCO=   Repite el NÚMERO del disco afectado (%DISCO%) para confirmar: "
+set /p "CONF_DISCO=   %T_CFM_04% (%DISCO%): "
 if not defined CONF_DISCO goto CONFIRMAR_DESTRUCTIVO_NO
 set "CONF_DISCO=%CONF_DISCO:"=%"
 set "CONF_DISCO=%CONF_DISCO: =%"
@@ -935,7 +1085,7 @@ if not "%CONFIRMADO%"=="SI" goto CONFIRMAR_DESTRUCTIVO_NO
 exit /b 0
 :CONFIRMAR_DESTRUCTIVO_NO
 echo(
-echo   [i] Confirmación no reconocida: NO se ha ejecutado nada.
+echo   %T_CFM_01%
 exit /b 0
 
 REM ---------------------------------------------------------------------
@@ -990,7 +1140,8 @@ REM  cuadra. Un fichero de texto plano se revisa en dos segundos.
 REM ---------------------------------------------------------------------
 :MOSTRAR_SCRIPT
 echo   ------------------------------------------------------------------
-echo   GUION TEMPORAL que se va a ejecutar (%F_SCRIPT%):
+echo   %T_COM_47%:
+echo   %F_SCRIPT%
 echo   ------------------------------------------------------------------
 type "%F_SCRIPT%"
 echo   ------------------------------------------------------------------
@@ -1011,20 +1162,20 @@ REM ---------------------------------------------------------------------
 :EJECUTAR_DISKPART
 echo(
 echo   ------------------------------------------------------------------
-echo   EJECUTANDO DISKPART. No pulses teclas, no cierres la ventana y no
-echo   apagues el equipo mientras el comando esté en curso.
+echo   %T_DP_01%
+echo   %T_DP_02%
 echo   ------------------------------------------------------------------
 echo(
 diskpart /s "%F_SCRIPT%"
 set "RESULTADO=%errorlevel%"
 echo(
 echo   ------------------------------------------------------------------
-if "%RESULTADO%"=="0" echo   [OK] diskpart terminó sin errores (código 0).
-if not "%RESULTADO%"=="0" echo   [!] diskpart devolvió el código de error %RESULTADO%.
+if "%RESULTADO%"=="0" echo   %T_COM_48%
+if not "%RESULTADO%"=="0" echo   %T_COM_49% %RESULTADO%
 echo   ------------------------------------------------------------------
 echo(
-echo   Nota: diskpart escribe en el idioma del sistema. Si ves caracteres
-echo   raros, prueba en la Consola Avanzada:  chcp 850   y luego  chcp 65001
+echo   %T_DP_03%
+echo   %T_DP_04%
 echo(
 exit /b 0
 
@@ -1036,15 +1187,15 @@ REM  a listar y se COMPRUEBA con los ojos. Reutilizamos LISTAR_DISCOS
 REM  (misma pieza de codigo, cero duplicacion) y anadimos la lectura.
 REM ---------------------------------------------------------------------
 :MOSTRAR_RESULTADO
-echo   VERIFICACIÓN FINAL: este es el estado ACTUAL del equipo.
+echo   %T_COM_25%
 call :LISTAR_DISCOS
-echo   Cómo comprobar el resultado:
-echo     - Maquetación (opción 1): el Disco %DISCO% debe mostrar Gpt y,
-echo       en 'list volume', un volumen SISTEMA en NTFS con su letra.
-echo     - Borrado seguro (opción 2): el Disco %DISCO% aparecerá EN BRUTO
-echo       (sin particiones ni volúmenes). Eso es lo correcto.
-echo     - Si el disco no muestra el resultado esperado, revisa el aviso
-echo       que dio diskpart antes de repetir cualquier operación.
+echo   %T_COM_26%
+echo     %T_D1_23% %DISCO% %T_D1_25%
+echo       %T_COM_27%
+echo     %T_D2_33% %DISCO% %T_D2_35%
+echo       %T_COM_28%
+echo     %T_COM_29%
+echo       %T_COM_30%
 echo(
 exit /b 0
 
@@ -1064,7 +1215,7 @@ REM ---------------------------------------------------------------------
 :LISTAR_DISCOS
 set "LISTADO_OK=NO"
 echo(
-echo   Consultando los discos del equipo con diskpart (solo lectura)...
+echo   %T_COM_31%
 echo(
 > "%F_SCRIPT%" echo rem JAH-WinPe - listado del equipo (solo lectura)
 >> "%F_SCRIPT%" echo list disk
@@ -1074,21 +1225,21 @@ set "RESULTADO_LISTADO=%errorlevel%"
 if not "%RESULTADO_LISTADO%"=="0" goto LISTAR_DISCOS_FIN
 type "%F_SALIDA%"
 echo(
-echo   Cómo leer este listado:
-echo     - 'list disk'    los discos físicos: mira la PRIMERA columna
-echo                      (Disk 0, Disk 1...) y compárala con el TAMAÑO.
-echo     - Estado 'Online' o 'En línea': el disco está operativo.
-echo     - La marca '*' en la columna 'Gpt' significa que ya es GPT.
-echo     - 'list volume'  qué volúmenes hay y con qué LETRA de unidad.
-echo     - Truco de seguridad: mira la ETIQUETA del disco en la caja del
-echo       equipo. Un disco de 500 GB no puede ser el de 1 TB.
+echo   %T_COM_32%
+echo     %T_COM_33%
+echo                      %T_COM_34%
+echo     %T_COM_35%
+echo     %T_COM_36%
+echo     %T_COM_37%
+echo     %T_COM_38%
+echo       %T_COM_39%
 echo(
 set "LISTADO_OK=SI"
 exit /b 0
 :LISTAR_DISCOS_FIN
-echo   [!] diskpart no ha podido completar el listado (código %RESULTADO_LISTADO%).
-echo       Sin listado no se puede elegir disco con seguridad: volvemos
-echo       al menú sin tocar nada.
+echo   %T_COM_50% %RESULTADO_LISTADO%
+echo       %T_COM_40%
+echo       %T_COM_41%
 echo(
 exit /b 0
 
@@ -1103,26 +1254,26 @@ REM ---------------------------------------------------------------------
 cls
 call :MOSTRAR_CABECERA
 echo(
-echo   [1] PREPARACIÓN RÁPIDA DE DISCO (maquetación)
+echo   %T_D1_01%
 echo   ------------------------------------------------------------------
 echo(
-echo   Este módulo deja un disco listo para instalar Windows:
+echo   %T_D1_02%
 echo(
-echo     a) Lista los discos físicos y sus tamaños (diskpart, solo lectura).
-echo     b) Te pide el NÚMERO del disco a preparar (entrada validada).
-echo     c) Genera el guion de diskpart con los comandos exactos y te lo
-echo        muestra para que lo leas ANTES de ejecutar nada.
-echo     d) Exige que teclees la palabra PREPARAR para continuar.
-echo     e) Ejecuta y vuelve a listar el equipo para verificar.
+echo     %T_D1_03%
+echo     %T_D1_04%
+echo     %T_D1_05%
+echo        %T_D1_06%
+echo     %T_D1_07% %T_CFM_05% %T_D1_26%
+echo     %T_D1_08%
 echo(
-echo   Orden exacto de comandos:  clean  -^>  convert gpt  -^>
-echo   create partition primary  -^>  format fs=ntfs quick label=SISTEMA
-echo   -^>  assign (letra libre que Windows elija).
+echo   %T_D1_09%
+echo   %T_D1_10%
+echo   %T_D1_11%
 echo(
-echo   RECUERDA: 'clean' borra la tabla de particiones del disco elegido.
-echo   Todo lo que hubiera en él dejará de ser visible de inmediato.
+echo   %T_D1_12%
+echo   %T_D1_13%
 echo(
-call :PULSA_TECLA "Pulsa cualquier tecla para empezar por el listado..."
+call :PULSA_TECLA "%T_D1_14%"
 call :PREPARAR_ENTORNO
 if not "%ENTORNO_OK%"=="SI" goto MODULO_PREPARAR_CANCELADO
 call :LISTAR_DISCOS
@@ -1132,32 +1283,32 @@ call :GENERAR_SCRIPT_MAQUETAR
 cls
 call :MOSTRAR_CABECERA
 echo(
-echo   [1] PREPARACIÓN RÁPIDA DE DISCO - RESUMEN Y CONFIRMACIÓN
+echo   %T_D1_15%
 echo   ------------------------------------------------------------------
 echo(
-echo   Disco elegido:  Disco %DISCO%
-echo   Acción:         borrar la tabla de particiones y crear una única
-echo                   partición GPT NTFS con la etiqueta SISTEMA.
+echo   %T_COM_51% %DISCO%
+echo   %T_D1_16%
+echo                   %T_D1_17%
 echo(
 call :MOSTRAR_SCRIPT
 if "%ES_WINPE%"=="SI" goto MODULO_PREPARAR_AVISO_OK
-echo   [!] Estás en Windows COMPLETO, no en WinPE. Si el Disco %DISCO%
-echo       fuera el disco donde está instalado el sistema en ejecución,
-echo       esta operación lo dejaría inservible. Ante la mínima duda:
-echo       cancela y comprueba antes con 'list volume' (letra C:).
+echo   %T_D1_24%
+echo       %T_D1_18%
+echo       %T_D1_19%
+echo       %T_D1_20%
 echo(
 :MODULO_PREPARAR_AVISO_OK
-call :CONFIRMAR_DESTRUCTIVO "PREPARAR"
+call :CONFIRMAR_DESTRUCTIVO "%T_CFM_05%"
 if not "%CONFIRMADO%"=="SI" goto MODULO_PREPARAR_CANCELADO
 call :EJECUTAR_DISKPART
 call :MOSTRAR_RESULTADO
 call :BORRAR_TEMPORALES
-call :PULSA_TECLA "Módulo terminado. Pulsa cualquier tecla para volver al menú..."
+call :PULSA_TECLA "%T_D1_21%"
 exit /b 0
 
 :MODULO_PREPARAR_CANCELADO
 call :BORRAR_TEMPORALES
-call :PULSA_TECLA "Operación cancelada: no se ha tocado ningún disco."
+call :PULSA_TECLA "%T_D1_22%"
 exit /b 0
 
 REM ---------------------------------------------------------------------
@@ -1171,22 +1322,22 @@ REM ---------------------------------------------------------------------
 cls
 call :MOSTRAR_CABECERA
 echo(
-echo   [2] BORRADO SEGURO / SANITIZACIÓN
+echo   %T_D2_01%
 echo   ------------------------------------------------------------------
 echo(
-echo   Qué hace: escribe CEROS sobre todas las áreas direccionables del
-echo   disco para que los datos anteriores no se puedan recuperar con
-echo   utilidades de recuperación. En diskpart:  clean all
+echo   %T_D2_02%
+echo   %T_D2_03%
+echo   %T_D2_04%
 echo(
-echo   Marco de referencia (NIST SP 800-88, nivel PURGE):
-echo     'clean'      destruye solo la tabla de particiones (segundos),
-echo                  pero los datos siguen en el disco: se recuperan.
-echo     'clean all'  sobrescribe el contenido (horas) y la recuperación
-echo                  práctica deja de ser viable. Es lo que haremos.
-echo   Para el nivel DESTROY (destrucción física del medio) no hay
-echo   software que valga: trituradora o incineradora certificadas.
+echo   %T_D2_05%
+echo     %T_D2_06%
+echo                  %T_D2_07%
+echo     %T_D2_08%
+echo                  %T_D2_09%
+echo   %T_D2_10%
+echo   %T_D2_11%
 echo(
-call :PULSA_TECLA "Pulsa cualquier tecla para empezar por el listado..."
+call :PULSA_TECLA "%T_D1_14%"
 call :PREPARAR_ENTORNO
 if not "%ENTORNO_OK%"=="SI" goto MODULO_SANITIZAR_CANCELADO
 call :LISTAR_DISCOS
@@ -1196,48 +1347,563 @@ call :GENERAR_SCRIPT_BORRAR
 cls
 call :MOSTRAR_CABECERA
 echo(
-echo   [2] BORRADO SEGURO - RESUMEN Y CONFIRMACIÓN
+echo   %T_D2_12%
 echo   ------------------------------------------------------------------
 echo(
-echo   Disco elegido:  Disco %DISCO%
-echo   Acción:         clean all  (sobrescritura completa con ceros)
+echo   %T_COM_51% %DISCO%
+echo   %T_D2_13%
 echo(
-echo   TIEMPO ESTIMADO (orientativo; depende del disco y de su conexión):
-echo     Disco de 250 GB ......... de 30 a 60 minutos
-echo     Disco de 500 GB ......... de 1 a 2 horas
-echo     Disco de 1 TB ........... de 2 a 4 horas
-echo     Disco de 2 TB ........... de 4 a 8 horas
-echo     SSD (mejor por USB) ..... suele ir más rápido, pero ver aviso
+echo   %T_D2_14%
+echo     %T_D2_15%
+echo     %T_D2_16%
+echo     %T_D2_17%
+echo     %T_D2_18%
+echo     %T_D2_19%
 echo(
-echo   AVISOS IMPORTANTES:
-echo     - NO interrumpas el proceso (ni teclas, ni reinicio, ni apagado):
-echo       un 'clean all' a medias deja el disco en un estado irregular.
-echo     - En SSD, 'clean all' NO garantiza el borrado físico: el
-echo       controlador reparte las escrituras. Para eso se usa la
-echo       herramienta del fabricante o el ATA Secure Erase.
-echo     - Si el disco ya tiene fallos físicos, esto no los arregla.
-echo     - Un disco sanitizado queda EN BRUTO (sin particiones): luego
-echo       puedes maquetarlo con la opción [1].
+echo   %T_D2_20%
+echo     %T_D2_21%
+echo       %T_D2_22%
+echo     %T_D2_23%
+echo       %T_D2_24%
+echo       %T_D2_25%
+echo     %T_D2_26%
+echo     %T_D2_27%
+echo       %T_D2_28%
 echo(
 if "%ES_WINPE%"=="SI" goto MODULO_SANITIZAR_AVISO_OK
-echo   [!] Estás en Windows COMPLETO, no en WinPE. Comprueba que el
-echo       Disco %DISCO% NO sea el del sistema en ejecución: en 'list
-echo       volume' busca qué disco contiene la letra C:. Si hay duda,
-echo       cancela ahora.
+echo   %T_D2_29%
+echo       %T_D2_34%
+echo       %T_D2_30%
+echo       %T_D2_31%
 echo(
 :MODULO_SANITIZAR_AVISO_OK
 call :MOSTRAR_SCRIPT
-echo   Para el borrado seguro se piden DOS confirmaciones escritas.
+echo   %T_D2_32%
 echo(
-call :CONFIRMAR_DESTRUCTIVO "BORRAR" DISCO
+call :CONFIRMAR_DESTRUCTIVO "%T_CFM_06%" DISCO
 if not "%CONFIRMADO%"=="SI" goto MODULO_SANITIZAR_CANCELADO
 call :EJECUTAR_DISKPART
 call :MOSTRAR_RESULTADO
 call :BORRAR_TEMPORALES
-call :PULSA_TECLA "Módulo terminado. Pulsa cualquier tecla para volver al menú..."
+call :PULSA_TECLA "%T_D1_21%"
 exit /b 0
 
 :MODULO_SANITIZAR_CANCELADO
 call :BORRAR_TEMPORALES
-call :PULSA_TECLA "Operación cancelada: no se ha tocado ningún disco."
+call :PULSA_TECLA "%T_D1_22%"
+exit /b 0
+
+REM #####################################################################
+REM  ANEXO A - DICCIONARIOS DE IDIOMA (i18n)
+REM #####################################################################
+REM  Cada bloque define LAS MISMAS variables T_xxx con el texto de su
+REM  idioma. No forman parte del flujo normal: se ENTRA en ellos desde el
+REM  'goto IDIOMA_%LANG%' de CARGAR_IDIOMA y se SALE con 'exit /b 0'.
+REM
+REM  REGLAS AL EDITAR ESTOS BLOQUES:
+REM   1) Los nombres de variable deben ser IDENTICOS en ES y en EN.
+REM   2) Nunca escribas una comilla doble dentro del valor: rompe la
+REM      forma  set "VAR=valor".
+REM   3) El signo mayor que se escribe escapado con el caret (^), como en
+REM      las flechas -^> de mas abajo: sin el caret, cmd lo interpretaria
+REM      como una redireccion y crearia ficheros basura en el directorio.
+REM   4) El signo de porcentaje tampoco puede aparecer dentro del valor.
+REM   5) Los comentarios van en castellano (documentacion del proyecto):
+REM      lo unico que se traduce es el TEXTO VISIBLE para el tecnico.
+REM   6) Los textos se parten en lineas cortas a proposito: cada 'echo'
+REM      imprime UNA variable y asi ninguna linea pasa de 94 columnas
+REM      (el ancho de la consola fijado con 'mode con: cols=94').
+REM =====================================================================
+
+REM ---------------------------------------------------------------------
+REM  IDIOMA_ES - castellano (%LANG%=ES). Idioma por defecto.
+REM ---------------------------------------------------------------------
+:IDIOMA_ES
+set "T_AYU1_01=[4] AYUDA DEL SISTEMA - Página 1 de 2: discos y almacenamiento"
+set "T_AYU1_02=DISKPART ........................ gestor de discos de Windows"
+set "T_AYU1_03=Formas de uso:"
+set "T_AYU1_04=diskpart                    abre la consola interactiva"
+set "T_AYU1_05=diskpart /s guion.txt       ejecuta un guion de comandos"
+set "T_AYU1_06=(es lo que hacen las opciones 1 y 2)"
+set "T_AYU1_07=list disk                    discos físicos y su tamaño"
+set "T_AYU1_08=list volume                  volúmenes/unidades y sus letras"
+set "T_AYU1_09=select disk N                elige el disco N (ÍNDICE, no letra)"
+set "T_AYU1_10=detail disk                  informe del disco seleccionado"
+set "T_AYU1_11=clean                        borra la tabla de particiones"
+set "T_AYU1_12=(rápido: los datos siguen ahí)"
+set "T_AYU1_13=clean all                    sobrescribe TODO con ceros"
+set "T_AYU1_14=(lento: destrucción lógica)"
+set "T_AYU1_15=convert gpt                  pasa el disco a esquema GPT"
+set "T_AYU1_16=convert mbr                  pasa el disco a esquema MBR"
+set "T_AYU1_17=create partition primary     crea una partición primaria"
+set "T_AYU1_18=(opcional: size=100000 en MB)"
+set "T_AYU1_19=format fs=ntfs quick         formateo rápido en NTFS"
+set "T_AYU1_20=(opcional: label=SISTEMA)"
+set "T_AYU1_21=assign letter=Z              asigna una letra concreta"
+set "T_AYU1_22=('assign' solo = letra libre)"
+set "T_AYU1_23=exit                         salir de diskpart"
+set "T_AYU1_24=Nota: diskpart exige permisos de administrador. En modo /s no"
+set "T_AYU1_25=admite teclado: el guion manda y se ejecuta línea a línea."
+set "T_AYU1_26=CHKDSK X: /f .................. repara errores de la tabla de archivos"
+set "T_AYU1_27=CHKDSK X: /r .................. busca sectores dañados (MUY lento)"
+set "T_AYU1_28=CHKDSK X: /scan ............... análisis sin desmontar la unidad"
+set "T_AYU1_29=FORMAT X: /fs:ntfs /q ......... formateo rápido (sin usar diskpart)"
+set "T_AYU1_30=FORMAT X: /fs:ntfs /q /p:1 .... + un pase de ceros (Windows completo)"
+set "T_AYU1_31=Los guiones temporales de las opciones 1 y 2 se crean en la"
+set "T_AYU1_32=carpeta temporal del sistema y se borran al terminar."
+set "T_AYU1_33=Pulsa cualquier tecla para continuar con la página 2..."
+set "T_AYU2_01=[4] AYUDA DEL SISTEMA - Página 2 de 2: sistema, red y utilidades"
+set "T_AYU2_02=SISTEMA E INVENTARIO"
+set "T_AYU2_03=systeminfo .................... ficha técnica completa del equipo"
+set "T_AYU2_04=wmic bios get serialnumber .... número de serie del equipo"
+set "T_AYU2_05=wmic os get caption,version ... versión exacta del sistema operativo"
+set "T_AYU2_06=sfc /scannow .................. integridad de archivos del sistema"
+set "T_AYU2_07=ESTADO DE LOS DISCOS (aviso SMART)"
+set "T_AYU2_08=wmic diskdrive get status ......... devuelve uno de estos valores:"
+set "T_AYU2_09=OK          el disco responde sin avisos de fallo"
+set "T_AYU2_10=Pred Fail   aviso de fallo inminente: COPIA los datos YA y"
+set "T_AYU2_11=sustituye el disco (no lo formatees ni lo borres)"
+set "T_AYU2_12=wmic diskdrive get model,size,status ... modelo + tamaño + estado"
+set "T_AYU2_13=Nota: 'wmic' está en desuso en Windows 11. Su equivalente en"
+set "T_AYU2_14=PowerShell es:  Get-CimInstance Win32_DiskDrive"
+set "T_AYU2_15=RED"
+set "T_AYU2_16=ipconfig /all ................. configuración IP detallada"
+set "T_AYU2_17=ping 8.8.8.8 .................. prueba de salida a Internet"
+set "T_AYU2_18=nslookup ejemplo.com .......... prueba de resolución DNS"
+set "T_AYU2_19=netstat -an ................... puertos y conexiones abiertas"
+set "T_AYU2_20=FICHEROS Y PROCESOS"
+set "T_AYU2_21=dir /s /b nombre.ext .......... busca archivos en subcarpetas"
+set "T_AYU2_22=findstr /i palabra fichero .... busca texto dentro de un fichero"
+set "T_AYU2_23=robocopy ORIGEN DESTINO /E .... copia recursiva robusta"
+set "T_AYU2_24=tasklist ...................... procesos en marcha"
+set "T_AYU2_25=taskkill /IM nombre.exe /F .... fuerza el cierre de un proceso"
+set "T_AYU2_26=Notas para el taller:"
+set "T_AYU2_27=- En WinPE solo existen los comandos incluidos en la imagen."
+set "T_AYU2_28=Si un comando no aparece, no está: pruébalo en la opción 3."
+set "T_AYU2_29=- Antes de formatear un disco, mira su estado SMART con la orden"
+set "T_AYU2_30=de arriba: un disco con 'Pred Fail' no merece una instalación"
+set "T_AYU2_31=nueva (el trabajo se perdería en semanas, no en años)."
+set "T_AYU2_32=   Ejecutar también el 'help' nativo de CMD? [1=Sí / 2=No]:  "
+set "T_AYU2_33=--- AYUDA NATIVA DE CMD (rueda del ratón para hacer scroll) ---"
+set "T_AYU3_01=Pulsa cualquier tecla para volver al menú principal..."
+set "T_BIEN_01=Bienvenido, técnico."
+set "T_BIEN_02=Esta herramienta centraliza las operaciones más usadas del taller"
+set "T_BIEN_03=para dar soporte a equipos Windows y preparar discos de forma"
+set "T_BIEN_04=(rápida, repetible y sin sorpresas)."
+set "T_BIEN_05=REGLAS DE ORO antes de tocar un disco:"
+set "T_BIEN_06=1. Identifica SIEMPRE el disco correcto antes de borrar nada."
+set "T_BIEN_07=Las opciones 1 y 2 listan los discos antes de preguntar."
+set "T_BIEN_08=2. Las opciones 1 y 2 son DESTRUCTIVAS: borran la tabla de"
+set "T_BIEN_09=particiones (y en la opción 2, todo el contenido del disco)."
+set "T_BIEN_10=Ninguna actúa sin que tú teclees una palabra de confirmación."
+set "T_BIEN_11=3. Ante la duda, consulta primero la opción 4 (Ayuda) y no"
+set "T_BIEN_12=improvises con comandos que no conoces."
+set "T_BIEN_13=Forma de uso: teclea el número de la opción que aparece en el"
+set "T_BIEN_14=menú. Según el entorno bastará con la tecla o con pulsar ENTER."
+set "T_BIEN_15=Pulsa cualquier tecla para entrar en el menú principal..."
+set "T_CFM_01=[i] Confirmación no reconocida: NO se ha ejecutado nada."
+set "T_CFM_02=Para continuar, teclea"
+set "T_CFM_03=y pulsa ENTER (ENTER vacío cancela):"
+set "T_CFM_04=Repite el NÚMERO del disco afectado"
+set "T_CFM_05=PREPARAR"
+set "T_CFM_06=BORRAR"
+set "T_COM_01=[!] Entrada no válida. Teclea solo uno de los digitos permitidos."
+set "T_COM_02=[!] Entrada no válida: escribe SOLO el número de disco (por"
+set "T_COM_03=ejemplo: 0, 1, 2, 10), sin ceros a la izquierda, o la letra"
+set "T_COM_04=A para cancelar y volver al menú."
+set "T_COM_05=[!] Esta consola NO parece tener permisos de administrador."
+set "T_COM_06=diskpart podrá listar los discos, pero NO podrá modificarlos"
+set "T_COM_07=(devolverá acceso denegado en 'clean')."
+set "T_COM_08=   Continuar de todos modos? [1=Sí / 2=No]:  "
+set "T_COM_09=[!] No he podido crear ficheros de trabajo en:"
+set "T_COM_10=Sin una carpeta escribible no puedo generar el guion de"
+set "T_COM_11=diskpart, y sin guion no se ejecuta nada. ABORTAMOS sin"
+set "T_COM_12=tocar ningún disco (la seguridad primero)."
+set "T_COM_13=[!] No encuentro diskpart.exe en esta imagen."
+set "T_COM_14=¿Es un WinPE muy recortado? Este módulo no puede continuar."
+set "T_COM_15=Teclea el NUMERO de disco sobre el que quieres trabajar."
+set "T_COM_16=Ese numero es la PRIMERA columna del listado de arriba"
+set "T_COM_17=(Disk 0 / Disco 0, Disk 1 / Disco 1...). Nunca es una letra."
+set "T_COM_18=Para cancelar y volver al menu: teclea  A  y pulsa ENTER."
+set "T_COM_19=   Número de disco:  "
+set "T_COM_20=listado. Puede ser por dos motivos:"
+set "T_COM_21=a) el número no existe (te has equivocado al leerlo), o"
+set "T_COM_22=b) tu Windows traduce el listado con otras palabras y la"
+set "T_COM_23=comprobación automática no sabe reconocerlo."
+set "T_COM_24=   ¿Qué hacemos? [1=Corregir / 2=Continuar / 3=Cancelar]:  "
+set "T_COM_25=VERIFICACIÓN FINAL: este es el estado ACTUAL del equipo."
+set "T_COM_26=Cómo comprobar el resultado:"
+set "T_COM_27=en 'list volume', un volumen SISTEMA en NTFS con su letra."
+set "T_COM_28=(sin particiones ni volúmenes). Eso es lo correcto."
+set "T_COM_29=- Si el disco no muestra el resultado esperado, revisa el aviso"
+set "T_COM_30=que dio diskpart antes de repetir cualquier operación."
+set "T_COM_31=Consultando los discos del equipo con diskpart (solo lectura)..."
+set "T_COM_32=Cómo leer este listado:"
+set "T_COM_33=- 'list disk'    los discos físicos: mira la PRIMERA columna"
+set "T_COM_34=(Disk 0, Disk 1...) y compárala con el TAMAÑO."
+set "T_COM_35=- Estado 'Online' o 'En línea': el disco está operativo."
+set "T_COM_36=- La marca '*' en la columna 'Gpt' significa que ya es GPT."
+set "T_COM_37=- 'list volume'  qué volúmenes hay y con qué LETRA de unidad."
+set "T_COM_38=- Truco de seguridad: mira la ETIQUETA del disco en la caja del"
+set "T_COM_39=equipo. Un disco de 500 GB no puede ser el de 1 TB."
+set "T_COM_40=Sin listado no se puede elegir disco con seguridad: volvemos"
+set "T_COM_41=al menú sin tocar nada."
+set "T_COM_42=Herramienta de Soporte Técnico"
+set "T_COM_43=Versión"
+set "T_COM_44=Fase"
+set "T_COM_45=Entorno:"
+set "T_COM_46=[!] NO he podido confirmar que el Disco"
+set "T_COM_47=GUION TEMPORAL que se va a ejecutar"
+set "T_COM_48=[OK] diskpart terminó sin errores (código 0)."
+set "T_COM_49=[!] diskpart devolvió el código de error"
+set "T_COM_50=[!] diskpart no ha podido completar el listado. Código de error:"
+set "T_COM_51=Disco elegido:"
+set "T_CONS_01=[3] CONSOLA AVANZADA"
+set "T_CONS_02=Abriendo una consola CMD interactiva en la MISMA ventana."
+set "T_CONS_03=- Escribe 'exit' para volver al menú principal."
+set "T_CONS_04=- Heredas el entorno actual (unidad de trabajo, variables)."
+set "T_CONS_05=- OJO: los cambios que hagas en variables NO afectan al menú."
+set "T_CONS_06=Recuerda: primero mira, después actúa. Para discos:"
+set "T_CONS_07=diskpart  -^>  list disk  -^>  detail disk  -^>  exit"
+set "T_D1_01=[1] PREPARACIÓN RÁPIDA DE DISCO (maquetación)"
+set "T_D1_02=Este módulo deja un disco listo para instalar Windows:"
+set "T_D1_03=a) Lista los discos físicos y sus tamaños (diskpart, solo lectura)."
+set "T_D1_04=b) Te pide el NÚMERO del disco a preparar (entrada validada)."
+set "T_D1_05=c) Genera el guion de diskpart con los comandos exactos y te lo"
+set "T_D1_06=muestra para que lo leas ANTES de ejecutar nada."
+set "T_D1_07=d) Exige que teclees la palabra"
+set "T_D1_08=e) Ejecuta y vuelve a listar el equipo para verificar."
+set "T_D1_09=Orden exacto de comandos:  clean  -^>  convert gpt  -^>"
+set "T_D1_10=create partition primary  -^>  format fs=ntfs quick label=SISTEMA"
+set "T_D1_11=-^>  assign (letra libre que Windows elija)."
+set "T_D1_12=RECUERDA: 'clean' borra la tabla de particiones del disco elegido."
+set "T_D1_13=Todo lo que hubiera en él dejará de ser visible de inmediato."
+set "T_D1_14=Pulsa cualquier tecla para empezar por el listado..."
+set "T_D1_15=[1] PREPARACIÓN RÁPIDA DE DISCO - RESUMEN Y CONFIRMACIÓN"
+set "T_D1_16=Acción:         borrar la tabla de particiones y crear una única"
+set "T_D1_17=partición GPT NTFS con la etiqueta SISTEMA."
+set "T_D1_18=el disco donde está instalado el sistema en ejecución,"
+set "T_D1_19=esta operación lo dejaría inservible. Ante la mínima duda:"
+set "T_D1_20=cancela y comprueba antes con 'list volume' (letra C:)."
+set "T_D1_21=Módulo terminado. Pulsa cualquier tecla para volver al menú..."
+set "T_D1_22=Operación cancelada: no se ha tocado ningún disco."
+set "T_D1_23=- Maquetación (opción 1): el Disco"
+set "T_D1_24=[!] Estás en Windows COMPLETO, no en WinPE. Si el disco elegido fuera"
+set "T_D1_25=debe mostrar Gpt y,"
+set "T_D1_26=para continuar."
+set "T_D2_01=[2] BORRADO SEGURO / SANITIZACIÓN"
+set "T_D2_02=Qué hace: escribe CEROS sobre todas las áreas direccionables del"
+set "T_D2_03=disco para que los datos anteriores no se puedan recuperar con"
+set "T_D2_04=utilidades de recuperación. En diskpart:  clean all"
+set "T_D2_05=Marco de referencia (NIST SP 800-88, nivel PURGE):"
+set "T_D2_06='clean'      destruye solo la tabla de particiones (segundos),"
+set "T_D2_07=pero los datos siguen en el disco: se recuperan."
+set "T_D2_08='clean all'  sobrescribe el contenido (horas) y la recuperación"
+set "T_D2_09=práctica deja de ser viable. Es lo que haremos."
+set "T_D2_10=Para el nivel DESTROY (destrucción física del medio) no hay"
+set "T_D2_11=software que valga: trituradora o incineradora certificadas."
+set "T_D2_12=[2] BORRADO SEGURO - RESUMEN Y CONFIRMACIÓN"
+set "T_D2_13=Acción:         clean all  (sobrescritura completa con ceros)"
+set "T_D2_14=TIEMPO ESTIMADO (orientativo; depende del disco y de su conexión):"
+set "T_D2_15=Disco de 250 GB ......... de 30 a 60 minutos"
+set "T_D2_16=Disco de 500 GB ......... de 1 a 2 horas"
+set "T_D2_17=Disco de 1 TB ........... de 2 a 4 horas"
+set "T_D2_18=Disco de 2 TB ........... de 4 a 8 horas"
+set "T_D2_19=SSD (mejor por USB) ..... suele ir más rápido, pero ver aviso"
+set "T_D2_20=AVISOS IMPORTANTES:"
+set "T_D2_21=- NO interrumpas el proceso (ni teclas, ni reinicio, ni apagado):"
+set "T_D2_22=un 'clean all' a medias deja el disco en un estado irregular."
+set "T_D2_23=- En SSD, 'clean all' NO garantiza el borrado físico: el"
+set "T_D2_24=controlador reparte las escrituras. Para eso se usa la"
+set "T_D2_25=herramienta del fabricante o el ATA Secure Erase."
+set "T_D2_26=- Si el disco ya tiene fallos físicos, esto no los arregla."
+set "T_D2_27=- Un disco sanitizado queda EN BRUTO (sin particiones): luego"
+set "T_D2_28=puedes maquetarlo con la opción [1]."
+set "T_D2_29=[!] Estás en Windows COMPLETO, no en WinPE. Comprueba que NO sea el"
+set "T_D2_30=volume' busca qué disco contiene la letra C:. Si hay duda,"
+set "T_D2_31=cancela ahora."
+set "T_D2_32=Para el borrado seguro se piden DOS confirmaciones escritas."
+set "T_D2_33=- Borrado seguro (opción 2): el Disco"
+set "T_D2_34=disco donde está instalado el sistema en ejecución: en 'list"
+set "T_D2_35=aparecerá EN BRUTO"
+set "T_DP_01=EJECUTANDO DISKPART. No pulses teclas, no cierres la ventana y no"
+set "T_DP_02=apagues el equipo mientras el comando esté en curso."
+set "T_DP_03=Nota: diskpart escribe en el idioma del sistema. Si ves caracteres"
+set "T_DP_04=raros, prueba en la Consola Avanzada:  chcp 850   y luego  chcp 65001"
+set "T_MENU_01=MENÚ PRINCIPAL"
+set "T_MENU_02=[1]  Preparación rápida de disco        limpieza y formato básico"
+set "T_MENU_03=[2]  Borrado seguro / Sanitización      destrucción lógica de datos"
+set "T_MENU_04=[3]  Consola Avanzada                   salir a CMD interactivo"
+set "T_MENU_05=[4]  Ayuda del sistema                  guía rápida del técnico"
+set "T_MENU_06=[5]  Salir / Apagar equipo"
+set "T_MENU_07=Aviso: [1] y [2] modifican DISCOS de verdad y piden confirmación"
+set "T_MENU_08=escrita. [3], [4] y [5] no tocan el hardware por sí solas."
+set "T_MENU_09=(Si la consola no reacciona a una sola tecla, teclea el número"
+set "T_MENU_10=y termina con ENTER.)"
+set "T_MENU_11=   Su opción [1-5]:  "
+set "T_MENU_12=Fecha y hora:"
+set "T_MENU_13=Modo de entrada:"
+set "T_SAL_01=[5] SALIR / APAGAR EQUIPO"
+set "T_SAL_02=[1]  Apagar el equipo"
+set "T_SAL_03=[2]  Salir de la herramienta y volver al sistema"
+set "T_SAL_04=[3]  Volver al menú principal (me he equivocado)"
+set "T_SAL_05=   Su opción [1-3]:  "
+set "T_SAL_06=!!!  ATENCIÓN  !!!"
+set "T_SAL_07=Vas a apagar el equipo. Se interrumpirá cualquier trabajo en"
+set "T_SAL_08=curso y, si arrancaste desde WinPE, terminará la sesión de"
+set "T_SAL_09=recuperación actual (los cambios ya guardados en el arranque RAM"
+set "T_SAL_10=no se conservan)."
+set "T_SAL_11=   Confirmar apagado? [1=Sí / 2=No]:  "
+set "T_SAL_12=Enviando señal de apagado con wpeutil (entorno WinPE detectado)..."
+set "T_SAL_13=Apagado programado en 5 segundos."
+set "T_SAL_14=Si te arrepientes desde OTRA consola escribe:  shutdown /a"
+set "T_SAL_15=Pulsa cualquier tecla para cerrar..."
+set "T_SAL_16=Sesión finalizada. Gracias por usar"
+exit /b 0
+
+REM ---------------------------------------------------------------------
+REM  IDIOMA_EN - ingles (%LANG%=EN).
+REM  Mismos nombres de variable que el bloque anterior, uno a uno.
+REM ---------------------------------------------------------------------
+:IDIOMA_EN
+set "T_AYU1_01=[4] SYSTEM HELP - Page 1 of 2: disks and storage"
+set "T_AYU1_02=DISKPART ........................ Windows disk manager"
+set "T_AYU1_03=Ways to use it:"
+set "T_AYU1_04=diskpart                    opens the interactive console"
+set "T_AYU1_05=diskpart /s script.txt      runs a batch of commands"
+set "T_AYU1_06=(this is what options 1 and 2 do)"
+set "T_AYU1_07=list disk                    physical disks and their size"
+set "T_AYU1_08=list volume                  volumes/drives and their letters"
+set "T_AYU1_09=select disk N                picks disk N (INDEX, not a letter)"
+set "T_AYU1_10=detail disk                  report of the selected disk"
+set "T_AYU1_11=clean                        erases the partition table"
+set "T_AYU1_12=(fast: the data is still there)"
+set "T_AYU1_13=clean all                    overwrites EVERYTHING with zeros"
+set "T_AYU1_14=(slow: logical destruction)"
+set "T_AYU1_15=convert gpt                  converts the disk to GPT layout"
+set "T_AYU1_16=convert mbr                  converts the disk to MBR layout"
+set "T_AYU1_17=create partition primary     creates one primary partition"
+set "T_AYU1_18=(optional: size=100000 in MB)"
+set "T_AYU1_19=format fs=ntfs quick         quick NTFS format"
+set "T_AYU1_20=(optional: label=SISTEMA)"
+set "T_AYU1_21=assign letter=Z              assigns a specific drive letter"
+set "T_AYU1_22=('assign' alone = next free letter)"
+set "T_AYU1_23=exit                         leaves diskpart"
+set "T_AYU1_24=Note: diskpart needs administrator rights. In /s mode it"
+set "T_AYU1_25=accepts no keyboard: the script rules and runs line by line."
+set "T_AYU1_26=CHKDSK X: /f .................. repairs file table errors"
+set "T_AYU1_27=CHKDSK X: /r .................. scans for bad sectors (VERY slow)"
+set "T_AYU1_28=CHKDSK X: /scan ............... checks without dismounting the drive"
+set "T_AYU1_29=FORMAT X: /fs:ntfs /q ......... quick format (without diskpart)"
+set "T_AYU1_30=FORMAT X: /fs:ntfs /q /p:1 .... + one zero pass (full Windows)"
+set "T_AYU1_31=The temporary scripts of options 1 and 2 are created in the"
+set "T_AYU1_32=system temp folder and are deleted when finished."
+set "T_AYU1_33=Press any key to continue to page 2..."
+set "T_AYU2_01=[4] SYSTEM HELP - Page 2 of 2: system, network and tools"
+set "T_AYU2_02=SYSTEM AND INVENTORY"
+set "T_AYU2_03=systeminfo .................... full technical sheet of the machine"
+set "T_AYU2_04=wmic bios get serialnumber .... machine serial number"
+set "T_AYU2_05=wmic os get caption,version ... exact operating system version"
+set "T_AYU2_06=sfc /scannow .................. system file integrity"
+set "T_AYU2_07=DISK HEALTH (SMART warning)"
+set "T_AYU2_08=wmic diskdrive get status ......... returns one of these values:"
+set "T_AYU2_09=OK          the disk answers with no failure warning"
+set "T_AYU2_10=Pred Fail   imminent failure warning: COPY the data NOW and"
+set "T_AYU2_11=replace the disk (do not format or erase it)"
+set "T_AYU2_12=wmic diskdrive get model,size,status ... model + size + status"
+set "T_AYU2_13=Note: 'wmic' is deprecated in Windows 11. Its equivalent in"
+set "T_AYU2_14=PowerShell is:  Get-CimInstance Win32_DiskDrive"
+set "T_AYU2_15=NETWORK"
+set "T_AYU2_16=ipconfig /all ................. detailed IP configuration"
+set "T_AYU2_17=ping 8.8.8.8 .................. Internet connectivity test"
+set "T_AYU2_18=nslookup example.com .......... DNS resolution test"
+set "T_AYU2_19=netstat -an ................... open ports and connections"
+set "T_AYU2_20=FILES AND PROCESSES"
+set "T_AYU2_21=dir /s /b name.ext ............ searches files in subfolders"
+set "T_AYU2_22=findstr /i word file .......... searches text inside a file"
+set "T_AYU2_23=robocopy SOURCE TARGET /E .... robust recursive copy"
+set "T_AYU2_24=tasklist ...................... running processes"
+set "T_AYU2_25=taskkill /IM name.exe /F ...... forces a process to close"
+set "T_AYU2_26=Notes for the workshop:"
+set "T_AYU2_27=- In WinPE only the commands included in the image exist."
+set "T_AYU2_28=If a command is missing, it is not there: try it in option 3."
+set "T_AYU2_29=- Before formatting a disk, check its SMART status with the"
+set "T_AYU2_30=command above: a disk with 'Pred Fail' does not deserve a new"
+set "T_AYU2_31=install (the work would be lost in weeks, not in years)."
+set "T_AYU2_32=   Also run the native CMD 'help'? [1=Yes / 2=No]:  "
+set "T_AYU2_33=--- NATIVE CMD HELP (use the mouse wheel to scroll) ---"
+set "T_AYU3_01=Press any key to return to the main menu..."
+set "T_BIEN_01=Welcome, technician."
+set "T_BIEN_02=This tool brings together the workshop's most common"
+set "T_BIEN_03=operations to service Windows machines and prepare disks"
+set "T_BIEN_04=in a fast, repeatable and surprise-free way."
+set "T_BIEN_05=GOLDEN RULES before touching any disk:"
+set "T_BIEN_06=1. ALWAYS identify the right disk before erasing anything."
+set "T_BIEN_07=Options 1 and 2 list the disks before asking."
+set "T_BIEN_08=2. Options 1 and 2 are DESTRUCTIVE: they erase the partition"
+set "T_BIEN_09=table (and in option 2, all the data on the disk)."
+set "T_BIEN_10=None of them acts unless you type a confirmation word."
+set "T_BIEN_11=3. When in doubt, read option 4 (Help) first and do not"
+set "T_BIEN_12=improvise with commands you do not know."
+set "T_BIEN_13=How to use it: type the number of the option shown in the"
+set "T_BIEN_14=menu. Depending on the environment the key alone or ENTER will do."
+set "T_BIEN_15=Press any key to enter the main menu..."
+set "T_CFM_01=[i] Confirmation not recognised: NOTHING has been executed."
+set "T_CFM_02=To continue, type"
+set "T_CFM_03=and press ENTER (empty ENTER cancels):"
+set "T_CFM_04=Type the NUMBER of the affected disk again"
+set "T_CFM_05=PREPARE"
+set "T_CFM_06=ERASE"
+set "T_COM_01=[!] Invalid input. Type only one of the allowed digits."
+set "T_COM_02=[!] Invalid input: type ONLY the disk number (for"
+set "T_COM_03=example: 0, 1, 2, 10), with no leading zeros, or the letter"
+set "T_COM_04=A to cancel and return to the menu."
+set "T_COM_05=[!] This console does NOT seem to have administrator rights."
+set "T_COM_06=diskpart will be able to list the disks, but NOT to modify them"
+set "T_COM_07=(it will return access denied on 'clean')."
+set "T_COM_08=   Continue anyway? [1=Yes / 2=No]:  "
+set "T_COM_09=[!] I could not create working files in:"
+set "T_COM_10=Without a writable folder I cannot build the diskpart"
+set "T_COM_11=script, and without a script nothing runs. WE ABORT without"
+set "T_COM_12=touching any disk (safety first)."
+set "T_COM_13=[!] I cannot find diskpart.exe in this image."
+set "T_COM_14=Is it a very trimmed WinPE? This module cannot continue."
+set "T_COM_15=Type the disk NUMBER you want to work on."
+set "T_COM_16=That number is the FIRST column of the listing above"
+set "T_COM_17=(Disk 0, Disk 1...). It is never a drive letter."
+set "T_COM_18=To cancel and return to the menu: type  A  and press ENTER."
+set "T_COM_19=   Disk number:  "
+set "T_COM_20=listing. It may be for one of two reasons:"
+set "T_COM_21=a) the number does not exist (you misread it), or"
+set "T_COM_22=b) your Windows translates the listing with other words and"
+set "T_COM_23=the automatic check cannot recognise it."
+set "T_COM_24=   What do we do? [1=Fix / 2=Continue / 3=Cancel]:  "
+set "T_COM_25=FINAL CHECK: this is the CURRENT state of the machine."
+set "T_COM_26=How to check the result:"
+set "T_COM_27=in 'list volume', a SISTEMA volume in NTFS with its letter."
+set "T_COM_28=(with no partitions or volumes). That is correct."
+set "T_COM_29=- If the disk does not show the expected result, check the"
+set "T_COM_30=warning diskpart gave before repeating any operation."
+set "T_COM_31=Reading the machine disks with diskpart (read only)..."
+set "T_COM_32=How to read this listing:"
+set "T_COM_33=- 'list disk'    the physical disks: look at the FIRST column"
+set "T_COM_34=(Disk 0, Disk 1...) and compare it with the SIZE."
+set "T_COM_35=- Status 'Online': the disk is operational."
+set "T_COM_36=- The '*' mark in the 'Gpt' column means it is already GPT."
+set "T_COM_37=- 'list volume'  which volumes exist and with which drive LETTER."
+set "T_COM_38=- Safety tip: look at the LABEL on the case of the machine."
+set "T_COM_39=A 500 GB disk cannot possibly be the 1 TB one."
+set "T_COM_40=Without a listing no disk can be chosen safely: we return"
+set "T_COM_41=to the menu without touching anything."
+set "T_COM_42=Technical Support Tool"
+set "T_COM_43=Version"
+set "T_COM_44=Phase"
+set "T_COM_45=Environment:"
+set "T_COM_46=[!] I could NOT confirm that Disk"
+set "T_COM_47=TEMPORARY SCRIPT about to be run"
+set "T_COM_48=[OK] diskpart finished with no errors (code 0)."
+set "T_COM_49=[!] diskpart returned the error code"
+set "T_COM_50=[!] diskpart could not complete the listing. Error code:"
+set "T_COM_51=Selected disk:"
+set "T_CONS_01=[3] ADVANCED CONSOLE"
+set "T_CONS_02=Opening an interactive CMD console in the SAME window."
+set "T_CONS_03=- Type 'exit' to return to the main menu."
+set "T_CONS_04=- You inherit the current environment (work drive, variables)."
+set "T_CONS_05=- NOTE: any variable change you make does NOT affect the menu."
+set "T_CONS_06=Remember: look first, act later. For disks:"
+set "T_CONS_07=diskpart  -^>  list disk  -^>  detail disk  -^>  exit"
+set "T_D1_01=[1] QUICK DISK PREPARATION (layout)"
+set "T_D1_02=This module leaves a disk ready to install Windows:"
+set "T_D1_03=a) Lists the physical disks and sizes (diskpart, read only)."
+set "T_D1_04=b) Asks you for the NUMBER of the disk (validated input)."
+set "T_D1_05=c) Builds the diskpart script with the exact commands and"
+set "T_D1_06=shows it so that you read it BEFORE running anything."
+set "T_D1_07=d) Requires you to type the word"
+set "T_D1_08=e) Runs it and lists the machine again to verify."
+set "T_D1_09=Exact command order:  clean  -^>  convert gpt  -^>"
+set "T_D1_10=create partition primary  -^>  format fs=ntfs quick label=SISTEMA"
+set "T_D1_11=-^>  assign (free letter chosen by Windows)."
+set "T_D1_12=REMEMBER: 'clean' erases the partition table of the chosen disk."
+set "T_D1_13=Everything on it stops being visible immediately."
+set "T_D1_14=Press any key to start with the listing..."
+set "T_D1_15=[1] QUICK DISK PREPARATION - SUMMARY AND CONFIRMATION"
+set "T_D1_16=Action:         erase the partition table and create one single"
+set "T_D1_17=GPT NTFS partition with the SISTEMA label."
+set "T_D1_18=the disk where the running system is installed,"
+set "T_D1_19=this operation would leave it unusable. At the slightest doubt:"
+set "T_D1_20=cancel and check first with 'list volume' (drive C:)."
+set "T_D1_21=Module finished. Press any key to return to the menu..."
+set "T_D1_22=Operation cancelled: no disk has been touched."
+set "T_D1_23=- Layout (option 1): Disk"
+set "T_D1_24=[!] You are in FULL Windows, not in WinPE. If the disk chosen were"
+set "T_D1_25=must show Gpt and,"
+set "T_D1_26=to continue."
+set "T_D2_01=[2] SECURE ERASE / SANITIZATION"
+set "T_D2_02=What it does: writes ZEROS over every addressable area of the"
+set "T_D2_03=disk so that the previous data cannot be recovered with"
+set "T_D2_04=recovery utilities. In diskpart:  clean all"
+set "T_D2_05=Reference framework (NIST SP 800-88, PURGE level):"
+set "T_D2_06='clean'      destroys only the partition table (seconds),"
+set "T_D2_07=but the data stays on the disk: it can be recovered."
+set "T_D2_08='clean all'  overwrites the content (hours) and practical"
+set "T_D2_09=recovery is no longer viable. That is what we will do."
+set "T_D2_10=For the DESTROY level (physical destruction of the media) no"
+set "T_D2_11=software helps: a certified shredder or incinerator."
+set "T_D2_12=[2] SECURE ERASE - SUMMARY AND CONFIRMATION"
+set "T_D2_13=Action:         clean all  (full overwrite with zeros)"
+set "T_D2_14=ESTIMATED TIME (rough; depends on the disk and its connection):"
+set "T_D2_15=250 GB disk ......... from 30 to 60 minutes"
+set "T_D2_16=500 GB disk ......... from 1 to 2 hours"
+set "T_D2_17=1 TB disk ........... from 2 to 4 hours"
+set "T_D2_18=2 TB disk ........... from 4 to 8 hours"
+set "T_D2_19=SSD (better over USB) .... usually faster, but see the warning"
+set "T_D2_20=IMPORTANT WARNINGS:"
+set "T_D2_21=- Do NOT interrupt the process (no keys, no reboot, no power off):"
+set "T_D2_22=a half done 'clean all' leaves the disk in an irregular state."
+set "T_D2_23=- On SSD, 'clean all' does NOT guarantee a physical erase: the"
+set "T_D2_24=controller spreads the writes. For that the manufacturer tool"
+set "T_D2_25=or the ATA Secure Erase is used."
+set "T_D2_26=- If the disk already has physical faults, this does not fix them."
+set "T_D2_27=- A sanitized disk is left RAW (no partitions): you can then"
+set "T_D2_28=lay it out with option [1]."
+set "T_D2_29=[!] You are in FULL Windows, not in WinPE. Check that it is NOT the"
+set "T_D2_30=volume' look for which disk holds drive C:. If in doubt,"
+set "T_D2_31=cancel now."
+set "T_D2_32=For the secure erase TWO written confirmations are required."
+set "T_D2_33=- Secure erase (option 2): Disk"
+set "T_D2_34=disk where the running system is installed: in 'list"
+set "T_D2_35=will appear RAW"
+set "T_DP_01=RUNNING DISKPART. Do not press keys, do not close the window and"
+set "T_DP_02=do not power off the machine while the command is running."
+set "T_DP_03=Note: diskpart writes in the system language. If you see strange"
+set "T_DP_04=characters, try the Advanced Console:  chcp 850   then  chcp 65001"
+set "T_MENU_01=MAIN MENU"
+set "T_MENU_02=[1]  Quick disk preparation             wipe table and format"
+set "T_MENU_03=[2]  Secure erase / Sanitization        logical data destruction"
+set "T_MENU_04=[3]  Advanced console                   drop to interactive CMD"
+set "T_MENU_05=[4]  System help                        technician quick guide"
+set "T_MENU_06=[5]  Exit / Shut down the computer"
+set "T_MENU_07=Warning: [1] and [2] really modify DISKS and ask for a written"
+set "T_MENU_08=confirmation. [3], [4] and [5] do not touch hardware on their own."
+set "T_MENU_09=(If the console does not react to a single key, type the number"
+set "T_MENU_10=and finish with ENTER.)"
+set "T_MENU_11=   Your option [1-5]:  "
+set "T_MENU_12=Date and time:"
+set "T_MENU_13=Input mode:"
+set "T_SAL_01=[5] EXIT / SHUT DOWN THE COMPUTER"
+set "T_SAL_02=[1]  Shut down the computer"
+set "T_SAL_03=[2]  Exit the tool and return to the system"
+set "T_SAL_04=[3]  Return to the main menu (my mistake)"
+set "T_SAL_05=   Your option [1-3]:  "
+set "T_SAL_06=!!!  WARNING  !!!"
+set "T_SAL_07=You are about to shut down the computer. Any work in progress"
+set "T_SAL_08=will be interrupted and, if you booted from WinPE, the current"
+set "T_SAL_09=recovery session will end (changes already saved in the RAM boot"
+set "T_SAL_10=are not kept)."
+set "T_SAL_11=   Confirm shutdown? [1=Yes / 2=No]:  "
+set "T_SAL_12=Sending the shutdown signal with wpeutil (WinPE detected)..."
+set "T_SAL_13=Shutdown scheduled in 5 seconds."
+set "T_SAL_14=If you change your mind from ANOTHER console type:  shutdown /a"
+set "T_SAL_15=Press any key to close..."
+set "T_SAL_16=Session finished. Thank you for using"
 exit /b 0
