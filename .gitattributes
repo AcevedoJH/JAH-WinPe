@@ -1,0 +1,35 @@
+# =====================================================================
+#  JAH-WinPe :: .gitattributes
+#  ---------------------------------------------------------------------
+#  Este archivo le dice a Git CÓMO tratar la línea de fin de fichero
+#  (LF vs CRLF) y qué archivos son binarios.
+#
+#  Por qué es importante aquí:
+#    - menu.bat DEBE viajar con CRLF. cmd.exe puede comportarse de forma
+#      extraña con finales de línea LF (los típicos de Linux/macOS).
+#    - Con 'text eol=crlf' Git guarda el contenido normalizado en el
+#      repositorio y lo ENTREGA con CRLF en el checkout, en cualquier
+#      sistema operativo. Así, clonar el repo en Windows deja un .bat
+#      listo para ejecutar sin conversiones manuales.
+#
+#  Documentación: https://git-scm.com/docs/gitattributes
+# =====================================================================
+
+# --- Scripts de Windows: CRLF obligatorio ----------------------------
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+
+# --- Documentación y utilidades multiplataforma: LF -------------------
+*.md    text eol=lf
+*.sh    text eol=lf
+
+# --- Binarios: nunca normalizar --------------------------------------
+#  Sin esta marca, Git intentaría "convertir finales de línea" en
+#  archivos binarios y podría corromperlos (y avisa en cada commit).
+*.exe   binary
+*.dll   binary
+*.iso   binary
+*.wim   binary
+*.esd   binary
+*.vhd   binary
+*.vhdx  binary

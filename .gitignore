@@ -1,0 +1,76 @@
+# =====================================================================
+#  JAH-WinPe :: .gitignore
+#  ---------------------------------------------------------------------
+#  Qué NO queremos versionar (es decir: qué debe ignorar Git).
+#
+#  Regla mental: al repositorio van SOLO el código y la documentación.
+#  Fuera: basura del sistema operativo, artefactos de construcción de
+#  imágenes y archivos temporales.
+#
+#  Sintaxis básica:
+#    patron        -> ignora ese nombre en cualquier carpeta
+#    carpeta/      -> ignora esa carpeta (la barra final indica directorio)
+#    *.ext         -> comodín de extensión
+#    !archivo      -> excepción: vuelve a incluir algo previamente ignorado
+#    # ...         -> comentario
+#  Documentación oficial: https://git-scm.com/docs/gitignore
+# =====================================================================
+
+# --- Basura del sistema operativo (Windows) --------------------------
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# --- Basura de otros sistemas (por si se clona el repo en Linux/macOS) ---
+.DS_Store
+.Trash-*/
+*~
+*.swp
+
+# --- Editores e IDE --------------------------------------------------
+.vscode/
+.idea/
+*.code-workspace
+nppBackup/
+
+# --- Copias de seguridad y archivos temporales -----------------------
+*.bak
+*.old
+*.orig
+*.tmp
+
+# --- Artefactos de WinPE (PESADOS: nunca al repositorio) -------------
+#  Copype / MakeWinPEMedia generan estas carpetas e imágenes de cientos
+#  de MB. Se reconstruyen desde el ADK; no deben viajar en Git.
+#  Si algún día necesitas versionar algo de aquí, quita el patrón.
+WinPE_*/
+mount/
+media/
+*.iso
+*.wim
+*.esd
+*.vhd
+*.vhdx
+
+# --- Logs y temporales del taller (los generará la Fase 2) -----------
+logs/
+*.log
+
+# --- Carpetas de trabajo/ensayos locales -----------------------------
+/tmp/
+/scratch/
+/_work/
+
+# =====================================================================
+#  NOTA PARA EL TÉCNICO / DESARROLLADOR
+#  ---------------------------------------------------------------------
+#  Si algún día aparecen archivos "fantasma" con nombres raros en la
+#  carpeta (por ejemplo: pantalla, cambia, listara, Preparacion...),
+#  NO es culpa de Git: es la trampa de un carácter '>' sin escapar
+#  dentro de una línea REM o ECHO de menu.bat. Recuerda que las flechas
+#  se escriben con el caret:  -^>   (ver README.md, Notas técnicas).
+#  Este .gitignore no puede adivinar esos nombres: se arreglan en el
+#  origen (el script), no aquí.
+# =====================================================================
