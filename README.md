@@ -16,7 +16,7 @@ dependencias externas: solo el archivo `menu.bat`.
 ```
 +--------------------------------------------------------------+
 |   JAH-WinPe  -  Herramienta de Soporte Técnico               |
-|   Versión 1.0.0  -  Fase 1  -  Entorno: Windows / WinPE      |
+|   Versión 1.1.0  -  Fase 2  -  Entorno: Windows / WinPE      |
 +--------------------------------------------------------------+
 |   [1]  Preparación rápida de disco   limpieza y formato      |
 |   [2]  Borrado seguro / Sanitización destrucción lógica      |
@@ -33,12 +33,17 @@ dependencias externas: solo el archivo `menu.bat`.
 | Fase | Contenido | Estado |
 |------|-----------|--------|
 | **1** | Interfaz: bienvenida, menú, ayuda, consola avanzada, apagado | ✅ Completada |
-| **2** | Flujos guiados de `diskpart`: preparación de disco y borrado seguro | ⏳ Pendiente |
+| **2** | Módulos de disco con `diskpart`: maquetación rápida y borrado seguro | ✅ Completada |
+| **3** | Log de actividad, detección BIOS/UEFI, localización ES/EN | ⏳ Pendiente |
 
-> **Importante:** en la Fase 1 las opciones **[1]** y **[2]** son *stubs*
-> (pantallas informativas). **No ejecutan todavía ninguna operación
-> destructiva sobre discos.** Mientras tanto, para trabajar a mano se usa
-> la opción **[3] Consola Avanzada**.
+> **Importante:** las opciones **[1]** y **[2]** ya ejecutan operaciones
+> **destructivas reales** sobre el disco elegido. Ninguna actúa sin que
+> teclees una palabra de confirmación (`PREPARAR` o `BORRAR`), y el borrado
+> seguro pide además repetir el número de disco. Antes de confirmar, el
+> programa **muestra el guion de `diskpart`** que va a ejecutar.
+>
+> Si solo quieres mirar el equipo sin modificar nada, usa la opción
+> **[3] Consola Avanzada**.
 
 ---
 
@@ -71,11 +76,47 @@ dependencias externas: solo el archivo `menu.bat`.
 
 | Opción | Nombre | Qué hace | Estado |
 |--------|--------|----------|--------|
-| `[1]` | Preparación rápida de disco | Limpieza + partición + formateo NTFS básico | Stub (Fase 2) |
-| `[2]` | Borrado seguro / Sanitización | Destrucción lógica de datos (NIST SP 800-88) | Stub (Fase 2) |
+| `[1]` | Preparación rápida de disco | `clean` + `convert gpt` + partición primaria + NTFS rápido (`SISTEMA`) + letra | Operativa |
+| `[2]` | Borrado seguro / Sanitización | `clean all` (sobrescritura con ceros, NIST SP 800-88 nivel Purge) | Operativa |
 | `[3]` | Consola Avanzada | Abre un `cmd` interactivo y vuelve al menú con `exit` | Operativa |
-| `[4]` | Ayuda del sistema | Guía rápida de `diskpart`, `chkdsk`, `wmic`, red… + `help` nativo | Operativa |
+| `[4]` | Ayuda del sistema | Guía rápida de `diskpart`, `chkdsk`, `format`, `wmic`… + `help` nativo | Operativa |
 | `[5]` | Salir / Apagar equipo | Salir del script o apagar (con confirmación) | Operativa |
+
+---
+
+## Cómo funcionan las opciones de disco (diseño)
+
+`diskpart` no atiende al teclado cuando trabaja con un guion: recibe una
+**lista de comandos** en un fichero de texto (`diskpart /s guion.txt`) y los
+ejecuta en orden. `menu.bat` aprovecha eso y hace lo siguiente, siempre
+igual:
+
+1. **Lista** los discos con `list disk` y `list volume` (solo lectura) y
+   muestra el resultado en pantalla.
+2. **Pide el número de disco** y lo valida carácter a carácter (solo
+   dígitos, sin ceros a la izquierda). Además intenta contrastarlo con el
+   listado y, si no puede confirmarlo, te pregunta en lugar de suponer.
+3. **Genera el guion** en la carpeta temporal del sistema (`_jah_diskpart.txt`).
+4. **Muestra el guion en pantalla** para que lo leas antes de ejecutarlo.
+5. **Pide confirmación escrita**: la palabra `PREPARAR` o `BORRAR`
+   (en el borrado seguro, además, repetir el número de disco).
+6. **Ejecuta** `diskpart /s` sin capturar la salida, para que veas el avance
+   (en `clean all` puede tardar horas).
+7. **Verifica** volviendo a listar discos y volúmenes.
+8. **Borra los ficheros temporales** (incluido el guion: no dejamos por ahí
+   una "receta de borrado" reutilizable por error).
+
+Ventajas: cero errores de tecleo en el momento crítico, trazabilidad de lo
+que se ha ejecutado y resultados repetibles.
+
+### Límite conocido (honestidad técnica)
+
+`diskpart` traduce sus mensajes al idioma del sistema (en español los discos
+aparecen como `Disco 0`, no `Disk 0`). La comprobación automática del
+listado reconoce las dos formas y, si no encuentra ninguna, **pregunta al
+técnico** en vez de decidir. Asimismo, si el texto nativo de `diskpart` se
+viera con caracteres raros en la consola, puede corregirse con
+`chcp 850` (y `chcp 65001` para volver al UTF-8 del menú).
 
 ---
 
@@ -120,6 +161,15 @@ Estas convenciones están explicadas en detalle dentro de `menu.bat`:
    menos superficie de error en el parser de batch.
 8. **Captura de entrada centralizada** en la subrutina `:LEER_OPCION`
    (`choice.exe` si existe; si no, `set /p` con lista blanca y saneado).
+9. **Números de disco: subrutina propia** `:LEER_NUMERO`, que valida
+   dígito a dígito (no se puede usar `choice` porque el número no es una
+   lista cerrada). La letra `A` cancela.
+10. **Guiones de `diskpart` en ficheros temporales.** Se escriben con
+    `echo` (`_jah_diskpart.txt`), se muestran antes de ejecutar y se borran
+    al terminar. En las líneas que se escriben hacia el fichero no puede
+    haber símbolos de redirección, porque `cmd.exe` los interpretaría.
+11. **Antes de toda acción destructiva** hay que teclear una palabra
+    literal (`PREPARAR` / `BORRAR`): un `ENTER` de más no borra nada.
 
 ---
 
@@ -127,11 +177,20 @@ Estas convenciones están explicadas en detalle dentro de `menu.bat`:
 
 - Toda acción irreversible pide **doble confirmación**; ante cualquier
   respuesta dudosa, el script **no ejecuta nada** y vuelve al menú.
+  Concretamente: teclear la palabra `PREPARAR`/`BORRAR` y, en el borrado
+  seguro, repetir además el número de disco.
 - **Regla de oro:** verifica siempre el disco correcto
-  (`diskpart` → `list disk` → `detail disk`) antes de tocar nada.
+  (`diskpart` → `list disk` → `detail disk` / `list volume`) antes de tocar
+  nada. Compara el tamaño con la etiqueta física del disco.
 - `clean` borra solo la tabla de particiones (los datos siguen ahí);
   `clean all` sobrescribe el medio y es lento. Entiende la diferencia antes
   de usarlos.
+- En **Windows completo**, el disco que contiene el sistema en ejecución
+  (letra `C:`) **no se debe tocar**: el módulo lo advierte y conviene
+  cancelar ante la mínima duda.
+- En **SSD**, `clean all` **no** garantiza el borrado físico (el
+  controlador reparte las escrituras): usa la herramienta del fabricante o
+  el ATA Secure Erase.
 
 ---
 
@@ -147,16 +206,29 @@ Estas convenciones están explicadas en detalle dentro de `menu.bat`:
 - [ ] `[5]` → `[3]` (volver) no apaga nada; `[1]` pide confirmación.
 - [ ] Los acentos se ven correctamente (sin "runas").
 - [ ] En WinPE: `[5]` → apagar usa `wpeutil`; en Windows, `shutdown`.
+- [ ] `[1]`: al teclear `A` en el número de disco vuelve al menú sin tocar nada.
+- [ ] `[1]`: al teclear letras, símbolos o ceros a la izquierda avisa y
+      vuelve a pedir el número (no se cierra).
+- [ ] `[1]`: antes de ejecutar, el guion aparece en pantalla y una palabra
+      distinta de `PREPARAR` cancela la operación.
+- [ ] `[2]`: pide `BORRAR` **y** repetir el número de disco; si el número no
+      coincide, cancela.
+- [ ] `[1]`/`[2]`: al terminar, la verificación (nuevo listado) muestra el
+      resultado esperado.
+- [ ] Al salir de un módulo, los ficheros `_jah_*.txt` ya no están en la
+      carpeta temporal.
 
 ---
 
-## Roadmap (Fase 2 y siguientes)
+## Roadmap (Fases siguientes)
 
-- [ ] Submenú guiado de `diskpart` para **[1]** (listar, seleccionar,
-      `clean`, partición primaria, `format fs=ntfs quick`, letra).
-- [ ] Flujo de **borrado seguro** para **[2]** (`clean all`, verificación).
-- [ ] Detección de firmware **BIOS/UEFI** para elegir esquema **MBR/GPT**.
+- [x] Módulo guiado de `diskpart` para **[1]** (listar, seleccionar,
+      `clean`, `convert gpt`, partición primaria, NTFS rápido, letra).
+- [x] Flujo de **borrado seguro** para **[2]** (`clean all` + verificación).
+- [x] Confirmación escrita (palabra clave) antes de toda acción destructiva.
+- [ ] Detección de firmware **BIOS/UEFI** para elegir esquema **MBR/GPT** solo.
 - [ ] **Log** de actividad (en la unidad de arranque o `%TEMP%`).
+- [ ] Lectura del tamaño real del disco para estimar el tiempo de `clean all`.
 - [ ] Modo "solo lectura" / inventario del equipo (`systeminfo`, `wmic`).
 - [ ] **Localización de la interfaz** (Español / English) por archivo de idioma.
 
