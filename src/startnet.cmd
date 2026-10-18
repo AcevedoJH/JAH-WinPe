@@ -1,0 +1,112 @@
+@echo off
+REM =====================================================================
+REM  JAH-WinPe :: startnet.cmd   (Fase 3 - arranque automatico en WinPE)
+REM  ---------------------------------------------------------------------
+REM  QUE ES ESTE ARCHIVO Y POR QUE EXISTE
+REM    Dentro de la imagen WinPE, 'winpeshl.exe' arranca como primer
+REM    proceso de usuario y busca, por defecto, este fichero:
+REM         %SystemRoot%\System32\startnet.cmd
+REM    (es decir, X:\Windows\System32\startnet.cmd, una vez que el
+REM    contenido de boot.wim se ha expandido en el disco RAM X:).
+REM    Sustituyendo el startnet.cmd de serie por ESTE, el equipo arranca
+REM    directamente nuestra herramienta: el tecnico no teclea nada.
+REM
+REM  POR QUE ESTE ORDEN DE PASOS
+REM    1) wpeinit .... inicializa Plug and Play (discos, USB) y red.
+REM    2) espera ..... pequeno margen para que termine de enumerar los USB.
+REM    3) buscar ..... localiza menu.bat en cualquier unidad.
+REM    4) lanzar ..... ejecuta menu.bat (la interfaz del taller).
+REM
+REM  NOTA SOBRE ACENTOS
+REM    TODO este fichero va en ASCII puro (sin acentos, ni siquiera en los
+REM    comentarios) a proposito: es lo primero que se ejecuta y todavia no
+REM    sabemos que pagina de codigos usa la consola. Asi es imposible que
+REM    aparezca un caracter raro en pantalla. menu.bat ya ajusta su propia
+REM    codificacion interna (chcp) nada mas arrancar.
+REM =====================================================================
+
+REM --- Paso 1: inicializar el entorno WinPE ----------------------------
+REM  'wpeinit' hace el trabajo que en un Windows normal haria la fase de
+REM  instalacion (MiniSetup): detecta hardware, arranca la red por DHCP y
+REM  deja listos los discos y los puertos USB. Deja su registro en:
+REM         X:\Windows\System32\wpeinit.log
+REM  Si esa linea fallara (imagen muy recortada sin wpeinit.exe), el
+REM  script continuara igual: no es critico para el taller.
+wpeinit
+
+REM --- Paso 2: pequena espera de cortesia ------------------------------
+REM  wpeinit puede tardar unos segundos en terminar de enumerar el USB que
+REM  contiene menu.bat. No tenemos 'timeout' ni 'choice' garantizados en
+REM  WinPE, asi que usamos el truco universal: un 'ping' a la direccion de
+REM  bucle local (127.0.0.1) con 6 intentos equivale a ~5 segundos.
+REM  Los mensajes del ping se silencian con  >nul .
+REM  Si la imagen no incluyera ping.exe, la linea solo daria un error
+REM  inofensivo y el script continuaria.
+ping -n 6 127.0.0.1 >nul
+
+REM --- Paso 3: localizar menu.bat --------------------------------------
+REM  Buscamos por orden de PRIORIDAD (gana la primera coincidencia):
+REM    1. X:\JAH\menu.bat    copia que VIAJA DENTRO de la ISO: el script
+REM                          de compilacion la metio en boot.wim.
+REM    2. X:\menu.bat        por si alguien la dejo suelta en la raiz.
+REM    3. Cualquier unidad A..Z -> por si el tecnico lleva menu.bat en un
+REM       pendrive aparte (ej. E:\JAH\menu.bat o E:\menu.bat).
+REM  Buscar con 'if exist' es solo lectura: no modifica nada de los
+REM  discos. El bucle recorre las 26 letras y se detiene en la primera
+REM  coincidencia (la subrutina comprueba 'MENU_RUTA' antes de seguir).
+set "MENU_RUTA="
+
+if exist "X:\JAH\menu.bat" set "MENU_RUTA=X:\JAH\menu.bat"
+if defined MENU_RUTA goto LANZAR
+if exist "X:\menu.bat" set "MENU_RUTA=X:\menu.bat"
+if defined MENU_RUTA goto LANZAR
+
+for %%L in (A B C D E F G H I J K L M N O P Q R S T U V W X Y Z) do if not defined MENU_RUTA call :BUSCAR_UNIDAD %%L
+if defined MENU_RUTA goto LANZAR
+goto NO_ENCONTRADO
+
+REM ---------------------------------------------------------------------
+REM  BUSCAR_UNIDAD - comprueba UNA letra (subrutina del bucle anterior).
+REM    %~1 = letra sola sin dos puntos (por ejemplo: E)
+REM  Se buscan las dos ubicaciones posibles, igual que en X:.
+REM ---------------------------------------------------------------------
+:BUSCAR_UNIDAD
+if exist "%~1:\JAH\menu.bat" set "MENU_RUTA=%~1:\JAH\menu.bat"
+if defined MENU_RUTA exit /b 0
+if exist "%~1:\menu.bat" set "MENU_RUTA=%~1:\menu.bat"
+exit /b 0
+
+REM --- Paso 4: lanzar la herramienta -----------------------------------
+:LANZAR
+echo.
+echo  JAH-WinPe: arrancando el menu desde  %MENU_RUTA%
+echo.
+REM  'call' es OBLIGATORIO para ejecutar un .bat/.cmd desde otro: sin
+REM  'call', cmd cederia el control para siempre a menu.bat y, al
+REM  terminar, la sesion quedaria en una pantalla negra sin retorno.
+call "%MENU_RUTA%"
+REM  Si llegamos aqui, el tecnico ha salido del menu. En lugar de dejar
+REM  la pantalla en negro abrimos una consola de emergencia:
+REM    - 'cmd /k' abre el interprete y NO lo cierra al acabar un comando.
+REM    - El tecnico escribe 'exit' cuando quiera reiniciar el equipo.
+echo.
+echo  El menu se ha cerrado. Consola de emergencia (escribe 'exit' para reiniciar).
+echo.
+cmd /k
+exit /b 0
+
+REM --- menu.bat no encontrado ------------------------------------------
+:NO_ENCONTRADO
+echo.
+echo  [!] No se ha encontrado menu.bat en ninguna unidad.
+echo.
+echo      Como solucionarlo:
+echo        - Copia menu.bat a la raiz de un pendrive   (ej.: E:\menu.bat)
+echo        - o dentro de una carpeta JAH               (ej.: E:\JAH\menu.bat)
+echo      Despues reinicia el equipo y arranca de nuevo desde WinPE.
+echo.
+echo      Se abre una consola de emergencia para que investigues
+echo      (por ejemplo: diskpart, luego list volume, luego exit).
+echo.
+cmd /k
+exit /b 0

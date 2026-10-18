@@ -11,7 +11,11 @@ de consola simple, repetible y "a prueba de errores de tecleo".
 
 Funciona **tanto en Windows completo como en Windows PE** (entorno de
 recuperación que arranca desde USB/ISO). No requiere instalación ni
-dependencias externas: solo el archivo `menu.bat`.
+dependencias externas: solo el archivo `src/menu.bat`.
+
+Desde la **Fase 3** el proyecto además **se compila como ISO arrancable**
+(UEFI x64 + BIOS Legacy) con **arranque automático** de la herramienta; ver
+[`docs/BUILD_GUIDE.md`](docs/BUILD_GUIDE.md).
 
 ```
 +--------------------------------------------------------------+
@@ -38,7 +42,8 @@ dependencias externas: solo el archivo `menu.bat`.
 | **2** | Módulos de disco con `diskpart`: maquetación rápida y borrado seguro | ✅ Completada |
 | **2.5** | Interfaz **multilenguaje** (Español / English) + README bilingüe | ✅ Completada |
 | **2.8** | **Escudo de seguridad**: bloqueo del disco de arranque + confirmación por palabra | ✅ Completada |
-| **3** | Log de actividad, detección BIOS/UEFI, más idiomas | ⏳ Pendiente |
+| **3** | **Entorno WinPE**: arranque automático (`startnet.cmd`) + **ISO arrancable** doble (UEFI/BIOS) | ✅ Completada |
+| **4** | Log de actividad, detección BIOS/UEFI, más idiomas | ⏳ Pendiente |
 
 > **Importante:** las opciones **[1]** y **[2]** ya ejecutan operaciones
 > **destructivas reales** sobre el disco elegido. Ninguna actúa sin que
@@ -56,9 +61,12 @@ dependencias externas: solo el archivo `menu.bat`.
 ## Requisitos
 
 - **Windows 10/11** o **WinPE** (imagen creada con Windows ADK 10/11).
-- **Sin instalación**: basta copiar `menu.bat` a la carpeta o USB de trabajo.
+- **Sin instalación**: basta copiar `src\menu.bat` a la carpeta o USB de
+  trabajo (o arrancar la ISO generada en la Fase 3).
 - **Permisos de administrador** para las operaciones de disco
   (en WinPE se ejecuta ya con privilegios de SYSTEM).
+- Solo para **compilar la ISO** (no para usarla): Windows ADK + complemento
+  WinPE. Detalles en [`docs/BUILD_GUIDE.md`](docs/BUILD_GUIDE.md).
 - Opcional: `choice.exe` en `%SystemRoot%\System32`.
   Si no existe (algunas imágenes WinPE minimalistas), el script detecta la
   ausencia y usa automáticamente su respaldo con `set /p` + lista blanca.
@@ -67,16 +75,33 @@ dependencias externas: solo el archivo `menu.bat`.
 
 ## Uso rápido
 
-1. Copia `menu.bat` a la raíz de tu carpeta de trabajo o del USB de arranque.
+1. Copia `src\menu.bat` a la raíz de tu carpeta de trabajo o del USB de
+   arranque. También puedes generar la **ISO arrancable** (ver más abajo).
 2. Ejecútalo:
-   - Doble clic sobre `menu.bat`, o
-   - desde una consola: `menu.bat`
+   - Doble clic sobre `src\menu.bat`, o
+   - desde una consola: `src\menu.bat`
 3. **Elige idioma** en la primera pantalla (`[1] Español` / `[2] English`).
    Si no eliges, el programa continúa en Español.
 4. Muévete por los menús tecleando el número de la opción
    (si tu consola no reacciona a una sola tecla, termina con `ENTER`).
 5. Desde **[3] Consola Avanzada** puedes ejecutar cualquier comando;
    escribe `exit` para volver al menú principal.
+
+### Compilar la ISO arrancable (Fase 3)
+
+Si quieres un medio de rescate **arrancable** (en lugar de copiar
+`src\menu.bat` a mano), compila la ISO desde un equipo Windows **como
+Administrador**:
+
+```bat
+build\build_iso.bat
+```
+
+Genera `JAH-WinPe.iso` con arranque **UEFI x64 + BIOS Legacy** y
+`menu.bat` integrado: al arrancar de la ISO, el menú **aparece solo**.
+Los requisitos (Windows ADK + complemento WinPE), los parámetros del script
+y las instrucciones para **probarla en QEMU** están en
+[`docs/BUILD_GUIDE.md`](docs/BUILD_GUIDE.md).
 
 ---
 
@@ -113,7 +138,7 @@ Al arrancar, el programa muestra una pantalla de selección de idioma:
 - El idioma **no se recuerda** entre ejecuciones: se pregunta siempre. Es
   intencionado (un USB de taller lo usan varias personas).
 - Para **añadir o corregir textos**, edita el bloque `:IDIOMA_ES` o
-  `:IDIOMA_EN` al final de `menu.bat` (ver "Notas técnicas", punto 12).
+  `:IDIOMA_EN` al final de `src/menu.bat` (ver "Notas técnicas", punto 12).
 
 ---
 
@@ -121,7 +146,7 @@ Al arrancar, el programa muestra una pantalla de selección de idioma:
 
 `diskpart` no atiende al teclado cuando trabaja con un guion: recibe una
 **lista de comandos** en un fichero de texto (`diskpart /s guion.txt`) y los
-ejecuta en orden. `menu.bat` aprovecha eso y hace lo siguiente, siempre
+ejecuta en orden. `src\menu.bat` aprovecha eso y hace lo siguiente, siempre
 igual:
 
 1. **Lista** los discos con `list disk` y `list volume` (solo lectura) y
@@ -159,14 +184,27 @@ viera con caracteres raros en la consola, puede corregirse con
 
 ```
 JAH-WinPe/
-├─ menu.bat        Interfaz principal del taller (Batch, comentado).
-│                  Incluye, al final, los dos diccionarios de idioma
-│                  (:IDIOMA_ES y :IDIOMA_EN).
-├─ README.md       Documentación (Español, por defecto)
-├─ README.en.md    Documentación (English)
-├─ .gitignore      Qué NO debe versionarse (basura, imágenes, logs…)
-└─ .gitattributes  Fuerza CRLF en los .bat (clave para que cmd.exe funcione)
+├─ src/             Contenido que entra en la imagen WinPE
+│  ├─ menu.bat      Interfaz principal del taller (Batch, comentado).
+│  │                Incluye, al final, los dos diccionarios de idioma
+│  │                (:IDIOMA_ES y :IDIOMA_EN).
+│  └─ startnet.cmd  Arranque automático dentro de WinPE (Fase 3):
+│                   wpeinit + búsqueda de menu.bat + lanzamiento.
+├─ build/           Utilidades de construcción (no van al ISO)
+│  ├─ build_iso.ps1 Compila la ISO con el ADK (oscdimg + DISM).
+│  ├─ build_iso.bat Lanzador cómodo (comprueba admin y llama al .ps1).
+│  └─ work/         (generado) soporte WinPE + punto de montaje.
+├─ docs/            Documentación técnica
+│  └─ BUILD_GUIDE.md Arquitectura de arranque WinPE + pruebas con QEMU.
+├─ README.md        Documentación (Español, por defecto)
+├─ README.en.md     Documentación (English)
+├─ .gitignore       Qué NO debe versionarse (basura, imágenes, logs…)
+└─ .gitattributes   Fuerza CRLF en .bat/.cmd/.ps1 (clave para cmd.exe)
 ```
+
+> **¿Por qué los README siguen en la raíz?** GitHub solo renderiza como
+> portada el `README.md` de la raíz; la documentación **técnica** (esta
+> guía de construcción) sí vive en `docs/`.
 
 > **¿Quieres otro idioma por defecto?** GitHub renderiza siempre
 > `README.md`. Si prefieres que el inglés sea el principal, renombra
@@ -177,7 +215,7 @@ JAH-WinPe/
 
 ## Notas técnicas (leer antes de editar)
 
-Estas convenciones están explicadas en detalle dentro de `menu.bat`:
+Estas convenciones están explicadas en detalle dentro de `src\menu.bat`:
 
 1. **Codificación: UTF-8 SIN BOM.** El script ejecuta `chcp 65001` para que
    los acentos se vean bien. Nunca guardes el `.bat` con BOM: rompería la
@@ -292,6 +330,19 @@ Estas convenciones están explicadas en detalle dentro de `menu.bat`:
 - [ ] Al salir de un módulo, los ficheros `_jah_*.txt` ya no están en la
       carpeta temporal.
 
+### ISO arrancable (Fase 3)
+
+- [ ] `build\build_iso.bat` termina con "COMPILACION TERMINADA" y muestra
+      el SHA-256 del ISO.
+- [ ] La **misma** `JAH-WinPe.iso` arranca en **BIOS Legacy** y en **UEFI**
+      (QEMU + OVMF; comandos en `docs/BUILD_GUIDE.md`).
+- [ ] Con el arranque por defecto (`_noprompt`), la ISO arranca **sin pulsar
+      tecla**.
+- [ ] Al entrar en WinPE aparece `JAH-WinPe: arrancando el menu desde …` y se
+      abre el menú **automáticamente** (sin teclear nada).
+- [ ] Si no hay `menu.bat` en ninguna unidad, sale el aviso `[!]` y una
+      consola de emergencia en vez de una pantalla negra.
+
 ---
 
 ## Roadmap (Fases siguientes)
@@ -301,10 +352,14 @@ Estas convenciones están explicadas en detalle dentro de `menu.bat`:
 - [x] Flujo de **borrado seguro** para **[2]** (`clean all` + verificación).
 - [x] Confirmación escrita (palabra clave) antes de toda acción destructiva.
 - [x] Interfaz **multilenguaje** Español / English (diccionarios dentro de
-      `menu.bat` + selector de idioma al arrancar).
+      `src/menu.bat` + selector de idioma al arrancar).
 - [x] **Escudo de seguridad** (Fase 2.8): bloqueo del disco de arranque,
       validación de existencia del disco y confirmación con palabra clave
       (`CONFIRMAR`/`CONFIRM` y `RIESGO`/`RISK`).
+- [x] **Entorno WinPE** (Fase 3): arranque automático con
+      `src/startnet.cmd` (wpeinit + búsqueda de `menu.bat`).
+- [x] **ISO arrancable** doble (UEFI x64 + BIOS Legacy) con `oscdimg` y
+      guía de compilación y prueba en QEMU (`docs/BUILD_GUIDE.md`).
 - [ ] Detección de firmware **BIOS/UEFI** para elegir esquema **MBR/GPT** solo.
 - [ ] **Log** de actividad (en la unidad de arranque o `%TEMP%`).
 - [ ] Lectura del tamaño real del disco para estimar el tiempo de `clean all`.

@@ -48,6 +48,7 @@ nppBackup/
 WinPE_*/
 mount/
 media/
+build/work/
 *.iso
 *.wim
 *.esd

@@ -11,7 +11,11 @@ that is simple, repeatable and "typo-proof".
 
 It runs **both on full Windows and on Windows PE** (the recovery environment
 that boots from USB/ISO). No installation and no external dependencies:
-just the `menu.bat` file.
+just the `src/menu.bat` file.
+
+Since **Phase 3** the project can also be **built as a bootable ISO**
+(UEFI x64 + BIOS Legacy) that launches the tool **automatically**; see
+[`docs/BUILD_GUIDE.md`](docs/BUILD_GUIDE.md).
 
 ```
 +--------------------------------------------------------------+
@@ -41,7 +45,8 @@ just the `menu.bat` file.
 | **2** | `diskpart` disk modules: quick preparation and secure erase | ✅ Done |
 | **2.5** | **Multilingual** UI (Español / English) + bilingual README | ✅ Done |
 | **2.8** | **Security shield**: boot-disk lock + keyword confirmation | ✅ Done |
-| **3** | Activity log, BIOS/UEFI detection, more languages | ⏳ Pending |
+| **3** | **WinPE environment**: automatic start-up (`startnet.cmd`) + **bootable ISO**, dual (UEFI/BIOS) | ✅ Done |
+| **4** | Activity log, BIOS/UEFI detection, more languages | ⏳ Pending |
 
 > **Important:** options **[1]** and **[2]** now perform **real destructive
 > operations** on the selected disk. Nothing runs unless you type the
@@ -59,9 +64,12 @@ just the `menu.bat` file.
 ## Requirements
 
 - **Windows 10/11** or **WinPE** (image built with Windows ADK 10/11).
-- **No installation**: just copy `menu.bat` to your working folder or USB drive.
+- **No installation**: just copy `src\menu.bat` to your working folder or USB
+  drive (or boot the ISO built in Phase 3).
 - **Administrator rights** for disk operations
   (in WinPE you already run with SYSTEM privileges).
+- Only to **build the ISO** (not to use it): Windows ADK + WinPE add-on.
+  Details in [`docs/BUILD_GUIDE.md`](docs/BUILD_GUIDE.md).
 - Optional: `choice.exe` in `%SystemRoot%\System32`.
   If it is missing (some minimal WinPE images), the script detects it and
   automatically falls back to `set /p` with a whitelist.
@@ -70,16 +78,32 @@ just the `menu.bat` file.
 
 ## Quick start
 
-1. Copy `menu.bat` to the root of your working folder or boot USB drive.
+1. Copy `src\menu.bat` to the root of your working folder or boot USB drive.
+   You can also build the **bootable ISO** (see below).
 2. Run it:
-   - double-click `menu.bat`, or
-   - from a console: `menu.bat`
+   - double-click `src\menu.bat`, or
+   - from a console: `src\menu.bat`
 3. **Pick a language** on the first screen (`[1] Español` / `[2] English`).
    If you don't, the tool continues in Spanish.
 4. Navigate the menus by typing the option number
    (if your console does not react to a single key, press `ENTER` afterwards).
 5. From **[3] Advanced Console** you can run any command;
    type `exit` to return to the main menu.
+
+### Build the bootable ISO (Phase 3)
+
+If you want a **bootable** rescue medium (instead of copying `src\menu.bat`
+by hand), build the ISO on a Windows machine **as Administrator**:
+
+```bat
+build\build_iso.bat
+```
+
+It produces `JAH-WinPe.iso` with dual boot **UEFI x64 + BIOS Legacy** and
+`menu.bat` integrated: when it boots from the ISO, the menu **comes up on
+its own**. Requirements (Windows ADK + WinPE add-on), the script parameters
+and the **QEMU** test instructions are in
+[`docs/BUILD_GUIDE.md`](docs/BUILD_GUIDE.md).
 
 ---
 
@@ -115,7 +139,7 @@ On start-up the tool shows a language selection screen:
 - The language is **not remembered** between runs: it is always asked. This
   is intentional (a workshop USB drive is used by several people).
 - To **add or fix texts**, edit the `:IDIOMA_ES` or `:IDIOMA_EN` block at the
-  end of `menu.bat` (see "Technical notes", item 12).
+  end of `src/menu.bat` (see "Technical notes", item 12).
 
 ---
 
@@ -123,7 +147,7 @@ On start-up the tool shows a language selection screen:
 
 `diskpart` does not listen to the keyboard when it runs a script: it takes a
 **list of commands** from a text file (`diskpart /s script.txt`) and executes
-them in order. `menu.bat` leverages that and always does the same:
+them in order. `src\menu.bat` leverages that and always does the same:
 
 1. **Lists** the disks with `list disk` and `list volume` (read-only) and
    shows the result on screen.
@@ -160,14 +184,27 @@ menu's UTF-8).
 
 ```
 JAH-WinPe/
-├─ menu.bat        Main workshop interface (Batch, fully commented).
-│                  It contains both language dictionaries at the end
-│                  (:IDIOMA_ES and :IDIOMA_EN).
-├─ README.md       Documentation (Español, default)
-├─ README.en.md    Documentation (English)
-├─ .gitignore      What must NOT be versioned (junk, images, logs…)
-└─ .gitattributes  Forces CRLF on .bat files (critical for cmd.exe)
+├─ src/             Content that goes into the WinPE image
+│  ├─ menu.bat      Main workshop interface (Batch, fully commented).
+│  │                It contains both language dictionaries at the end
+│  │                (:IDIOMA_ES and :IDIOMA_EN).
+│  └─ startnet.cmd  Automatic start-up inside WinPE (Phase 3):
+│                   wpeinit + menu.bat search + launch.
+├─ build/           Build utilities (they do not go into the ISO)
+│  ├─ build_iso.ps1 Builds the ISO with the ADK (oscdimg + DISM).
+│  ├─ build_iso.bat Convenient launcher (checks admin, calls the .ps1).
+│  └─ work/         (generated) WinPE media + mount point.
+├─ docs/            Technical documentation
+│  └─ BUILD_GUIDE.md WinPE boot architecture + QEMU testing.
+├─ README.md        Documentation (Español, default)
+├─ README.en.md     Documentation (English)
+├─ .gitignore       What must NOT be versioned (junk, images, logs…)
+└─ .gitattributes   Forces CRLF on .bat/.cmd/.ps1 (critical for cmd.exe)
 ```
+
+> **Why do the READMEs stay at the root?** GitHub only renders the root
+> `README.md` as the landing page; the actual **technical** documentation
+> (this build guide) does live in `docs/`.
 
 > **Want a different default language?** GitHub always renders `README.md`.
 > If you prefer English as the main one, rename `README.en.md` → `README.md`
@@ -177,7 +214,7 @@ JAH-WinPe/
 
 ## Technical notes (read before editing)
 
-These conventions are explained in detail inside `menu.bat`:
+These conventions are explained in detail inside `src\menu.bat`:
 
 1. **Encoding: UTF-8 WITHOUT BOM.** The script runs `chcp 65001` so accents
    display correctly. Never save the `.bat` with a BOM: it would break the
@@ -287,6 +324,19 @@ These conventions are explained in detail inside `menu.bat`:
 - [ ] After leaving a module, the `_jah_*.txt` files are gone from the temp
       folder.
 
+### Bootable ISO (Phase 3)
+
+- [ ] `build\build_iso.bat` ends with "COMPILACION TERMINADA" and prints the
+      ISO SHA-256.
+- [ ] The **same** `JAH-WinPe.iso` boots in **BIOS Legacy** and in **UEFI**
+      (QEMU + OVMF; commands in `docs/BUILD_GUIDE.md`).
+- [ ] With the default boot mode (`_noprompt`), the ISO boots **without
+      pressing a key**.
+- [ ] On entering WinPE it prints `JAH-WinPe: arrancando el menu desde …` and
+      opens the menu **automatically** (no typing).
+- [ ] If there is no `menu.bat` on any drive, the `[!]` warning and an
+      emergency console appear instead of a black screen.
+
 ---
 
 ## Roadmap (next phases)
@@ -295,11 +345,15 @@ These conventions are explained in detail inside `menu.bat`:
       `convert gpt`, primary partition, quick NTFS, drive letter).
 - [x] **Secure erase** flow for **[2]** (`clean all` + verification).
 - [x] Written confirmation (keyword) before every destructive action.
-- [x] **Multilingual** UI Español / English (dictionaries inside `menu.bat` +
-      language selector on start-up).
+- [x] **Multilingual** UI Español / English (dictionaries inside
+      `src/menu.bat` + language selector on start-up).
 - [x] **Security shield** (Phase 2.8): boot-disk lock, disk-existence
       validation and keyword confirmation (`CONFIRMAR`/`CONFIRM` and
       `RIESGO`/`RISK`).
+- [x] **WinPE environment** (Phase 3): automatic start-up with
+      `src/startnet.cmd` (wpeinit + `menu.bat` search).
+- [x] **Bootable ISO**, dual (UEFI x64 + BIOS Legacy), built with `oscdimg`,
+      plus a build and QEMU test guide (`docs/BUILD_GUIDE.md`).
 - [ ] **BIOS/UEFI** firmware detection to choose the **MBR/GPT** scheme alone.
 - [ ] Activity **log** (on the boot volume or `%TEMP%`).
 - [ ] Read the real disk size to estimate `clean all` duration.

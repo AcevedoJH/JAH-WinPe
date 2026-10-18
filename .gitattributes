@@ -16,8 +16,12 @@
 # =====================================================================
 
 # --- Scripts de Windows: CRLF obligatorio ----------------------------
+#  .bat y .cmd -> CRLF porque los lee cmd.exe.
+#  .ps1        -> CRLF por comodidad: se editan en Windows (Notepad/VSCode)
+#                 y, aunque PowerShell admite LF, uniformamos.
 *.bat   text eol=crlf
 *.cmd   text eol=crlf
+*.ps1   text eol=crlf
 
 # --- Documentación y utilidades multiplataforma: LF -------------------
 *.md    text eol=lf
