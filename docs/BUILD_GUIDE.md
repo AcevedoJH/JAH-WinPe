@@ -345,12 +345,13 @@ asigne) y lanzar la herramienta. **Este es el escenario de taller real.**
 La orden que genera `build_iso.ps1` (guardada en `build\work\oscdimg_temp.cmd`):
 
 ```bat
-"…\oscdimg.exe" -nJAHWINPE -m -o -bootdata:2#p0,e,b"…\etfsboot.com"#p0,e,b"…\efisys_noprompt.bin" "…\media" "…\JAH-WinPe.iso"
+"…\oscdimg.exe" -n -lJAHWINPE -m -o -bootdata:2#p0,e,b"…\etfsboot.com"#p0,e,b"…\efisys_noprompt.bin" "…\media" "…\JAH-WinPe.iso"
 ```
 
 | Parámetro | Significado |
 |-----------|-------------|
-| `-nJAHWINPE` | **Etiqueta de volumen** de la ISO (lo que se ve como nombre del medio). |
+| `-n` | Permite **nombres de archivo largos** (más allá del formato DOS 8.3) en ISO 9660. |
+| `-lJAHWINPE` | **Etiqueta de volumen** de la ISO (lo que se ve como nombre del medio), según la sintaxis `-l<volumeLabel>` de oscdimg. |
 | `-m` | Permite imágenes **mayores** de lo que el estándar ISO9660 "clásico" admite. |
 | `-o` | **Optimiza** almacenamiento: si hay ficheros repetidos, los guarda una sola vez (típico en WIMs grandes). |
 | `-bootdata:…` | Define las **entradas de arranque** (El Torito). Ver desglose abajo. |

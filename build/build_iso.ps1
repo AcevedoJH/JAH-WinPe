@@ -397,7 +397,7 @@ $bootdata = '2#p0,e,b"{0}"#p0,e,b"{1}"' -f $Etfsboot, $Efisys
 #  dejar que cmd.exe la ejecute tal cual. Ventaja extra: si algo falla,
 #  el .cmd queda en disco y puedes ver/editar la orden real.
 $RutaCmdOscdimg = Join-Path $WorkRoot 'oscdimg_temp.cmd'
-$lineaOscdimg = '"{0}" -n{1} -m -o -bootdata:{2} "{3}" "{4}"' -f `
+$lineaOscdimg = '"{0}" -n -l{1} -m -o -bootdata:{2} "{3}" "{4}"' -f `
                 $RutaOscdimg, $NombreVolumen, $bootdata, $DirMedia, $OutputIso
 $contenidoCmd = @(
     '@echo off',
