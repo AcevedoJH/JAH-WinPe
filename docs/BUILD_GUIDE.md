@@ -67,7 +67,7 @@
                 └────────┬─────────┘
                          ▼
                 ┌──────────────────┐
-                │    menu.bat      │  La interfaz del taller (Fase 1/2/2.8/4)
+                │    menu.bat      │  La interfaz del taller (Fase 1/2/2.8/4/4.5)
                 └──────────────────┘
 ```
 

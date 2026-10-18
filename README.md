@@ -22,13 +22,14 @@ Desde la **Fase 3** el proyecto además **se compila como ISO arrancable**
 |   Elige idioma / Choose language:  [1] Español   [2] English |
 +--------------------------------------------------------------+
 |   JAH-WinPe  -  Herramienta de Soporte Técnico               |
-|   Versión 1.4.0  -  Fase 4.0  -  Entorno: Windows / WinPE    |
+|   Versión 1.5.0  -  Fase 4.5  -  Entorno: Windows / WinPE    |
 +--------------------------------------------------------------+
 |   [1]  Preparación rápida de disco   limpieza y formato      |
 |   [2]  Borrado seguro / Sanitización destrucción lógica      |
-|   [3]  Consola Avanzada              salir a CMD interactivo |
-|   [4]  Ayuda del sistema             guía rápida del técnico |
-|   [5]  Salir / Apagar equipo                                 |
+|   [3]  Diagnóstico / Inventario      consulta SOLO LECTURA   |
+|   [4]  Consola Avanzada              salir a CMD interactivo |
+|   [5]  Ayuda del sistema             guía rápida del técnico |
+|   [6]  Salir / Apagar equipo                                 |
 +--------------------------------------------------------------+
 |   Firmware: UEFI  ->  GPT     |   Log: persistente / RAM     |
 +--------------------------------------------------------------+
@@ -46,7 +47,8 @@ Desde la **Fase 3** el proyecto además **se compila como ISO arrancable**
 | **2.8** | **Escudo de seguridad**: bloqueo del disco de arranque + confirmación por palabra | ✅ Completada |
 | **3** | **Entorno WinPE**: arranque automático (`startnet.cmd`) + **ISO arrancable** doble (UEFI/BIOS) | ✅ Completada |
 | **4** | **Firmware UEFI/Legacy** (esquema GPT/MBR automático) + **registro de actividad** (`jah-winpe.log`) | ✅ Completada |
-| **5** | Más idiomas; leer el tamaño real del disco; recordar el idioma entre sesiones | ⏳ Pendiente |
+| **4.5** | **Inventario** de hardware (solo lectura) + **estimación de tiempo** del borrado según tamaño real y tipo de disco | ✅ Completada |
+| **5** | Más idiomas; recordar el idioma entre sesiones | ⏳ Pendiente |
 
 > **Importante:** las opciones **[1]** y **[2]** ya ejecutan operaciones
 > **destructivas reales** sobre el disco elegido. Ninguna actúa sin que
@@ -57,7 +59,7 @@ Desde la **Fase 3** el proyecto además **se compila como ISO arrancable**
 > se **bloquea** y no se genera ningún guion.
 >
 > Si solo quieres mirar el equipo sin modificar nada, usa la opción
-> **[3] Consola Avanzada**.
+> **[3] Diagnóstico / Inventario** (es de **solo lectura**).
 >
 > Desde la **Fase 4**, el programa **detecta el firmware** (UEFI o BIOS
 > Legacy) y elige solo el esquema de particionado correcto (**GPT** en UEFI,
@@ -65,6 +67,11 @@ Desde la **Fase 3** el proyecto además **se compila como ISO arrancable**
 > pregunta al técnico qué esquema aplicar. Cada operación relevante queda
 > anotada con fecha y hora en un **registro de actividad** (`jah-winpe.log`)
 > que, cuando existe un disco persistente conectado, sobrevive al reinicio.
+>
+> Desde la **Fase 4.5**, antes de un `clean all` el programa **lee el tamaño
+> real del disco** y muestra una **estimación orientativa del tiempo** de
+> borrado (según sea HDD o SSD y su capacidad) en un aviso amarillo, **antes**
+> de pedir la palabra de confirmación.
 
 ---
 
@@ -94,7 +101,7 @@ Desde la **Fase 3** el proyecto además **se compila como ISO arrancable**
    Si no eliges, el programa continúa en Español.
 4. Muévete por los menús tecleando el número de la opción
    (si tu consola no reacciona a una sola tecla, termina con `ENTER`).
-5. Desde **[3] Consola Avanzada** puedes ejecutar cualquier comando;
+5. Desde **[4] Consola Avanzada** puedes ejecutar cualquier comando;
    escribe `exit` para volver al menú principal.
 
 ### Compilar la ISO arrancable (Fase 3)
@@ -120,10 +127,34 @@ y las instrucciones para **probarla en QEMU** están en
 | Opción | Nombre | Qué hace | Estado |
 |--------|--------|----------|--------|
 | `[1]` | Preparación rápida de disco | `clean` + `convert gpt` + partición primaria + NTFS rápido (`SISTEMA`) + letra | Operativa |
-| `[2]` | Borrado seguro / Sanitización | `clean all` (sobrescritura con ceros, NIST SP 800-88 nivel Purge) | Operativa |
-| `[3]` | Consola Avanzada | Abre un `cmd` interactivo y vuelve al menú con `exit` | Operativa |
-| `[4]` | Ayuda del sistema | Guía rápida de `diskpart`, `chkdsk`, `format`, `wmic`… + `help` nativo | Operativa |
-| `[5]` | Salir / Apagar equipo | Salir del script o apagar (con confirmación) | Operativa |
+| `[2]` | Borrado seguro / Sanitización | `clean all` (sobrescritura con ceros, NIST SP 800-88 nivel Purge), con estimación previa del tiempo | Operativa |
+| `[3]` | Diagnóstico / Inventario | **Solo lectura**: sistema/CPU/RAM/placa base y discos físicos con su tamaño (`wmic`/`diskpart`) | Operativa |
+| `[4]` | Consola Avanzada | Abre un `cmd` interactivo y vuelve al menú con `exit` | Operativa |
+| `[5]` | Ayuda del sistema | Guía rápida de `diskpart`, `chkdsk`, `format`, `wmic`… + `help` nativo | Operativa |
+| `[6]` | Salir / Apagar equipo | Salir del script o apagar (con confirmación) | Operativa |
+
+### Inventario de solo lectura y estimación de tiempo (Fase 4.5)
+
+La opción **[3]** muestra, sin tocar nada, un resumen del equipo:
+
+- **Sistema** operativo y modelo (`wmic os`, `wmic csproduct`).
+- **Procesador**, núcleos físicos y lógicos (`wmic cpu`).
+- **Memoria RAM** total y disponible (`wmic OS`, en KB → MB/GB).
+- **Placa base** (`wmic baseboard`).
+- **Discos físicos** con índice, tamaño y estado (`diskpart list disk` +
+  `wmic diskdrive`).
+
+Es un módulo **100 % de solo lectura**: ni selecciona discos ni escribe
+guiones. Si la imagen WinPE no incluye `wmic`, se degrada con elegancia
+(usa `diskpart list disk` y variables de entorno como
+`%PROCESSOR_IDENTIFIER%`) y avisa en pantalla; nunca inventa un dato.
+
+En la opción **[2]**, **antes** de pedir la palabra de confirmación, el
+programa lee el **tamaño real** del disco (`wmic diskdrive ... size`) e
+intenta saber si es **HDD o SSD** (WMI `MSFT_PhysicalDisk`); si no lo puede
+detectar, **pregunta**. Con esos datos muestra un **aviso amarillo** con un
+rango de tiempo **orientativo** (`de X a Y`), recordando que depende del bus
+(USB/SATA) y del estado del disco.
 
 ---
 
@@ -287,6 +318,25 @@ Estas convenciones están explicadas en detalle dentro de `src\menu.bat`:
     disco escribible** y, si no hay, deja el log **en RAM** avisando de que
     se perderá al reiniciar. Nunca guarda texto tecleado por el técnico:
     solo datos ya validados (números de disco, códigos, palabras clave).
+15. **Inventario de solo lectura (Fase 4.5).** La opción `[3]` consulta el
+    hardware con `wmic` (sistema, CPU, RAM, placa base y discos) y con
+    `diskpart list disk` (tamaño y estado). Ninguna de esas órdenes modifica
+    nada. Como `wmic` está en desuso en Windows 11 y puede faltar en WinPE,
+    cada bloque comprueba la herramienta antes de usarla y, si no está,
+    ofrece un respaldo (`diskpart` para discos, variables de entorno para la
+    CPU) o avisa. La RAM se lee en **kilobytes** y se convierte a MB/GB con
+    `set /a`, porque `set /a` no maneja los bytes de un disco grande (se
+    desbordarían los 32 bits).
+16. **Estimación del tiempo de borrado (Fase 4.5).** Antes de un `clean all`
+    se lee el **tamaño exacto en bytes** (`wmic diskdrive ... size`) y se
+    convierte a GB **por texto** (se recortan los últimos 9 dígitos), no con
+    aritmética, por el mismo motivo de desbordamiento. El tipo de disco
+    (HDD/SSD) se detecta con WMI (`MSFT_PhysicalDisk`: `3`=HDD, `4`=SSD) y,
+    si no se puede, se pregunta. El tiempo se calcula con dos velocidades de
+    referencia (HDD 60–150 MB/s; SSD 100–300 MB/s) y se muestra como un
+    **rango** `de X a Y`, siempre con la etiqueta **orientativa**: un disco
+    por USB 2.0 puede tardar diez veces más. El aviso aparece **después** de
+    mostrar el guion y **antes** de la confirmación, en amarillo.
 
 ---
 
@@ -325,6 +375,11 @@ Estas convenciones están explicadas en detalle dentro de `src\menu.bat`:
   disco elegido, limpieza, `clean all`, códigos de error de `diskpart`,
   bloqueos y salida) quedan registradas con fecha y hora en `jah-winpe.log`,
   de modo que una intervención se puede reconstruir después.
+- **Inventario sin riesgo (Fase 4.5):** la opción `[3]` es de **solo
+  lectura** (no genera guiones ni escribe en discos) y queda registrada en el
+  log como `INVENTARIO`. El **aviso de tiempo** de `[2]` no cambia el
+  borrado: solo informa antes de la confirmación, con la advertencia de no
+  interrumpir el proceso una vez iniciado.
 
 ---
 
@@ -338,11 +393,11 @@ Estas convenciones están explicadas en detalle dentro de `src\menu.bat`:
 - [ ] Pulsar una tecla no válida: solo *beep*, el script **no** se cierra.
 - [ ] Pulsar `ENTER` en vacío: mensaje `[!] Entrada no válida` y vuelve a pedir.
 - [ ] `Ctrl+C`: el script no queda en un estado roto.
-- [ ] `[3]` abre consola; `exit` devuelve al menú principal.
-- [ ] `[4]` muestra las dos páginas y el `help` nativo.
-- [ ] `[5]` → `[3]` (volver) no apaga nada; `[1]` pide confirmación.
+- [ ] `[4]` abre consola; `exit` devuelve al menú principal.
+- [ ] `[5]` muestra las dos páginas y el `help` nativo.
+- [ ] `[6]` → `[3]` (volver) no apaga nada; `[1]` pide confirmación.
 - [ ] Los acentos se ven correctamente (sin "runas").
-- [ ] En WinPE: `[5]` → apagar usa `wpeutil`; en Windows, `shutdown`.
+- [ ] En WinPE: `[6]` → apagar usa `wpeutil`; en Windows, `shutdown`.
 - [ ] `[1]`: al teclear `A` en el número de disco vuelve al menú sin tocar nada.
 - [ ] `[1]`: al teclear letras, símbolos o ceros a la izquierda avisa y
       vuelve a pedir el número (no se cierra).
@@ -391,6 +446,20 @@ Estas convenciones están explicadas en detalle dentro de `src\menu.bat`:
       en ese disco y **sobrevive** al reinicio.
 - [ ] Sin disco persistente, el menú avisa `Registro (log): solo en RAM`.
 
+### Inventario y estimación de tiempo (Fase 4.5)
+
+- [ ] `[3]` muestra sistema, CPU, RAM (total y disponible), placa base y
+      discos físicos con su tamaño, y **no** modifica nada.
+- [ ] Tras salir de `[3]`, `jah-winpe.log` contiene una línea `INVENTARIO`.
+- [ ] Si la imagen no tiene `wmic`, `[3]` avisa en los bloques afectados y,
+      aun así, lista los discos con `diskpart`.
+- [ ] `[2]`: tras mostrar el guion aparece el **aviso amarillo** con el
+      tamaño real del disco y un rango de tiempo estimado.
+- [ ] Si el tipo de disco no se puede detectar, `[2]` **pregunta**
+      `[1=HDD / 2=SSD]` antes de estimar (no adivina).
+- [ ] `jah-winpe.log` registra la estimación (`... media=HDD ...`) tras elegir
+      el disco en `[2]`.
+
 ---
 
 ## Roadmap (Fases siguientes)
@@ -413,8 +482,11 @@ Estas convenciones están explicadas en detalle dentro de `src\menu.bat`:
       verificar.
 - [x] **Registro de actividad** (Fase 4): `jah-winpe.log` con fecha, hora,
       tipo de evento y resultado; persistente si hay un disco escribible.
-- [ ] Lectura del tamaño real del disco para estimar el tiempo de `clean all`.
-- [ ] Modo "solo lectura" / inventario del equipo (`systeminfo`, `wmic`).
+- [x] **Lectura del tamaño real del disco** (Fase 4.5) para estimar el
+      tiempo de `clean all` (HDD/SSD, con aviso orientativo antes de
+      confirmar).
+- [x] **Modo "solo lectura" / inventario** del equipo (Fase 4.5):
+      `systeminfo`/`wmic` para CPU, RAM, placa base y discos.
 - [ ] Guardar el idioma elegido entre ejecuciones (fichero junto al script).
 - [ ] Más idiomas: añadir un bloque `:IDIOMA_xx` y su opción en el selector.
 

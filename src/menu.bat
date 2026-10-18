@@ -8,13 +8,15 @@ REM  COMPONENTE : menu.bat -^> seleccion de idioma, pantalla de bienvenida,
 REM               menu principal, ayuda del sistema, modulos de disco con
 REM               diskpart, ESCUDO DE SEGURIDAD del disco de arranque,
 REM               DETECCION DE FIRMWARE (UEFI / Legacy), REGISTRO DE
-REM               ACTIVIDAD (log) y salida ordenada.
-REM  FASE       : 4.0 (deteccion de firmware que adapta el esquema de
-REM               particionado GPT/MBR y sistema de AUDITORIA persistente
-REM               en 'jah-winpe.log'; se conservan el ESCUDO DE SEGURIDAD
-REM               del disco de arranque y el programa MULTILENGUAJE
-REM               castellano / ingles de las fases anteriores).
-REM  VERSION    : 1.4.0
+REM               ACTIVIDAD (log), DIAGNOSTICO / INVENTARIO de solo
+REM               lectura, LECTURA DEL TAMANO REAL del disco con
+REM               ESTIMACION del tiempo de borrado y salida ordenada.
+REM  FASE       : 4.5 (anade el modulo de INVENTARIO de hardware de solo
+REM               lectura y la LECTURA DEL TAMANO REAL del disco para
+REM               ESTIMAR el tiempo del borrado seguro 'clean all'; se
+REM               conservan el firmware, el log, el escudo de seguridad
+REM               y el multilenguaje de las fases anteriores).
+REM  VERSION    : 1.5.0
 REM
 REM  --------------------------------------------------------------------
 REM  MAPA DE NAVEGACION (etiquetas del script)
@@ -23,9 +25,10 @@ REM    SELECCION_IDIOMA -^> elegir castellano/ingles -^> BIENVENIDA
 REM    BIENVENIDA  -^> bienvenida una sola vez -^> MENU
 REM    MENU        -^> [1] OP_DISCO ......... maquetacion guiada (diskpart)
 REM                -^> [2] OP_SANITIZAR ..... borrado seguro    (diskpart)
-REM                -^> [3] OP_CONSOLA ....... CMD interactivo
-REM                -^> [4] OP_AYUDA ......... 2 paginas + help nativo
-REM                -^> [5] OP_SALIR ......... apagar / salir (con confirmacion)
+REM                -^> [3] OP_INVENTARIO ... diagnostico (SOLO LECTURA)
+REM                -^> [4] OP_CONSOLA ....... CMD interactivo
+REM                -^> [5] OP_AYUDA ......... 2 paginas + help nativo
+REM                -^> [6] OP_SALIR ......... apagar / salir (con confirmacion)
 REM    FIN_SCRIPT  -^> salida limpia del script
 REM    FIN_APAGADO -^> salida tras solicitar el apagado
 REM    (al final)  -^> subrutinas internas invocadas con 'call :etiqueta'
@@ -65,6 +68,19 @@ REM                          script o en otro disco conectado; si no hay,
 REM                          en la RAM con aviso de que se perdera).
 REM      REGISTRAR ......... anota UNA linea con fecha, hora, tipo de
 REM                          evento, detalle y resultado (auditoria).
+REM
+REM    FLUJO DEL INVENTARIO Y DE LA ESTIMACION (Fase 4.5):
+REM      MODULO_INVENTARIO . pantalla de diagnostico SOLO LECTURA: sistema,
+REM                          procesador, RAM, placa base y discos fisicos.
+REM                          No genera ningun guion ni modifica nada.
+REM      LEER_TAMANO_DISCO . lee el tamano REAL del disco elegido (en
+REM                          bytes, con wmic) y lo convierte a GB.
+REM      DETECTAR_MEDIA .... intenta saber si el disco es HDD o SSD (WMI
+REM                          de almacenamiento); si no puede, PREGUNTA.
+REM      CALCULAR_ESTIMADO . convierte tamano + tipo de disco en un
+REM                          rango de tiempo ORIENTATIVO de borrado.
+REM      MOSTRAR_AVISO_T .. pinta ese aviso (en amarillo) ANTES de pedir
+REM                          la palabra de confirmacion del borrado seguro.
 REM
 REM    NOTA: los textos del log se escriben en castellano tecnico (es un
 REM    registro de auditoria para el taller), pero los AVISOS de pantalla
@@ -113,7 +129,7 @@ REM      queda PROHIBIDO: si el tecnico lo elige, la operacion se DENEGA
 REM      en pantalla roja y no se escribe ni se ejecuta ningun guion.
 REM      Si el disco no puede identificarse, el script NO calla: avisa y
 REM      exige una palabra de RIESGO antes de seguir. Ver el bloque
-REM      ESCUDO DE SEGURIDAD en PASO 12.
+REM      ESCUDO DE SEGURIDAD en PASO 13.
 REM --------------------------------------------------------------------
 REM
 REM  ESCUDO DE SEGURIDAD (Fase 2.8) - RESUMEN PARA MANTENIMIENTO:
@@ -175,6 +191,24 @@ REM     deja en la RAM avisando de que se perdera al reiniciar. Nunca se
 REM     guarda el texto tecleado por el tecnico: solo datos ya validados
 REM     (numeros de disco, codigos de error, palabras clave).
 REM
+REM  INVENTARIO Y ESTIMACION (Fase 4.5) - RESUMEN PARA MANTENIMIENTO:
+REM   INVENTARIO (SOLO LECTURA): la opcion [3] usa 'wmic' (instrumental de
+REM     Windows) para leer sistema, CPU, RAM, placa base y discos. 'wmic'
+REM     y 'diskpart list disk' NO modifican nada: solo informan. Si la
+REM     imagen WinPE viene recortada y no trae wmic, el modulo se degrada
+REM     con elegancia: para los discos usa 'diskpart list disk' (probado
+REM     en la Fase 2) y para la CPU lee variables de entorno de Windows
+REM     (%PROCESSOR_IDENTIFIER%, %NUMBER_OF_PROCESSORS%), que SIEMPRE
+REM     existen. Ante un dato ausente se avisa; nunca se inventa.
+REM   TAMANO Y TIEMPO: antes de confirmar un 'clean all' se LEE el tamano
+REM     real del disco (wmic diskdrive ... size, en bytes) y se estima un
+REM     rango de tiempo. Como las velocidades de disco varian mucho, la
+REM     cifra es ORIENTATIVA (un aviso, no una promesa): se calcula con
+REM     dos velocidades tipicas de referencia segun sea HDD o SSD y se
+REM     presenta como "de X a Y". El tipo de disco se intenta detectar con
+REM     el WMI de almacenamiento (MSFT_PhysicalDisk: 3=HDD, 4=SSD) y, si
+REM     no se puede, se PREGUNTA al tecnico. Nunca se adivina.
+REM
 REM  COMO HABLA ESTE SCRIPT CON DISKPART (resumen para mantenimiento):
 REM   diskpart admite un guion en texto plano mediante la opcion /s:
 REM        diskpart /s "C:\Temp\guion.txt"
@@ -185,7 +219,6 @@ REM   Ventaja doble: cero errores de tecleo en el momento critico y
 REM   trazabilidad exacta de lo que se ha ejecutado.
 REM
 REM  PENDIENTE PARA FASES SIGUIENTES:
-REM   - Lectura del tamano real del disco para estimar el 'clean all'.
 REM   - Recordar el idioma elegido entre ejecuciones (hoy se pregunta
 REM     siempre; seria guardarlo en un fichero junto al script).
 REM   - Traducir tambien los comentarios del codigo (hoy van en
@@ -222,8 +255,8 @@ REM --- Identidad de la herramienta --------------------------------------
 REM Centralizamos los textos repetidos: si manana cambiamos de version
 REM solo tocamos aqui y se actualiza cabecera, titulo y mensajes.
 set "TOOL_NAME=JAH-WinPe"
-set "TOOL_VER=1.4.0"
-set "TOOL_FASE=4.0"
+set "TOOL_VER=1.5.0"
+set "TOOL_FASE=4.5"
 
 REM --- Apariencia de la consola -----------------------------------------
 REM title  -^> texto de la barra de titulo de la ventana.
@@ -440,6 +473,7 @@ echo      %T_MENU_03%
 echo      %T_MENU_04%
 echo      %T_MENU_05%
 echo      %T_MENU_06%
+echo      %T_MENU_15%
 echo(
 echo   ------------------------------------------------------------------
 echo   %T_MENU_07%
@@ -461,7 +495,7 @@ REM cuando esta cierra con 'exit /b'. Le pasamos dos argumentos:
 REM   1) el texto que vera el tecnico,
 REM   2) los digitos permitidos (lista blanca).
 REM El resultado queda en la variable global %OPCION%.
-call :LEER_OPCION "%T_MENU_11%" "1 2 3 4 5"
+call :LEER_OPCION "%T_MENU_11%" "1 2 3 4 5 6"
 
 REM Anotamos la opcion elegida en el registro (auditoria de uso). Se hace
 REM solo si hay un digito valido: asi no ensuciamos el log con ENTERs en
@@ -475,19 +509,20 @@ REM parentesados: asi evitamos problemas de expansion de variables
 REM dentro de bloques (que exigen expansion retrasada).
 REM
 REM ALTERNATIVA classica, si despacharamos directamente con choice:
-REM     if errorlevel 5 goto OP_SALIR
-REM     if errorlevel 4 goto OP_AYUDA
+REM     if errorlevel 6 goto OP_SALIR
+REM     if errorlevel 5 goto OP_AYUDA
 REM     ...siempre de MAYOR a MENOR, porque 'if errorlevel N' significa
 REM     "errorlevel MAYOR O IGUAL que N" y no "igual a N".
 REM Nosotros capturamos el valor en %OPCION% para reutilizar la misma
 REM logica tanto en el modo choice como en el modo set /p.
 if "%OPCION%"=="1" goto OP_DISCO
 if "%OPCION%"=="2" goto OP_SANITIZAR
-if "%OPCION%"=="3" goto OP_CONSOLA
-if "%OPCION%"=="4" goto OP_AYUDA
-if "%OPCION%"=="5" goto OP_SALIR
+if "%OPCION%"=="3" goto OP_INVENTARIO
+if "%OPCION%"=="4" goto OP_CONSOLA
+if "%OPCION%"=="5" goto OP_AYUDA
+if "%OPCION%"=="6" goto OP_SALIR
 
-REM Si llegamos aqui, la entrada no fue un digito valido del 1 al 5.
+REM Si llegamos aqui, la entrada no fue un digito valido del 1 al 6.
 REM Solo puede pasar en dos casos: el tecnico respondio a la pregunta de
 REM Ctrl+C con "no" (choice devuelve 0 o 255) o el modo set /p recibio
 REM algo raro. En cualquier caso: NI SE CIERRA NI SE SALE; simplemente
@@ -498,7 +533,7 @@ REM =====================================================================
 REM  PASO 5 - OPCION [1] PREPARACION RAPIDA DE DISCO (maquetacion)
 REM =====================================================================
 REM  Este bloque es solo el "interruptor": todo el trabajo real vive en
-REM  la subrutina MODULO_PREPARAR (PASO 12). Asi el flujo principal se
+REM  la subrutina MODULO_PREPARAR (PASO 13). Asi el flujo principal se
 REM  lee de un vistazo: se elige opcion, se llama al modulo y se vuelve.
 REM  'call' ejecuta la subrutina y REGRESA aqui cuando esta cierra con
 REM  'exit /b'; despues volvemos al menu, pase lo que pase.
@@ -517,7 +552,19 @@ call :MODULO_SANITIZAR
 goto MENU
 
 REM =====================================================================
-REM  PASO 7 - OPCION [3] CONSOLA AVANZADA (CMD interactivo)
+REM  PASO 7 - OPCION [3] DIAGNOSTICO / INVENTARIO (solo lectura, Fase 4.5)
+REM =====================================================================
+REM  Tercera opcion "de taller": consultar el equipo SIN tocar nada. Igual
+REM  que las otras, este bloque es solo el interruptor; el trabajo real
+REM  vive en la subrutina MODULO_INVENTARIO (PASO 15). Es una operacion de
+REM  SOLO LECTURA: no genera guiones ni modifica discos.
+REM =====================================================================
+:OP_INVENTARIO
+call :MODULO_INVENTARIO
+goto MENU
+
+REM =====================================================================
+REM  PASO 8 - OPCION [4] CONSOLA AVANZADA (CMD interactivo)
 REM =====================================================================
 :OP_CONSOLA
 cls
@@ -550,7 +597,7 @@ cmd
 goto MENU
 
 REM =====================================================================
-REM  PASO 8 - OPCION [4] AYUDA DEL SISTEMA (2 paginas + help nativo)
+REM  PASO 9 - OPCION [5] AYUDA DEL SISTEMA (2 paginas + help nativo)
 REM =====================================================================
 :OP_AYUDA
 cls
@@ -648,7 +695,7 @@ call :PULSA_TECLA "%T_AYU3_01%"
 goto MENU
 
 REM =====================================================================
-REM  PASO 9 - OPCION [5] SALIR / APAGAR EQUIPO
+REM  PASO 10 - OPCION [6] SALIR / APAGAR EQUIPO
 REM  (todas las acciones de esta seccion piden confirmacion previa)
 REM =====================================================================
 :OP_SALIR
@@ -724,7 +771,7 @@ shutdown /s /t 5 /f /c "%TOOL_NAME%: apagado solicitado por el tecnico."
 goto FIN_APAGADO
 
 REM =====================================================================
-REM  PASO 10 - SALIDAS ORDENADAS DEL SCRIPT
+REM  PASO 11 - SALIDAS ORDENADAS DEL SCRIPT
 REM =====================================================================
 
 REM Salida normal (opcion 2 del submenu salir): despedida + pausa para
@@ -748,7 +795,7 @@ endlocal
 exit /b 0
 
 REM =====================================================================
-REM  PASO 11 - SUBRUTINAS INTERNAS (se invocan con 'call :etiqueta')
+REM  PASO 12 - SUBRUTINAS INTERNAS (se invocan con 'call :etiqueta')
 REM =====================================================================
 REM  Una subrutina en batch es simplemente un bloque con etiqueta que se
 REM  llama con   call :nombre   y se cierra con   exit /b.
@@ -872,7 +919,7 @@ echo   %T_COM_01%
 goto LEER_CON_SETP
 
 REM =====================================================================
-REM  PASO 12 - SUBRUTINAS DE LOS MODULOS DE DISCO (Fase 2)
+REM  PASO 13 - SUBRUTINAS DE LOS MODULOS DE DISCO (Fase 2)
 REM =====================================================================
 REM  Aqui vive el trabajo "de verdad": las opciones [1] y [2] del menu
 REM  solo hacen 'call :MODULO_...' y vuelven al menu.
@@ -1095,6 +1142,8 @@ if exist "%F_SALIDA%" del /f /q "%F_SALIDA%" >nul 2>&1
 if exist "%F_PRUEBA%" del /f /q "%F_PRUEBA%" >nul 2>&1
 if exist "%F_SEG%" del /f /q "%F_SEG%" >nul 2>&1
 if exist "%F_SEG_SAL%" del /f /q "%F_SEG_SAL%" >nul 2>&1
+REM  F_INV es el temporal de las consultas de inventario (wmic, Fase 4.5).
+if exist "%F_INV%" del /f /q "%F_INV%" >nul 2>&1
 exit /b 0
 
 REM ---------------------------------------------------------------------
@@ -1511,6 +1560,9 @@ if not "%DISCO_OK%"=="SI" goto MODULO_SANITIZAR_CANCELADO
 call :REGISTRAR DISCO "modulo=sanitizar disco=%DISCO%" "SELECCIONADO"
 call :COMPROBAR_DISCO_SEGURO
 if "%BLOQUEADO%"=="SI" goto MODULO_SANITIZAR_BLOQUEO
+REM  Fase 4.5: leemos el tamano REAL del disco y estimamos el tiempo del
+REM  'clean all' ANTES de generar el guion y de pedir la confirmacion.
+call :CALCULAR_ESTIMACION_BORRADO
 call :GENERAR_SCRIPT_BORRAR
 cls
 call :MOSTRAR_CABECERA
@@ -1526,11 +1578,7 @@ echo   %T_FW_02% %FIRMWARE%
 echo   %T_D2_13%
 echo(
 echo   %T_D2_14%
-echo     %T_D2_15%
-echo     %T_D2_16%
-echo     %T_D2_17%
-echo     %T_D2_18%
-echo     %T_D2_19%
+call :MOSTRAR_TIEMPO_ESTIMADO
 echo(
 echo   %T_D2_20%
 echo     %T_D2_21%
@@ -1550,6 +1598,8 @@ echo       %T_D2_31%
 echo(
 :MODULO_SANITIZAR_AVISO_OK
 call :MOSTRAR_SCRIPT
+call :MOSTRAR_AVISO_TIEMPO
+echo(
 echo   %T_D2_32%
 echo(
 call :EVALUAR_SEGURIDAD
@@ -1759,7 +1809,7 @@ echo(
 exit /b 0
 
 REM #####################################################################
-REM  PASO 13 - FIRMWARE Y AUDITORIA DE TALLER (Fase 4)
+REM  PASO 14 - FIRMWARE Y AUDITORIA DE TALLER (Fase 4)
 REM #####################################################################
 REM  Dos subsistemas que comparten una idea: dar CONTEXTO y TRAZABILIDAD
 REM  a las operaciones destructivas del taller.
@@ -2025,6 +2075,456 @@ if "%LOG_RES%"=="" set "LOG_RES=OK"
 exit /b 0
 
 REM #####################################################################
+REM  PASO 15 - DIAGNOSTICO / INVENTARIO DE HARDWARE (Fase 4.5)
+REM #####################################################################
+REM  Este modulo es de SOLO LECTURA. Su unica mision es MOSTRAR datos: no
+REM  genera ningun guion de diskpart ni escribe en ningun disco.
+REM
+REM  Herramientas que usa (todas nativas de Windows y sin efectos):
+REM    wmic      -^> instrumental de Windows (WMI). Consulta al sistema.
+REM                 Ruta normal:  %SystemRoot%\System32\wbem\wmic.exe
+REM    diskpart  -^> SOLO con 'list disk' (listar, nunca seleccionar ni
+REM                 limpiar): es la misma pieza ya probada en la Fase 2.
+REM    ver       -^> comando clasico que imprime la version de Windows.
+REM
+REM  POR QUE 'wmic' PUEDE NO ESTAR: en Windows 11 'wmic' esta en desuso y
+REM  en un WinPE recortado puede que ni exista. Por eso cada bloque
+REM  comprueba si la herramienta esta ANTES de usarla y, si falta, avisa
+REM  con un texto traducido en vez de fallar.
+REM
+REM  COMO SE LEE CADA DATO (para el tecnico junior):
+REM    - wmic os        -^> sistema operativo (Caption, Version).
+REM    - wmic csproduct -^> fabricante y modelo del equipo.
+REM    - wmic cpu       -^> procesador: nucleos fisicos y logicos.
+REM    - wmic baseboard -^> placa base: fabricante y modelo.
+REM    - wmic diskdrive -^> discos fisicos: modelo, tamano y estado.
+REM    - diskpart list disk -^> discos con su tamano en GB (mas legible).
+REM  Los valores de 'wmic' salen en el idioma del sistema operativo: eso
+REM  es informacion en bruto, no un texto que debamos traducir nosotros.
+REM #####################################################################
+
+REM ---------------------------------------------------------------------
+REM  MODULO_INVENTARIO - pantalla de diagnostico (solo lectura)
+REM ---------------------------------------------------------------------
+REM  Sigue el mismo patron que los modulos de disco: se llama con
+REM  'call :MODULO_INVENTARIO' y vuelve con 'exit /b 0'. Imprime una
+REM  cabecera, cinco bloques de informacion y una pausa final.
+REM ---------------------------------------------------------------------
+:MODULO_INVENTARIO
+cls
+call :MOSTRAR_CABECERA
+echo(
+echo   %T_INV_01%
+echo   ------------------------------------------------------------------
+echo   %T_INV_02%
+echo(
+echo   %T_INV_03%
+call :INV_SISTEMA
+echo(
+echo   %T_INV_04%
+call :INV_CPU
+echo(
+echo   %T_INV_05%
+call :INV_RAM
+echo(
+echo   %T_INV_06%
+call :INV_PLACA
+echo(
+echo   %T_INV_07%
+call :INV_DISCOS
+echo(
+REM  Dejamos constancia en el log de que se consulto el equipo. El detalle
+REM  va en ASCII y sin datos personales: es una linea de auditoria.
+call :REGISTRAR INVENTARIO "consulta=completa" "OK"
+call :PULSA_TECLA "%T_INV_09%"
+exit /b 0
+
+REM ---------------------------------------------------------------------
+REM  INV_SISTEMA - sistema operativo y modelo del equipo
+REM ---------------------------------------------------------------------
+REM  'wmic os get caption,version /value' imprime el nombre del sistema y
+REM  su version. 'wmic csproduct' da el fabricante y el modelo. La opcion
+REM  '/value' muestra una linea por dato (Nombre=Valor): asi se lee mejor
+REM  que en la tabla ancha por defecto. Si no hay wmic, caemos a 'ver',
+REM  que solo da la version numerica: menos, pero siempre disponible.
+REM ---------------------------------------------------------------------
+:INV_SISTEMA
+if not exist "%SystemRoot%\System32\wbem\wmic.exe" goto INV_SISTEMA_VER
+wmic os get caption,version /value
+wmic csproduct get vendor,name /value
+exit /b 0
+:INV_SISTEMA_VER
+echo       %T_INV_14%
+ver
+exit /b 0
+
+REM ---------------------------------------------------------------------
+REM  INV_CPU - procesador
+REM ---------------------------------------------------------------------
+REM  'wmic cpu get name,numberofcores,numberoflogicalprocessors /value'
+REM  informa del modelo, de los nucleos FISICOS y de los LOGICOS (con
+REM  HyperThreading, los logicos suelen ser el doble de los fisicos).
+REM  RESPALDO SIN wmic: Windows expone SIEMPRE dos variables de entorno,
+REM  %PROCESSOR_IDENTIFIER% y %NUMBER_OF_PROCESSORS%, que valen incluso
+REM  en el WinPE mas recortado.
+REM ---------------------------------------------------------------------
+:INV_CPU
+if not exist "%SystemRoot%\System32\wbem\wmic.exe" goto INV_CPU_ENV
+wmic cpu get name,numberofcores,numberoflogicalprocessors /value
+exit /b 0
+:INV_CPU_ENV
+echo       %PROCESSOR_IDENTIFIER%
+if defined NUMBER_OF_PROCESSORS echo       %T_INV_13% %NUMBER_OF_PROCESSORS%
+exit /b 0
+
+REM ---------------------------------------------------------------------
+REM  INV_RAM - memoria RAM total y disponible
+REM ---------------------------------------------------------------------
+REM  wmic devuelve la RAM en KILOBYTES en dos propiedades distintas:
+REM    TotalVisibleMemorySize -^> RAM total (Win32_OperatingSystem).
+REM    FreePhysicalMemory     -^> RAM libre ahora.
+REM  Convertimos a MB y a GB con 'set /a' (division entera por 1024 dos
+REM  veces). NOTA IMPORTANTE: usamos KILOBYTES y no BYTES porque 'set /a'
+REM  trabaja con enteros de 32 bits: un numero en bytes (8 GB ya son
+REM  8.589.934.592) se DESBORDARIA y daria un resultado falso. En
+REM  kilobytes, incluso 32 GB (33.554.432) entra sin problema.
+REM ---------------------------------------------------------------------
+:INV_RAM
+if not exist "%SystemRoot%\System32\wbem\wmic.exe" goto INV_RAM_NA
+call :ARCHIVO_TEMP_INV
+wmic OS get TotalVisibleMemorySize /value > "%F_INV%" 2>nul
+set "RAM_TOTAL="
+for /f "usebackq tokens=2 delims==" %%A in ("%F_INV%") do set "RAM_TOTAL=%%A"
+wmic OS get FreePhysicalMemory /value > "%F_INV%" 2>nul
+set "RAM_LIBRE="
+for /f "usebackq tokens=2 delims==" %%A in ("%F_INV%") do set "RAM_LIBRE=%%A"
+if exist "%F_INV%" del /f /q "%F_INV%" >nul 2>&1
+REM  Quitamos los espacios que wmic suele dejar alrededor del valor.
+set "RAM_TOTAL=%RAM_TOTAL: =%"
+set "RAM_LIBRE=%RAM_LIBRE: =%"
+if not defined RAM_TOTAL goto INV_RAM_NA
+set /a RAM_T_MB=%RAM_TOTAL%/1024
+set /a RAM_T_GB=%RAM_T_MB%/1024
+echo       %T_INV_11% %RAM_T_MB% %T_INV_15%  ^(%RAM_T_GB% %T_INV_16%^)
+if not defined RAM_LIBRE goto INV_RAM_FIN
+set /a RAM_L_MB=%RAM_LIBRE%/1024
+set /a RAM_L_GB=%RAM_L_MB%/1024
+echo       %T_INV_12% %RAM_L_MB% %T_INV_15%  ^(%RAM_L_GB% %T_INV_16%^)
+:INV_RAM_FIN
+exit /b 0
+:INV_RAM_NA
+echo       %T_INV_10%
+echo       %T_INV_17%
+exit /b 0
+
+REM ---------------------------------------------------------------------
+REM  INV_PLACA - placa base
+REM ---------------------------------------------------------------------
+:INV_PLACA
+if not exist "%SystemRoot%\System32\wbem\wmic.exe" goto INV_PLACA_NA
+wmic baseboard get manufacturer,product /value
+exit /b 0
+:INV_PLACA_NA
+echo       %T_INV_10%
+exit /b 0
+
+REM ---------------------------------------------------------------------
+REM  INV_DISCOS - discos fisicos
+REM ---------------------------------------------------------------------
+REM  Dos fuentes complementarias, ambas de SOLO LECTURA:
+REM    1) diskpart 'list disk' -^> indice + tamano en GB + estado + GPT.
+REM       Se ejecuta con un guion temporal, igual que en la Fase 2.
+REM    2) wmic diskdrive       -^> modelo comercial de cada disco.
+REM  Si falta diskpart, se intenta al menos wmic; si faltan los dos, se
+REM  avisa. En ningun caso se selecciona ni se limpia un disco.
+REM ---------------------------------------------------------------------
+:INV_DISCOS
+set "INV_DISCOS_HECHO=NO"
+if exist "%SystemRoot%\System32\diskpart.exe" call :INV_DISCOS_DP
+if exist "%SystemRoot%\System32\wbem\wmic.exe" call :INV_DISCOS_WMIC
+if "%INV_DISCOS_HECHO%"=="NO" echo       %T_INV_10%
+exit /b 0
+
+:INV_DISCOS_DP
+set "INV_DISCOS_HECHO=SI"
+call :ARCHIVO_TEMP_INV
+> "%F_INV%" echo rem JAH-WinPe - inventario de discos (solo lectura)
+>> "%F_INV%" echo list disk
+diskpart /s "%F_INV%" 2>&1
+if exist "%F_INV%" del /f /q "%F_INV%" >nul 2>&1
+exit /b 0
+
+:INV_DISCOS_WMIC
+set "INV_DISCOS_HECHO=SI"
+echo(
+echo       %T_INV_08%
+wmic diskdrive get index,model,size,status
+exit /b 0
+
+REM #####################################################################
+REM  PASO 16 - TAMANO REAL Y ESTIMACION DE BORRADO (Fase 4.5)
+REM #####################################################################
+REM  Antes de un 'clean all' (que puede durar HORAS) leemos el tamano
+REM  real del disco y mostramos un aviso con un tiempo estimado. Regla de
+REM  oro: la cifra es ORIENTATIVA. Un disco de taller puede ir por SATA o
+REM  por USB 2.0 (unas diez veces mas lento) y su estado influye. Por eso
+REM  damos un RANGO "de X a Y" y avisamos, en vez de prometer un numero.
+REM #####################################################################
+
+REM ---------------------------------------------------------------------
+REM  ARCHIVO_TEMP_INV - fichero temporal para las consultas de wmic
+REM ---------------------------------------------------------------------
+REM  Se usa para capturar la salida de 'wmic' y leer un valor concreto.
+REM  Vive en la carpeta temporal del sistema y SIEMPRE se borra despues.
+REM ---------------------------------------------------------------------
+:ARCHIVO_TEMP_INV
+set "F_INV="
+if defined TEMP set "F_INV=%TEMP%\_jah_inv.txt"
+if not defined F_INV set "F_INV=%SystemDrive%\_jah_inv.txt"
+exit /b 0
+
+REM ---------------------------------------------------------------------
+REM  CALCULAR_ESTIMACION_BORRADO - orquesta la lectura y la estimacion
+REM ---------------------------------------------------------------------
+REM  Entrada: %DISCO%
+REM  Salida:  DISCO_GB, MEDIA_TIPO, MEDIA_TXT, EST_TXT
+REM  Pasos: leer tamano -^> detectar tipo (o preguntar) -^> estimar tiempo
+REM  -^> anotar el resultado en el log.
+REM ---------------------------------------------------------------------
+:CALCULAR_ESTIMACION_BORRADO
+set "DISCO_GB="
+set "MEDIA_TIPO=?"
+set "MEDIA_TXT="
+set "EST_TXT="
+call :LEER_TAMANO_DISCO
+call :DETECTAR_MEDIA
+if not "%MEDIA_TIPO%"=="?" goto CALCULAR_ESTIMACION_LISTO
+call :ELEGIR_MEDIA_DUDA
+:CALCULAR_ESTIMACION_LISTO
+if "%MEDIA_TIPO%"=="HDD" set "MEDIA_TXT=%T_EST_06%"
+if "%MEDIA_TIPO%"=="SSD" set "MEDIA_TXT=%T_EST_07%"
+if not defined MEDIA_TXT set "MEDIA_TXT=%T_EST_08%"
+call :ESTIMAR_TIEMPO_BORRADO
+set "DISCO_GB_LOG=%DISCO_GB%"
+if not defined DISCO_GB_LOG set "DISCO_GB_LOG=NA"
+set "EST_LOG=disco=%DISCO% tamano=%DISCO_GB_LOG%GB media=%MEDIA_TIPO%"
+call :REGISTRAR SANITIZAR "%EST_LOG%" "ESTIMADO"
+exit /b 0
+
+REM ---------------------------------------------------------------------
+REM  LEER_TAMANO_DISCO - lee el tamano REAL del disco en bytes
+REM ---------------------------------------------------------------------
+REM  'wmic diskdrive where "index=N" get size /value' devuelve la capacidad
+REM  EXACTA del disco N en bytes (por ejemplo: Size=500107862016).
+REM
+REM  CONVERSION bytes -^> GB SIN DESBORDAR: 'set /a' no puede con numeros
+REM  de 12 cifras (32 bits), asi que NO dividimos con aritmetica: quitamos
+REM  los ultimos 9 digitos con una operacion de TEXTO. Recortar 9 cifras
+REM  equivale a dividir entre mil millones y, como 1 GB son mas o menos
+REM  1.000.000.000 bytes, el resultado son los GB comerciales del disco.
+REM  Antes de recortar VALIDAMOS que la cadena sea solo digitos y tenga al
+REM  menos 10 cifras: asi un mensaje de error de wmic jamas se confunde
+REM  con un tamano.
+REM ---------------------------------------------------------------------
+:LEER_TAMANO_DISCO
+set "DISCO_GB="
+set "DISCO_BYTES="
+if not defined DISCO exit /b 0
+if not exist "%SystemRoot%\System32\wbem\wmic.exe" exit /b 0
+call :ARCHIVO_TEMP_INV
+wmic diskdrive where "index=%DISCO%" get size /value > "%F_INV%" 2>nul
+if not exist "%F_INV%" exit /b 0
+for /f "usebackq tokens=2 delims==" %%A in ("%F_INV%") do set "DISCO_BYTES=%%A"
+if exist "%F_INV%" del /f /q "%F_INV%" >nul 2>&1
+set "DISCO_BYTES=%DISCO_BYTES: =%"
+call :ES_NUMERO_GRANDE "%DISCO_BYTES%"
+if not "%NUM_GRANDE_OK%"=="SI" exit /b 0
+set "DISCO_GB=%DISCO_BYTES:~0,-9%"
+exit /b 0
+
+REM ---------------------------------------------------------------------
+REM  ES_NUMERO_GRANDE - valida una cadena de solo digitos (10 cifras o mas)
+REM ---------------------------------------------------------------------
+REM  Uso:      call :ES_NUMERO_GRANDE "%DISCO_BYTES%"
+REM  Devuelve: NUM_GRANDE_OK = SI / NO
+REM  Reutiliza :ES_DIGITO (definida en el PASO 13) caracter a caracter. Se
+REM  exige una longitud minima para descartar cualquier mensaje de texto.
+REM ---------------------------------------------------------------------
+:ES_NUMERO_GRANDE
+set "NUM_GRANDE_OK=NO"
+set "NG_TXT=%~1"
+if not defined NG_TXT exit /b 0
+if "%NG_TXT:~0,10%"=="" exit /b 0
+set "NG_BUCLE=%NG_TXT%"
+:ES_NUMERO_GRANDE_BUCLE
+if not defined NG_BUCLE goto ES_NUMERO_GRANDE_OK
+set "NG_CAR=%NG_BUCLE:~0,1%"
+set "NG_BUCLE=%NG_BUCLE:~1%"
+call :ES_DIGITO "%NG_CAR%"
+if not "%DIGITO_OK%"=="SI" exit /b 0
+goto ES_NUMERO_GRANDE_BUCLE
+:ES_NUMERO_GRANDE_OK
+set "NUM_GRANDE_OK=SI"
+exit /b 0
+
+REM ---------------------------------------------------------------------
+REM  DETECTAR_MEDIA - HDD o SSD? (WMI de almacenamiento)
+REM ---------------------------------------------------------------------
+REM  Consulta la clase MSFT_PhysicalDisk (espacio de nombres 'storage'):
+REM  su propiedad MediaType vale 3 para HDD y 4 para SSD. Si el espacio de
+REM  nombres no existe (WinPE recortado) o el disco no aparece, dejamos
+REM  MEDIA_TIPO='?' y el modulo PREGUNTARA (nunca adivina).
+REM  La orden de 'wmic' se arma en TROZOS (variable MEDIA_WMIC) porque en
+REM  una sola linea pasaria de 94 columnas y romperia el ancho de consola.
+REM ---------------------------------------------------------------------
+:DETECTAR_MEDIA
+set "MEDIA_TIPO=?"
+if not defined DISCO exit /b 0
+if not exist "%SystemRoot%\System32\wbem\wmic.exe" exit /b 0
+call :ARCHIVO_TEMP_INV
+set "MEDIA_WMIC=/namespace:\\root\microsoft\windows\storage"
+set "MEDIA_WMIC=%MEDIA_WMIC% path MSFT_PhysicalDisk"
+set "MEDIA_WMIC=%MEDIA_WMIC% where DeviceId='%DISCO%' get MediaType /value"
+wmic %MEDIA_WMIC% > "%F_INV%" 2>nul
+if not exist "%F_INV%" exit /b 0
+set "MEDIA_NUM="
+for /f "usebackq tokens=2 delims==" %%A in ("%F_INV%") do set "MEDIA_NUM=%%A"
+if exist "%F_INV%" del /f /q "%F_INV%" >nul 2>&1
+set "MEDIA_NUM=%MEDIA_NUM: =%"
+if "%MEDIA_NUM%"=="3" set "MEDIA_TIPO=HDD"
+if "%MEDIA_NUM%"=="4" set "MEDIA_TIPO=SSD"
+exit /b 0
+
+REM ---------------------------------------------------------------------
+REM  ELEGIR_MEDIA_DUDA - pregunta HDD o SSD si no se pudo detectar
+REM ---------------------------------------------------------------------
+REM  Solo se entra cuando DETECTAR_MEDIA dejo MEDIA_TIPO='?'. El tipo de
+REM  disco influye en el tiempo, asi que si no lo sabemos lo preguntamos
+REM  en vez de suponer. Por defecto (o si la entrada no es valida) tomamos
+REM  HDD, que es la suposicion CONSERVADORA (la estimacion mas larga).
+REM ---------------------------------------------------------------------
+:ELEGIR_MEDIA_DUDA
+cls
+call :MOSTRAR_CABECERA
+echo(
+echo   %T_MED_01%
+echo   ------------------------------------------------------------------
+echo(
+echo   %T_MED_02% %DISCO% %T_MED_03%
+echo(
+call :LEER_OPCION "%T_MED_04%" "1 2"
+set "MEDIA_TIPO=HDD"
+if "%OPCION%"=="2" set "MEDIA_TIPO=SSD"
+call :REGISTRAR SANITIZAR "media=manual disco=%DISCO% tipo=%MEDIA_TIPO%" "OK"
+exit /b 0
+
+REM ---------------------------------------------------------------------
+REM  ESTIMAR_TIEMPO_BORRADO - del tamano al rango de tiempo
+REM ---------------------------------------------------------------------
+REM  Entrada: DISCO_GB (numero) y MEDIA_TIPO (HDD / SSD)
+REM  Salida:  EST_TXT  (por ejemplo: "de 1 h 20 min a 3 h 10 min")
+REM
+REM  COMO SE CALCULA (aqui esta la "matematica" del aviso):
+REM    1) Pasamos los GB a MB:  MB = GB x 1024.
+REM    2) Elegimos DOS velocidades de escritura tipicas (en MB/s): la
+REM       RAPIDA da el minimo y la LENTA el maximo:
+REM          HDD: 150 MB/s (min)  y   60 MB/s (max)
+REM          SSD: 300 MB/s (min)  y  100 MB/s (max)
+REM    3) minutos = MB / (MB/s) / 60.  Para dividir una sola vez juntamos
+REM       las dos divisiones:  minutos = MB / (velocidad x 60).
+REM          HDD: 150x60 = 9000  y  60x60 = 3600
+REM          SSD: 300x60 = 18000 y 100x60 = 6000
+REM    4) 'set /a' trabaja con enteros y redondea hacia abajo; despues
+REM       evitamos el "0 minutos" forzando un minimo de 1.
+REM  Recuerda: son referencias de taller, no medidas del disco concreto.
+REM ---------------------------------------------------------------------
+:ESTIMAR_TIEMPO_BORRADO
+set "EST_TXT="
+if not defined DISCO_GB exit /b 0
+set /a EST_MB=%DISCO_GB% * 1024
+if /i "%MEDIA_TIPO%"=="SSD" goto ESTIMAR_SSD
+set /a EST_MIN_MIN=%EST_MB% / 9000
+set /a EST_MIN_MAX=%EST_MB% / 3600
+goto ESTIMAR_FIN
+:ESTIMAR_SSD
+set /a EST_MIN_MIN=%EST_MB% / 18000
+set /a EST_MIN_MAX=%EST_MB% / 6000
+:ESTIMAR_FIN
+if %EST_MIN_MIN% LSS 1 set "EST_MIN_MIN=1"
+if %EST_MIN_MAX% LSS %EST_MIN_MIN% set "EST_MIN_MAX=%EST_MIN_MIN%"
+call :FORMATO_HORAS %EST_MIN_MIN%
+set "EST_TXT=%HORAS_TXT%"
+call :FORMATO_HORAS %EST_MIN_MAX%
+set "EST_TXT=%T_EST_10% %EST_TXT% %T_EST_11% %HORAS_TXT%"
+exit /b 0
+
+REM ---------------------------------------------------------------------
+REM  FORMATO_HORAS - convierte minutos en "H h M min" o "M min"
+REM ---------------------------------------------------------------------
+REM  Uso:      call :FORMATO_HORAS 95   -^>   HORAS_TXT = "1 h 35 min"
+REM  'set /a' da la division entera (horas) y el resto con el MODULO '%',
+REM  que en un .bat se escribe DOBLE: %%.
+REM ---------------------------------------------------------------------
+:FORMATO_HORAS
+set "HORAS_TXT="
+set "FH_MIN=%~1"
+if not defined FH_MIN exit /b 0
+set /a FH_H=%FH_MIN% / 60
+set /a FH_M=%FH_MIN% %% 60
+if %FH_H% LSS 1 set "HORAS_TXT=%FH_M% %T_EST_13%"
+if %FH_H% GEQ 1 set "HORAS_TXT=%FH_H% %T_EST_12% %FH_M% %T_EST_13%"
+exit /b 0
+
+REM ---------------------------------------------------------------------
+REM  MOSTRAR_TIEMPO_ESTIMADO - una linea dentro del resumen del modulo
+REM ---------------------------------------------------------------------
+REM  Si tenemos tamano y estimacion, mostramos el dato concreto; si no,
+REM  caemos a la tabla generica de siempre (T_D2_15..T_D2_19). Asi el
+REM  tecnico SIEMPRE ve una referencia de tiempo, sepa el script mucho o
+REM  poco del disco elegido.
+REM ---------------------------------------------------------------------
+:MOSTRAR_TIEMPO_ESTIMADO
+if defined EST_TXT goto MOSTRAR_TIEMPO_DETALLE
+echo     %T_EST_17%
+echo     %T_D2_15%
+echo     %T_D2_16%
+echo     %T_D2_17%
+echo     %T_D2_18%
+echo     %T_D2_19%
+exit /b 0
+:MOSTRAR_TIEMPO_DETALLE
+echo     %T_EST_02% %DISCO%   -   %T_EST_03% %DISCO_GB% %T_EST_05%
+echo     %T_EST_04% %MEDIA_TXT%   -   %T_EST_09% %EST_TXT%
+exit /b 0
+
+REM ---------------------------------------------------------------------
+REM  MOSTRAR_AVISO_TIEMPO - aviso amarillo antes de la confirmacion
+REM ---------------------------------------------------------------------
+REM  Se pinta en amarillo (color 0E) para que destaque, igual que el aviso
+REM  de riesgo de la Fase 2.8, y se vuelve al verde normal al terminar. Se
+REM  muestra DESPUES del guion y ANTES de pedir la palabra de confirmacion.
+REM ---------------------------------------------------------------------
+:MOSTRAR_AVISO_TIEMPO
+color 0E
+echo(
+echo   ==================================================================
+echo   %T_EST_01%
+echo   ==================================================================
+echo(
+echo   %T_EST_02% %DISCO%   -   %T_EST_04% %MEDIA_TXT%
+if defined DISCO_GB echo   %T_EST_03% %DISCO_GB% %T_EST_05%
+if not defined DISCO_GB echo   %T_EST_03% %T_EST_08%
+if defined EST_TXT echo   %T_EST_09% %EST_TXT%
+if not defined EST_TXT echo   %T_EST_09% %T_EST_17%
+echo(
+echo   %T_EST_14%
+echo   %T_EST_15%
+echo   %T_EST_16%
+echo(
+color 0A
+exit /b 0
+
+REM #####################################################################
 REM  ANEXO A - DICCIONARIO DE TEXTOS (multilenguaje)
 REM #####################################################################
 REM  Cada bloque define LAS MISMAS variables T_xxx con el texto de su
@@ -2050,7 +2550,7 @@ REM ---------------------------------------------------------------------
 REM  IDIOMA_ES - castellano (%LANG%=ES). Idioma por defecto.
 REM ---------------------------------------------------------------------
 :IDIOMA_ES
-set "T_AYU1_01=[4] AYUDA DEL SISTEMA - Página 1 de 2: discos y almacenamiento"
+set "T_AYU1_01=[5] AYUDA DEL SISTEMA - Página 1 de 2: discos y almacenamiento"
 set "T_AYU1_02=DISKPART ........................ gestor de discos de Windows"
 set "T_AYU1_03=Formas de uso:"
 set "T_AYU1_04=diskpart                    abre la consola interactiva"
@@ -2083,7 +2583,7 @@ set "T_AYU1_30=FORMAT X: /fs:ntfs /q /p:1 .... + un pase de ceros (Windows compl
 set "T_AYU1_31=Los guiones temporales de las opciones 1 y 2 se crean en la"
 set "T_AYU1_32=carpeta temporal del sistema y se borran al terminar."
 set "T_AYU1_33=Pulsa cualquier tecla para continuar con la página 2..."
-set "T_AYU2_01=[4] AYUDA DEL SISTEMA - Página 2 de 2: sistema, red y utilidades"
+set "T_AYU2_01=[5] AYUDA DEL SISTEMA - Página 2 de 2: sistema, red y utilidades"
 set "T_AYU2_02=SISTEMA E INVENTARIO"
 set "T_AYU2_03=systeminfo .................... ficha técnica completa del equipo"
 set "T_AYU2_04=wmic bios get serialnumber .... número de serie del equipo"
@@ -2110,7 +2610,7 @@ set "T_AYU2_24=tasklist ...................... procesos en marcha"
 set "T_AYU2_25=taskkill /IM nombre.exe /F .... fuerza el cierre de un proceso"
 set "T_AYU2_26=Notas para el taller:"
 set "T_AYU2_27=- En WinPE solo existen los comandos incluidos en la imagen."
-set "T_AYU2_28=Si un comando no aparece, no está: pruébalo en la opción 3."
+set "T_AYU2_28=Si un comando no aparece, no está: pruébalo en la opción 4."
 set "T_AYU2_29=- Antes de formatear un disco, mira su estado SMART con la orden"
 set "T_AYU2_30=de arriba: un disco con 'Pred Fail' no merece una instalación"
 set "T_AYU2_31=nueva (el trabajo se perdería en semanas, no en años)."
@@ -2127,7 +2627,7 @@ set "T_BIEN_07=Las opciones 1 y 2 listan los discos antes de preguntar."
 set "T_BIEN_08=2. Las opciones 1 y 2 son DESTRUCTIVAS: borran la tabla de"
 set "T_BIEN_09=particiones (y en la opción 2, todo el contenido del disco)."
 set "T_BIEN_10=Ninguna actúa sin que tú teclees una palabra de confirmación."
-set "T_BIEN_11=3. Ante la duda, consulta primero la opción 4 (Ayuda) y no"
+set "T_BIEN_11=3. Ante la duda, consulta primero la opción 5 (Ayuda) y no"
 set "T_BIEN_12=improvises con comandos que no conoces."
 set "T_BIEN_13=Forma de uso: teclea el número de la opción que aparece en el"
 set "T_BIEN_14=menú. Según el entorno bastará con la tecla o con pulsar ENTER."
@@ -2184,7 +2684,7 @@ set "T_COM_48=[OK] diskpart terminó sin errores (código 0)."
 set "T_COM_49=[!] diskpart devolvió el código de error"
 set "T_COM_50=[!] diskpart no ha podido completar el listado. Código de error:"
 set "T_COM_51=Disco elegido:"
-set "T_CONS_01=[3] CONSOLA AVANZADA"
+set "T_CONS_01=[4] CONSOLA AVANZADA"
 set "T_CONS_02=Abriendo una consola CMD interactiva en la MISMA ventana."
 set "T_CONS_03=- Escribe 'exit' para volver al menú principal."
 set "T_CONS_04=- Heredas el entorno actual (unidad de trabajo, variables)."
@@ -2252,6 +2752,44 @@ set "T_D2_32=Para el borrado seguro se piden DOS confirmaciones escritas."
 set "T_D2_33=- Borrado seguro (opción 2): el Disco"
 set "T_D2_34=ejecución. La protección de arranque bloquea el disco del sistema"
 set "T_D2_35=aparecerá EN BRUTO"
+set "T_EST_01=ADVERTENCIA: TIEMPO ESTIMADO DEL BORRADO SEGURO (clean all)"
+set "T_EST_02=Disco número"
+set "T_EST_03=Tamaño real detectado:"
+set "T_EST_04=Tipo de disco:"
+set "T_EST_05=GB"
+set "T_EST_06=HDD (disco duro mecánico)"
+set "T_EST_07=SSD (unidad de estado sólido)"
+set "T_EST_08=sin determinar"
+set "T_EST_09=Tiempo estimado:"
+set "T_EST_10=de"
+set "T_EST_11=a"
+set "T_EST_12=h"
+set "T_EST_13=min"
+set "T_EST_14=Cifra ORIENTATIVA: depende del disco, del bus (USB/SATA) y de su salud."
+set "T_EST_15=NO interrumpas el proceso una vez iniciado (ni teclas, ni reinicio)."
+set "T_EST_16=En SSD el borrado físico NO queda garantizado (mira los avisos)."
+set "T_EST_17=Tamaño no legible: se usa la tabla de referencia de abajo."
+set "T_INV_01=[3] DIAGNÓSTICO / INVENTARIO - SOLO LECTURA"
+set "T_INV_02=Este módulo NO modifica discos ni particiones: solo informa."
+set "T_INV_03=EQUIPO Y SISTEMA"
+set "T_INV_04=PROCESADOR"
+set "T_INV_05=MEMORIA RAM (total / disponible)"
+set "T_INV_06=PLACA BASE"
+set "T_INV_07=DISCOS FÍSICOS (índice, tamaño y estado)"
+set "T_INV_08=Modelos de disco:"
+set "T_INV_09=Pulsa cualquier tecla para volver al menú..."
+set "T_INV_10=[i] Dato no disponible en esta imagen (falta el comando)."
+set "T_INV_11=Total:"
+set "T_INV_12=Disponible:"
+set "T_INV_13=Procesadores lógicos:"
+set "T_INV_14=Sistema (ver):"
+set "T_INV_15=MB"
+set "T_INV_16=GB"
+set "T_INV_17=No legible aquí: prueba 'systeminfo' en la Consola (opción 4)."
+set "T_MED_01=TIPO DE DISCO NO DETECTADO"
+set "T_MED_02=No he podido saber si el Disco"
+set "T_MED_03=es un HDD (mecánico) o un SSD (sólido):"
+set "T_MED_04=   ¿Qué tipo de disco es? [1=HDD / 2=SSD]:  "
 set "T_FW_01=FIRMWARE Y ESQUEMA DE PARTICIONADO"
 set "T_FW_02=Firmware detectado:"
 set "T_FW_03=Esquema de particionado:"
@@ -2266,20 +2804,21 @@ set "T_DP_04=raros, prueba en la Consola Avanzada:  chcp 850   y luego  chcp 650
 set "T_MENU_01=MENÚ PRINCIPAL"
 set "T_MENU_02=[1]  Preparación rápida de disco        limpieza y formato básico"
 set "T_MENU_03=[2]  Borrado seguro / Sanitización      destrucción lógica de datos"
-set "T_MENU_04=[3]  Consola Avanzada                   salir a CMD interactivo"
-set "T_MENU_05=[4]  Ayuda del sistema                  guía rápida del técnico"
-set "T_MENU_06=[5]  Salir / Apagar equipo"
+set "T_MENU_04=[3]  Diagnóstico / Inventario           consulta sin modificar nada"
+set "T_MENU_05=[4]  Consola Avanzada                   salir a CMD interactivo"
+set "T_MENU_06=[5]  Ayuda del sistema                  guía rápida del técnico"
+set "T_MENU_15=[6]  Salir / Apagar equipo"
 set "T_MENU_07=Aviso: [1] y [2] modifican DISCOS de verdad y piden confirmación"
-set "T_MENU_08=escrita. [3], [4] y [5] no tocan el hardware por sí solas."
+set "T_MENU_08=escrita. Las opciones [3] a [6] no tocan el hardware por sí solas."
 set "T_MENU_09=(Si la consola no reacciona a una sola tecla, teclea el número"
 set "T_MENU_10=y termina con ENTER.)"
-set "T_MENU_11=   Su opción [1-5]:  "
+set "T_MENU_11=   Su opción [1-6]:  "
 set "T_MENU_12=Fecha y hora:"
 set "T_MENU_13=Modo de entrada:"
 set "T_MENU_14=Firmware:"
 set "T_LOG_01=Registro (log): PERSISTENTE en"
 set "T_LOG_02=Registro (log): solo en RAM (se perdera al reiniciar):"
-set "T_SAL_01=[5] SALIR / APAGAR EQUIPO"
+set "T_SAL_01=[6] SALIR / APAGAR EQUIPO"
 set "T_SAL_02=[1]  Apagar el equipo"
 set "T_SAL_03=[2]  Salir de la herramienta y volver al sistema"
 set "T_SAL_04=[3]  Volver al menú principal (me he equivocado)"
@@ -2325,7 +2864,7 @@ REM  IDIOMA_EN - ingles (%LANG%=EN).
 REM  Mismos nombres de variable que el bloque anterior, uno a uno.
 REM ---------------------------------------------------------------------
 :IDIOMA_EN
-set "T_AYU1_01=[4] SYSTEM HELP - Page 1 of 2: disks and storage"
+set "T_AYU1_01=[5] SYSTEM HELP - Page 1 of 2: disks and storage"
 set "T_AYU1_02=DISKPART ........................ Windows disk manager"
 set "T_AYU1_03=Ways to use it:"
 set "T_AYU1_04=diskpart                    opens the interactive console"
@@ -2358,7 +2897,7 @@ set "T_AYU1_30=FORMAT X: /fs:ntfs /q /p:1 .... + one zero pass (full Windows)"
 set "T_AYU1_31=The temporary scripts of options 1 and 2 are created in the"
 set "T_AYU1_32=system temp folder and are deleted when finished."
 set "T_AYU1_33=Press any key to continue to page 2..."
-set "T_AYU2_01=[4] SYSTEM HELP - Page 2 of 2: system, network and tools"
+set "T_AYU2_01=[5] SYSTEM HELP - Page 2 of 2: system, network and tools"
 set "T_AYU2_02=SYSTEM AND INVENTORY"
 set "T_AYU2_03=systeminfo .................... full technical sheet of the machine"
 set "T_AYU2_04=wmic bios get serialnumber .... machine serial number"
@@ -2385,7 +2924,7 @@ set "T_AYU2_24=tasklist ...................... running processes"
 set "T_AYU2_25=taskkill /IM name.exe /F ...... forces a process to close"
 set "T_AYU2_26=Notes for the workshop:"
 set "T_AYU2_27=- In WinPE only the commands included in the image exist."
-set "T_AYU2_28=If a command is missing, it is not there: try it in option 3."
+set "T_AYU2_28=If a command is missing, it is not there: try it in option 4."
 set "T_AYU2_29=- Before formatting a disk, check its SMART status with the"
 set "T_AYU2_30=command above: a disk with 'Pred Fail' does not deserve a new"
 set "T_AYU2_31=install (the work would be lost in weeks, not in years)."
@@ -2402,7 +2941,7 @@ set "T_BIEN_07=Options 1 and 2 list the disks before asking."
 set "T_BIEN_08=2. Options 1 and 2 are DESTRUCTIVE: they erase the partition"
 set "T_BIEN_09=table (and in option 2, all the data on the disk)."
 set "T_BIEN_10=None of them acts unless you type a confirmation word."
-set "T_BIEN_11=3. When in doubt, read option 4 (Help) first and do not"
+set "T_BIEN_11=3. When in doubt, read option 5 (Help) first and do not"
 set "T_BIEN_12=improvise with commands you do not know."
 set "T_BIEN_13=How to use it: type the number of the option shown in the"
 set "T_BIEN_14=menu. Depending on the environment the key alone or ENTER will do."
@@ -2459,7 +2998,7 @@ set "T_COM_48=[OK] diskpart finished with no errors (code 0)."
 set "T_COM_49=[!] diskpart returned the error code"
 set "T_COM_50=[!] diskpart could not complete the listing. Error code:"
 set "T_COM_51=Selected disk:"
-set "T_CONS_01=[3] ADVANCED CONSOLE"
+set "T_CONS_01=[4] ADVANCED CONSOLE"
 set "T_CONS_02=Opening an interactive CMD console in the SAME window."
 set "T_CONS_03=- Type 'exit' to return to the main menu."
 set "T_CONS_04=- You inherit the current environment (work drive, variables)."
@@ -2527,6 +3066,44 @@ set "T_D2_32=For the secure erase TWO written confirmations are required."
 set "T_D2_33=- Secure erase (option 2): Disk"
 set "T_D2_34=here. The boot protection blocks the system disk when it"
 set "T_D2_35=will appear RAW"
+set "T_EST_01=WARNING: ESTIMATED TIME FOR THE SECURE ERASE (clean all)"
+set "T_EST_02=Disk number"
+set "T_EST_03=Actual size detected:"
+set "T_EST_04=Disk type:"
+set "T_EST_05=GB"
+set "T_EST_06=HDD (mechanical hard drive)"
+set "T_EST_07=SSD (solid state drive)"
+set "T_EST_08=undetermined"
+set "T_EST_09=Estimated time:"
+set "T_EST_10=from"
+set "T_EST_11=to"
+set "T_EST_12=h"
+set "T_EST_13=min"
+set "T_EST_14=ROUGH figure: it depends on the disk, the bus (USB/SATA) and its health."
+set "T_EST_15=Do NOT interrupt the process once started (no keys, no reboot)."
+set "T_EST_16=On SSD the physical erase is NOT guaranteed (see the warnings)."
+set "T_EST_17=Size not readable: the reference table below is used."
+set "T_INV_01=[3] DIAGNOSTICS / INVENTORY - READ ONLY"
+set "T_INV_02=This module does NOT modify disks or partitions: it only reports."
+set "T_INV_03=MACHINE AND SYSTEM"
+set "T_INV_04=PROCESSOR"
+set "T_INV_05=RAM MEMORY (total / available)"
+set "T_INV_06=MOTHERBOARD"
+set "T_INV_07=PHYSICAL DISKS (index, size and status)"
+set "T_INV_08=Disk models:"
+set "T_INV_09=Press any key to return to the menu..."
+set "T_INV_10=[i] Data not available in this image (command missing)."
+set "T_INV_11=Total:"
+set "T_INV_12=Available:"
+set "T_INV_13=Logical processors:"
+set "T_INV_14=System (ver):"
+set "T_INV_15=MB"
+set "T_INV_16=GB"
+set "T_INV_17=Not readable here: try 'systeminfo' in the Console (option 4)."
+set "T_MED_01=DISK TYPE NOT DETECTED"
+set "T_MED_02=I could not tell whether Disk"
+set "T_MED_03=is an HDD (mechanical) or an SSD (solid):"
+set "T_MED_04=   What type of disk is it? [1=HDD / 2=SSD]:  "
 set "T_FW_01=FIRMWARE AND PARTITION LAYOUT"
 set "T_FW_02=Detected firmware:"
 set "T_FW_03=Partition layout:"
@@ -2541,20 +3118,21 @@ set "T_DP_04=characters, try the Advanced Console:  chcp 850   then  chcp 65001"
 set "T_MENU_01=MAIN MENU"
 set "T_MENU_02=[1]  Quick disk preparation             wipe table and format"
 set "T_MENU_03=[2]  Secure erase / Sanitization        logical data destruction"
-set "T_MENU_04=[3]  Advanced console                   drop to interactive CMD"
-set "T_MENU_05=[4]  System help                        technician quick guide"
-set "T_MENU_06=[5]  Exit / Shut down the computer"
+set "T_MENU_04=[3]  Diagnostics / Inventory            read-only machine info"
+set "T_MENU_05=[4]  Advanced console                   drop to interactive CMD"
+set "T_MENU_06=[5]  System help                        technician quick guide"
+set "T_MENU_15=[6]  Exit / Shut down the computer"
 set "T_MENU_07=Warning: [1] and [2] really modify DISKS and ask for a written"
-set "T_MENU_08=confirmation. [3], [4] and [5] do not touch hardware on their own."
+set "T_MENU_08=confirmation. Options [3] to [6] do not touch hardware on their own."
 set "T_MENU_09=(If the console does not react to a single key, type the number"
 set "T_MENU_10=and finish with ENTER.)"
-set "T_MENU_11=   Your option [1-5]:  "
+set "T_MENU_11=   Your option [1-6]:  "
 set "T_MENU_12=Date and time:"
 set "T_MENU_13=Input mode:"
 set "T_MENU_14=Firmware:"
 set "T_LOG_01=Activity log: PERSISTENT at"
 set "T_LOG_02=Activity log: RAM only (lost on reboot):"
-set "T_SAL_01=[5] EXIT / SHUT DOWN THE COMPUTER"
+set "T_SAL_01=[6] EXIT / SHUT DOWN THE COMPUTER"
 set "T_SAL_02=[1]  Shut down the computer"
 set "T_SAL_03=[2]  Exit the tool and return to the system"
 set "T_SAL_04=[3]  Return to the main menu (my mistake)"
