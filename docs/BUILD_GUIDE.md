@@ -206,6 +206,16 @@ o directamente con PowerShell:
 powershell -ExecutionPolicy Bypass -File build\build_iso.ps1
 ```
 
+> **Autonomía de entorno (sin "Deployment and Imaging Tools Environment"):**
+> `build_iso.ps1` localiza el Windows ADK instalado y carga sus variables
+> de entorno (`WinPERoot`, `WinPEMountRoot`, `DISMToolsRoot`) en la
+> sesión actual, así que basta con **cualquier consola elevada** (CMD,
+> PowerShell o la terminal integrada de VS Code). Además, todas las rutas
+> de trabajo (`build\work\`, `media\`, `mount\`) y la ISO de salida se
+> resuelven con respecto a la ubicación del repositorio (`$PSScriptRoot` /
+> `%~dp0`), sin ninguna ruta fija al Escritorio ni a `C:\Users`. Las
+> rutas resueltas se muestran al arrancar el build.
+
 ### 4.1 Parámetros de `build_iso.ps1`
 
 | Parámetro | Por defecto | Qué hace |

@@ -72,6 +72,13 @@
       - Permisos de Administrador (DISM monta imagenes; es obligatorio).
     Documentacion ampliada: docs\BUILD_GUIDE.md
 
+    AUTONOMIA DE ENTORNO: no hace falta abrir la consola "Deployment and
+    Imaging Tools Environment" del ADK. El script localiza el ADK
+    instalado y el mismo carga sus variables de entorno (WinPERoot,
+    WinPEMountRoot, DISMToolsRoot) en la sesion actual, asi que funciona
+    desde cualquier terminal elevada (CMD, PowerShell o la terminal
+    integrada de VS Code).
+
     SOBRE LOS ACENTOS: este script y build_iso.bat estan escritos en ASCII
     puro (sin tildes) a proposito, para funcionar igual bajo cualquier
     pagina de codigos y sin depender del BOM. Es una decision de
@@ -146,6 +153,22 @@ function Fallar {
     exit 1
 }
 
+# ---------------------------------------------------------------------
+#  BLINDAJE ANTE RUTAS FANTASMA (regla anti hardcode del proyecto)
+#  REGLA: work, media, mount y el ISO final nacen SIEMPRE de
+#  $PSScriptRoot (la carpeta de ESTE script), no de ninguna variable de
+#  entorno heredada, del Escritorio ni de 'C:\Users\...'. Las UNICAS
+#  rutas que pueden salirse del repositorio son las que el usuario pasa
+#  a mano con -WorkRoot o -OutputIso; este aviso existe para que una
+#  ruta "fantasma" jamas pase inadvertida en la primera pantalla.
+# ---------------------------------------------------------------------
+if (-not $WorkRoot.StartsWith($DirProyecto, [StringComparison]::OrdinalIgnoreCase)) {
+    Escribir-Aviso "WorkRoot queda fuera del repositorio (valor explicito del usuario): $WorkRoot"
+}
+if (-not $OutputIso.StartsWith($DirProyecto, [StringComparison]::OrdinalIgnoreCase)) {
+    Escribir-Aviso "OutputIso queda fuera del repositorio (valor explicito del usuario): $OutputIso"
+}
+
 # =====================================================================
 #  PASO 1/4 - COMPROBACIONES PREVIAS (nada se toca todavia)
 # =====================================================================
@@ -176,6 +199,13 @@ foreach ($f in @($FuenteMenu, $FuenteStart)) {
 }
 Escribir-Ok 'Fuentes encontradas (src\menu.bat y src\startnet.cmd).'
 
+#  Rutas RESUELTAS en pantalla desde el principio: si alguna vez
+#  apareciera aqui una ruta inesperada (Escritorio, C:\Users\...), se
+#  veria de inmediato. Todas nacen de $PSScriptRoot.
+Escribir-Info "Raiz del repositorio : $DirProyecto"
+Escribir-Info "Carpeta de trabajo   : $WorkRoot"
+Escribir-Info "ISO de salida        : $OutputIso"
+
 #  1.d) Localizar el Windows ADK. El ADK se instala, por defecto, en
 #       '%ProgramFiles(x86)%\Windows Kits\10\Assessment and Deployment Kit'.
 #       Probamos varias raices porque no todos los equipos son iguales.
@@ -186,6 +216,9 @@ if ($env:ProgramFiles)       { $RaicesAdk += (Join-Path $env:ProgramFiles       
 
 $RutaOscdimg = $null
 $RutaCopype  = $null
+#  Raiz del ADK de la que salga el hallazgo: luego nos servira para
+#  cargar las variables de entorno del ADK en esta sesion (ver 1.g).
+$RaizAdkActiva = $null
 foreach ($raiz in $RaicesAdk) {
     if (-not (Test-Path -LiteralPath $raiz)) { continue }
     #  oscdimg.exe vive en 'Deployment Tools\<arch>\Oscdimg'. Si no esta
@@ -204,6 +237,7 @@ foreach ($raiz in $RaicesAdk) {
         $p = Join-Path $raiz 'Windows Preinstallation Environment\copype.cmd'
         if (Test-Path -LiteralPath $p) { $RutaCopype = $p }
     }
+    if (-not $RaizAdkActiva) { if ($RutaOscdimg -or $RutaCopype) { $RaizAdkActiva = $raiz } }
     if ($RutaOscdimg -and $RutaCopype) { break }
 }
 
@@ -243,6 +277,54 @@ try {
 } catch {
     Escribir-Aviso "No he podido comprobar el espacio libre en $letraTrabajo."
 }
+
+# =====================================================================
+#  1.g) ENTORNO DEL ADK EN ESTA SESION (autonomia desde cualquier terminal)
+# =====================================================================
+#  POR QUE EXISTE ESTE BLOQUE (y por que NO se llama a DandISetEnv.bat):
+#
+#  La "Deployment and Imaging Tools Environment" del ADK no es mas que
+#  un atajo de Windows que ejecuta 'DandISetEnv.bat', un .bat que define
+#  las variables WinPERoot, WinPEMountRoot y DISMToolsRoot, y antepone
+#  las carpetas de oscdimg al PATH... pero lo hace en la SESION de cmd
+#  que lo ejecuta. En PowerShell, invocar un .bat (incluso con '&') o
+#  lanzarlo "en segundo plano" lanza un cmd.exe HIJO: cuando ese hijo
+#  termina, su entorno se descarta y no llega a una sola linea de este
+#  proceso. Es decir: llamarlo no sirve de nada.
+#
+#  LA SOLUCION CORRECTA EN POWERSHELL: detectar la raiz del ADK (paso
+#  1.d) y asignar las MISMAS variables directamente en el ambito '$env:'
+#  de ESTE proceso. Todos los procesos que lancemos a continuacion
+#  (copype.cmd, oscdimg.exe, dism.exe) HEREDAN ese entorno, porque en
+#  Windows un proceso hijo hereda las variables de su padre.
+#
+#  VENTAJA DOBLE: al fijarlas nosotros desde la instalacion detectada,
+#  el build funciona desde cualquier terminal (CMD, PowerShell, VS
+#  Code...) Y queda INMUNE a valores fantasma heredados de sesiones
+#  anteriores (por ejemplo un 'WinPERoot' viejo que apuntara a una copia
+#  del kit en el Escritorio): se sobrescriben SIEMPRE con la ruta
+#  correcta del ADK instalado en este equipo.
+# ---------------------------------------------------------------------
+if (-not $RaizAdkActiva) {
+    Fallar 'No se pudo determinar la raiz del ADK para cargar su entorno.'
+}
+$env:WinPERoot      = $RaizAdkActiva
+$env:WinPEMountRoot = Join-Path $RaizAdkActiva 'Windows Preinstallation Environment'
+$env:DISMToolsRoot  = Join-Path $RaizAdkActiva 'Deployment Tools'
+
+#  PATH: se ANTA la carpeta de oscdimg y la del complemento WinPE para
+#  que 'oscdimg' y 'copype.cmd' sean invocables por nombre desde esta
+#  sesion, sin necesitar el lanzador del ADK. Se antepena (y no se
+#  anade al final) para que estas rutas ganen sobre cualquier copia
+#  antigua que pudiera existir en el PATH del sistema.
+$dirOscdimgEnv = Split-Path -Parent $RutaOscdimg
+$dirWinPEEnv   = Split-Path -Parent $RutaCopype
+$env:PATH = "$dirOscdimgEnv;$dirWinPEEnv;$env:PATH"
+
+Escribir-Ok 'Entorno del ADK cargado en esta sesion (sin DandISetEnv.bat):'
+Escribir-Info "  WinPERoot      = $env:WinPERoot"
+Escribir-Info "  WinPEMountRoot = $env:WinPEMountRoot"
+Escribir-Info "  DISMToolsRoot  = $env:DISMToolsRoot"
 
 # =====================================================================
 #  PASO 2/4 - CREAR EL SOPORTE WinPE LIMPIO (copype)
