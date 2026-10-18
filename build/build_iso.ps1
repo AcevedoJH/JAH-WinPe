@@ -75,7 +75,7 @@
     AUTONOMIA DE ENTORNO: no hace falta abrir la consola "Deployment and
     Imaging Tools Environment" del ADK. El script localiza el ADK
     instalado y el mismo carga sus variables de entorno (WinPERoot,
-    WinPEMountRoot, DISMToolsRoot) en la sesion actual, asi que funciona
+    DISMRoot, OSCDImgRoot) en la sesion actual, asi que funciona
     desde cualquier terminal elevada (CMD, PowerShell o la terminal
     integrada de VS Code).
 
@@ -136,15 +136,34 @@ $RutaWim  = Join-Path $DirMedia 'sources\boot.wim'
 #  Ayudantes de salida por pantalla.
 #  Se separan en funciones para que el flujo principal se lea como una
 #  lista de PASOS y no como un muro de Write-Host.
+#
+#  NOTA PSScriptAnalyzer: la regla PSUseApprovedVerbs avisa que
+#  'Escribir' no es un verbo de la lista oficial (Get-Verb, inglesa).
+#  Se silencia a proposito en cada funcion con SuppressMessageAttribute
+#  porque la convencion de nombres ES/EN de toda la suite (menu.bat,
+#  build_iso.ps1...) es intencionada y se mantiene en espanol.
 # ---------------------------------------------------------------------
 function Escribir-Paso {
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseApprovedVerbs', Justification = 'Verbo en espanol intencionado: convencion ES/EN del proyecto.')]
     param([int]$Numero, [int]$Total, [string]$Texto)
     Write-Host ''
     Write-Host ('=== PASO {0}/{1} : {2} ===' -f $Numero, $Total, $Texto) -ForegroundColor Cyan
 }
-function Escribir-Ok    { param([string]$T) Write-Host "  [OK] $T"  -ForegroundColor Green }
-function Escribir-Info  { param([string]$T) Write-Host "  [..] $T"  -ForegroundColor Gray }
-function Escribir-Aviso { param([string]$T) Write-Host "  [!]  $T"  -ForegroundColor Yellow }
+function Escribir-Ok {
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseApprovedVerbs', Justification = 'Verbo en espanol intencionado: convencion ES/EN del proyecto.')]
+    param([string]$T)
+    Write-Host "  [OK] $T" -ForegroundColor Green
+}
+function Escribir-Info {
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseApprovedVerbs', Justification = 'Verbo en espanol intencionado: convencion ES/EN del proyecto.')]
+    param([string]$T)
+    Write-Host "  [..] $T" -ForegroundColor Gray
+}
+function Escribir-Aviso {
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseApprovedVerbs', Justification = 'Verbo en espanol intencionado: convencion ES/EN del proyecto.')]
+    param([string]$T)
+    Write-Host "  [!]  $T" -ForegroundColor Yellow
+}
 function Fallar {
     param([string]$Texto)
     Write-Host ''
@@ -285,7 +304,7 @@ try {
 #
 #  La "Deployment and Imaging Tools Environment" del ADK no es mas que
 #  un atajo de Windows que ejecuta 'DandISetEnv.bat', un .bat que define
-#  las variables WinPERoot, WinPEMountRoot y DISMToolsRoot, y antepone
+#  las variables WinPERoot, DandIRoot, DISMRoot y OSCDImgRoot, y antepone
 #  las carpetas de oscdimg al PATH... pero lo hace en la SESION de cmd
 #  que lo ejecuta. En PowerShell, invocar un .bat (incluso con '&') o
 #  lanzarlo "en segundo plano" lanza un cmd.exe HIJO: cuando ese hijo
@@ -304,27 +323,79 @@ try {
 #  anteriores (por ejemplo un 'WinPERoot' viejo que apuntara a una copia
 #  del kit en el Escritorio): se sobrescriben SIEMPRE con la ruta
 #  correcta del ADK instalado en este equipo.
+#
+#  NOTA SOBRE 'WinPERoot' (fallo corregido): esta variable NO apunta a
+#  la raiz del ADK ('...\Assessment and Deployment Kit') sino estricta-
+#  mente a la subcarpeta del complemento de WinPE:
+#      ...\Assessment and Deployment Kit\Windows Preinstallation Environment
+#  Motivo (verificado leyendo el 'copype.cmd' del ADK instalado):
+#    linea 21 : set SOURCE=%WinPERoot%\%WINPE_ARCH%
+#               -> si 'WinPERoot' fuera la raiz del ADK, copype
+#               buscaria '...\Assessment and Deployment Kit\amd64'
+#               (inexistente) y abortaria con "architecture was not
+#               found". Con este valor resuelve
+#               '...\Windows Preinstallation Environment\amd64'.
+#    linea 22 : set FWFILESROOT=%OSCDImgRoot%\..\..\%WINPE_ARCH%\Oscdimg
+#               -> exige que 'OSCDImgRoot' este definida.
+#    linea 123: "%DISMRoot%\Dism.exe" /Mount-Image ...
+#               -> exige que 'DISMRoot' este definida.
+#  Por eso se replican AQUI las variables canonicas que define el
+#  'DandISetEnv.bat' oficial del ADK (leido en este equipo), con los
+#  mismos valores:
+#      WinPERoot   = <ADK>\Windows Preinstallation Environment
+#      DandIRoot   = <ADK>\Deployment Tools
+#      DISMRoot    = DandIRoot\<arquitectura nativa>\DISM
+#      OSCDImgRoot = DandIRoot\<arquitectura nativa>\Oscdimg
 # ---------------------------------------------------------------------
 if (-not $RaizAdkActiva) {
     Fallar 'No se pudo determinar la raiz del ADK para cargar su entorno.'
 }
-$env:WinPERoot      = $RaizAdkActiva
-$env:WinPEMountRoot = Join-Path $RaizAdkActiva 'Windows Preinstallation Environment'
-$env:DISMToolsRoot  = Join-Path $RaizAdkActiva 'Deployment Tools'
 
-#  PATH: se ANTA la carpeta de oscdimg y la del complemento WinPE para
-#  que 'oscdimg' y 'copype.cmd' sean invocables por nombre desde esta
-#  sesion, sin necesitar el lanzador del ADK. Se antepena (y no se
-#  anade al final) para que estas rutas ganen sobre cualquier copia
-#  antigua que pudiera existir en el PATH del sistema.
-$dirOscdimgEnv = Split-Path -Parent $RutaOscdimg
-$dirWinPEEnv   = Split-Path -Parent $RutaCopype
-$env:PATH = "$dirOscdimgEnv;$dirWinPEEnv;$env:PATH"
+#  Carpeta del complemento WinPE dentro del ADK detectado (madre de la
+#  estructura amd64/x86 que consume copype).
+$DirWinPEAdk = Join-Path $RaizAdkActiva 'Windows Preinstallation Environment'
+$DirToolsAdk = Join-Path $RaizAdkActiva 'Deployment Tools'
+
+#  Arquitectura nativa del equipo. Misma logica que DandISetEnv.bat: si
+#  este proceso PowerShell corriera en 32 bits sobre Windows de 64 bits,
+#  se usa la arquitectura REAL (PROCESSOR_ARCHITEW6432) para no
+#  apuntar a la carpeta x86 de las herramientas por equivocacion.
+$ArqNat = $env:PROCESSOR_ARCHITECTURE
+if ($ArqNat -eq 'x86' -and $env:PROCESSOR_ARCHITEW6432) { $ArqNat = $env:PROCESSOR_ARCHITEW6432 }
+
+#  WinPERoot -> subcarpeta del complemento WinPE (VER NOTA ARRIBA).
+$env:WinPERoot   = $DirWinPEAdk
+$env:DandIRoot   = $DirToolsAdk
+$env:DISMRoot    = Join-Path $DirToolsAdk "$ArqNat\DISM"
+$env:OSCDImgRoot = Join-Path $DirToolsAdk "$ArqNat\Oscdimg"
+
+#  Verificacion temprana: si falta el Dism.exe del ADK que invocara
+#  copype (linea 123), es mejor parar aqui con un mensaje claro que
+#  dejar que copype falle despues con un error criptico de montaje.
+if (-not (Test-Path -LiteralPath (Join-Path $env:DISMRoot 'Dism.exe'))) {
+    Fallar ('No encuentro el Dism.exe del ADK en: ' + $env:DISMRoot +
+            '. Revisa la instalacion del Windows ADK (Deployment Tools).')
+}
+
+#  PATH: se antepanan las herramientas que usa este build (DISM,
+#  Oscdimg, BCDBoot) y la carpeta WinPE (donde vive copype.cmd), tal
+#  como hace DandISetEnv.bat, para que sean invocables por nombre desde
+#  esta sesion sin necesitar el lanzador del ADK. Solo se incluyen
+#  carpetas que EXISTAN, y se antepenan (no se anaden al final) para
+#  que ganen sobre cualquier copia antigua que hubiera en el PATH.
+$dirsPath = @(
+    $env:DISMRoot
+    $env:OSCDImgRoot
+    (Join-Path $DirToolsAdk "$ArqNat\BCDBoot")
+    $DirWinPEAdk
+    (Split-Path -Parent $RutaOscdimg)   # cubre el caso de oscdimg x86
+) | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -Unique
+$env:PATH = ($dirsPath -join ';') + ';' + $env:PATH
 
 Escribir-Ok 'Entorno del ADK cargado en esta sesion (sin DandISetEnv.bat):'
-Escribir-Info "  WinPERoot      = $env:WinPERoot"
-Escribir-Info "  WinPEMountRoot = $env:WinPEMountRoot"
-Escribir-Info "  DISMToolsRoot  = $env:DISMToolsRoot"
+Escribir-Info "  WinPERoot   = $env:WinPERoot"
+Escribir-Info "  DISMRoot    = $env:DISMRoot"
+Escribir-Info "  OSCDImgRoot = $env:OSCDImgRoot"
 
 # =====================================================================
 #  PASO 2/4 - CREAR EL SOPORTE WinPE LIMPIO (copype)
