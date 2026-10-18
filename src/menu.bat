@@ -6,13 +6,15 @@ REM  PROYECTO   : JAH-WinPe - herramienta de soporte tecnico en consola
 REM               (Windows completo y WinPE de arranque).
 REM  COMPONENTE : menu.bat -^> seleccion de idioma, pantalla de bienvenida,
 REM               menu principal, ayuda del sistema, modulos de disco con
-REM               diskpart, ESCUDO DE SEGURIDAD del disco de arranque y
-REM               salida ordenada.
-REM  FASE       : 2.8 (modulos de disco ACTIVOS y BLINDADOS: bloqueo del
-REM               disco de arranque, validacion estricta de la entrada y
-REM               doble confirmacion escrita CONFIRMAR + numero de disco;
-REM               programa MULTILENGUAJE: castellano / ingles).
-REM  VERSION    : 1.3.0
+REM               diskpart, ESCUDO DE SEGURIDAD del disco de arranque,
+REM               DETECCION DE FIRMWARE (UEFI / Legacy), REGISTRO DE
+REM               ACTIVIDAD (log) y salida ordenada.
+REM  FASE       : 4.0 (deteccion de firmware que adapta el esquema de
+REM               particionado GPT/MBR y sistema de AUDITORIA persistente
+REM               en 'jah-winpe.log'; se conservan el ESCUDO DE SEGURIDAD
+REM               del disco de arranque y el programa MULTILENGUAJE
+REM               castellano / ingles de las fases anteriores).
+REM  VERSION    : 1.4.0
 REM
 REM  --------------------------------------------------------------------
 REM  MAPA DE NAVEGACION (etiquetas del script)
@@ -51,6 +53,22 @@ REM      CONFIRMAR_DESTR ... el tecnico teclea CONFIRMAR + el numero
 REM      EJECUTAR_DISKPART . lanza diskpart /s y muestra su salida
 REM      MOSTRAR_RESULTADO . vuelve a listar para verificar
 REM      BORRAR_TEMPORALES . limpia los ficheros de trabajo
+REM
+REM    FLUJO DEL FIRMWARE Y DE LA AUDITORIA (Fase 4):
+REM      DETECTAR_FIRMWARE . UEFI o Legacy -^> rellena FIRMWARE y
+REM                          FIRMWARE_FORMATO (GPT para UEFI, MBR para
+REM                          Legacy). No imprime nada: solo prepara datos.
+REM      ELEGIR_FORMATO_DUDA si el firmware NO se pudo verificar, pregunta
+REM                          al tecnico que esquema aplicar (nunca adivina).
+REM      PREPARAR_LOG ...... elige DONDE guardar 'jah-winpe.log' (junto al
+REM                          script o en otro disco conectado; si no hay,
+REM                          en la RAM con aviso de que se perdera).
+REM      REGISTRAR ......... anota UNA linea con fecha, hora, tipo de
+REM                          evento, detalle y resultado (auditoria).
+REM
+REM    NOTA: los textos del log se escriben en castellano tecnico (es un
+REM    registro de auditoria para el taller), pero los AVISOS de pantalla
+REM    SI se traducen con el diccionario del ANEXO A.
 REM
 REM  --------------------------------------------------------------------
 REM  CONVENCIONES QUE DEBES SEGUIR AL EDITAR ESTE ARCHIVO
@@ -132,6 +150,31 @@ REM   Alternativa documentada y descartada: nombres de variable dinamicos
 REM       call set "T_MENU_01=%%%LANG%_MENU_01%%"
 REM   (funciona, pero es menos legible y mas fragil; ver PASO 2).
 REM
+REM  FIRMWARE Y AUDITORIA (Fase 4) - RESUMEN PARA MANTENIMIENTO:
+REM   FIRMWARE: como saber si el equipo arranco en UEFI o en BIOS Legacy.
+REM     Se prueba por capas, de la mas fiable a la menos:
+REM       1) REGISTRO: 'wpeutil UpdateBootInfo' (solo WinPE) rellena
+REM          HKLM\...\Control\SystemInformation\SystemFirmwareType.
+REM          Valor 0x2 -^> UEFI ;  0x1 -^> BIOS Legacy.
+REM       2) BCDEDIT: se busca 'winload.efi' (UEFI) o 'winload.exe'
+REM          (Legacy) en la entrada de arranque actual.
+REM       3) Si ambas fallan, FIRMWARE='?' y NO se adivina: en el modulo
+REM          de disco se PREGUNTA que esquema aplicar (GPT o MBR).
+REM     Resultado: FIRMWARE (UEFI/LEGACY/MANUAL/?) y FIRMWARE_FORMATO
+REM     (GPT o MBR). El generador de guiones escribe 'convert' con el esquema.
+REM
+REM   AUDITORIA: registro append-only en 'jah-winpe.log'. Cada operacion
+REM     relevante llama a  call :REGISTRAR TIPO "detalle" "resultado"  y
+REM     la subrutina anade UNA linea:
+REM        ^<fecha^> ^<hora^> ^| TIPO ^| detalle ^| resultado
+REM     El fichero se ABRE y se CIERRA en cada anotacion (redireccion ^>^>),
+REM     asi nunca queda bloqueado aunque el disco se este manipulando.
+REM     UBICACION: se intenta primero junto al script; si el script corre
+REM     en X: (WinPE, RAM) se busca otro disco ESCRIBIBLE; si no hay, se
+REM     deja en la RAM avisando de que se perdera al reiniciar. Nunca se
+REM     guarda el texto tecleado por el tecnico: solo datos ya validados
+REM     (numeros de disco, codigos de error, palabras clave).
+REM
 REM  COMO HABLA ESTE SCRIPT CON DISKPART (resumen para mantenimiento):
 REM   diskpart admite un guion en texto plano mediante la opcion /s:
 REM        diskpart /s "C:\Temp\guion.txt"
@@ -142,8 +185,6 @@ REM   Ventaja doble: cero errores de tecleo en el momento critico y
 REM   trazabilidad exacta de lo que se ha ejecutado.
 REM
 REM  PENDIENTE PARA FASES SIGUIENTES:
-REM   - Registro de actividad (log) persistente en la unidad de arranque.
-REM   - Deteccion de firmware (BIOS/UEFI) para elegir GPT o MBR solo.
 REM   - Lectura del tamano real del disco para estimar el 'clean all'.
 REM   - Recordar el idioma elegido entre ejecuciones (hoy se pregunta
 REM     siempre; seria guardarlo en un fichero junto al script).
@@ -181,8 +222,8 @@ REM --- Identidad de la herramienta --------------------------------------
 REM Centralizamos los textos repetidos: si manana cambiamos de version
 REM solo tocamos aqui y se actualiza cabecera, titulo y mensajes.
 set "TOOL_NAME=JAH-WinPe"
-set "TOOL_VER=1.3.0"
-set "TOOL_FASE=2.8"
+set "TOOL_VER=1.4.0"
+set "TOOL_FASE=4.0"
 
 REM --- Apariencia de la consola -----------------------------------------
 REM title  -^> texto de la barra de titulo de la ventana.
@@ -236,6 +277,21 @@ REM 'PS_EXE' apunta a la ruta canónica de PS 5.x/Windows.
 set "PS_OK=NO"
 set "PS_EXE=%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe"
 if exist "%PS_EXE%" set "PS_OK=SI"
+
+REM --- Auditoria y firmware (Fase 4) ------------------------------------
+REM Estos dos pasos NO imprimen nada en pantalla: solo dejan listas las
+REM variables (LOG_*, FIRMWARE). El texto visible llega luego, ya en el
+REM idioma elegido, en el menu principal y en los modulos de disco.
+REM ORDEN IMPORTANTE:
+REM   1) PREPARAR_LOG       abre la ubicacion del 'jah-winpe.log'.
+REM   2) DETECTAR_FIRMWARE  decide UEFI/Legacy y el esquema GPT/MBR.
+REM   3) REGISTRAR x4       deja constancia del arranque (auditoria).
+call :PREPARAR_LOG
+call :DETECTAR_FIRMWARE
+call :REGISTRAR INICIO "%TOOL_NAME% v%TOOL_VER% (fase %TOOL_FASE%)" "OK"
+call :REGISTRAR ENTORNO "WinPE=%ES_WINPE% PowerShell=%PS_OK%" "OK"
+call :REGISTRAR FIRMWARE "%FIRMWARE% / %FIRMWARE_FORMATO% / %FIRMWARE_METODO%" "OK"
+call :REGISTRAR LOG "%LOG_UBICACION% / %LOG_PERSISTENTE% / %LOG_ARCHIVO%" "OK"
 
 REM De aqui saltamos a la pantalla de seleccion de idioma. Se usa 'goto'
 REM (salto sin retorno) porque es el flujo normal del programa: una vez
@@ -306,6 +362,8 @@ if "%OPCION%"=="2" set "LANG=EN"
 REM Recargamos el diccionario: ahora si, con el idioma definitivo. A
 REM partir de esta linea todas las pantallas salen en el idioma elegido.
 call :CARGAR_IDIOMA
+REM Dejamos constancia del idioma elegido en el registro de auditoria.
+call :REGISTRAR IDIOMA "idioma=%LANG%" "OK"
 cls
 goto BIENVENIDA
 
@@ -389,6 +447,9 @@ echo          %T_MENU_08%
 echo   ------------------------------------------------------------------
 echo      %T_MENU_12% %date%  %time:~0,5%
 echo      %T_MENU_13% %MODO_ENTRADA%
+echo      %T_MENU_14% %FIRMWARE%   -^>   %FIRMWARE_FORMATO%
+if "%LOG_PERSISTENTE%"=="SI" echo      %T_LOG_01% %LOG_ARCHIVO%
+if not "%LOG_PERSISTENTE%"=="SI" echo      %T_LOG_02% %LOG_ARCHIVO%
 echo(
 echo   %T_MENU_09%
 echo    %T_MENU_10%
@@ -401,6 +462,11 @@ REM   1) el texto que vera el tecnico,
 REM   2) los digitos permitidos (lista blanca).
 REM El resultado queda en la variable global %OPCION%.
 call :LEER_OPCION "%T_MENU_11%" "1 2 3 4 5"
+
+REM Anotamos la opcion elegida en el registro (auditoria de uso). Se hace
+REM solo si hay un digito valido: asi no ensuciamos el log con ENTERs en
+REM vacio ni con entradas erroneas.
+if defined OPCION call :REGISTRAR MENU "opcion=%OPCION%" "OK"
 
 REM --- Despacho (reparto de la opcion elegida) --------------------------
 REM Comparamos %OPCION% con cada tecla posible y saltamos a la seccion
@@ -637,6 +703,7 @@ if exist "%SystemRoot%\System32\wpeutil.exe" goto APAGAR_WINPE
 goto APAGAR_WINDOWS
 
 :APAGAR_WINPE
+call :REGISTRAR SALIDA "modo=apagar entorno=WinPE" "OK"
 echo(
 echo   %T_SAL_12%
 REM wpeutil es la herramienta oficial de WinPE: solo admite un comando
@@ -645,6 +712,7 @@ wpeutil shutdown
 goto FIN_APAGADO
 
 :APAGAR_WINDOWS
+call :REGISTRAR SALIDA "modo=apagar entorno=Windows" "OK"
 echo(
 echo   %T_SAL_13%
 echo   %T_SAL_14%
@@ -662,6 +730,7 @@ REM =====================================================================
 REM Salida normal (opcion 2 del submenu salir): despedida + pausa para
 REM que el tecnico pueda leerla antes de que la ventana se cierre.
 :FIN_SCRIPT
+call :REGISTRAR SALIDA "modo=salir" "OK"
 echo(
 echo   %T_SAL_16% %TOOL_NAME% v%TOOL_VER%.
 echo(
@@ -981,12 +1050,18 @@ echo       %T_COM_06%
 echo       %T_COM_07%
 echo(
 call :LEER_OPCION "%T_COM_08%" "1 2"
-if not "%OPCION%"=="1" exit /b 0
+if not "%OPCION%"=="1" goto PREPARAR_ENTORNO_SIN_ADMIN
 :PREPARAR_ENTORNO_LISTO
 set "ENTORNO_OK=SI"
+call :REGISTRAR ENTORNO "listo admin=%ES_ADMIN% carpeta=%DIR_TRABAJO%" "OK"
+exit /b 0
+
+:PREPARAR_ENTORNO_SIN_ADMIN
+call :REGISTRAR ENTORNO "admin=NO tecnico_decide_cancelar" "CANCELADO"
 exit /b 0
 
 :PREPARAR_ENTORNO_SIN_ESCRITURA
+call :REGISTRAR ENTORNO "sin_carpeta_escribible dir=%DIR_TRABAJO%" "ERROR"
 echo(
 echo   %T_COM_09%
 echo           %DIR_TRABAJO%
@@ -997,6 +1072,7 @@ echo(
 exit /b 0
 
 :PREPARAR_ENTORNO_SIN_DISKPART
+call :REGISTRAR ENTORNO "sin_diskpart_en_la_imagen" "ERROR"
 echo(
 echo   %T_COM_13%
 echo       %T_COM_14%
@@ -1124,6 +1200,7 @@ set "CONF_TXT=%CONF_TXT: =%"
 if /i not "%CONF_TXT%"=="%~1" goto CONFIRMAR_DESTRUCTIVO_NO
 if "%~2"=="DISCO" goto CONFIRMAR_DESTRUCTIVO_DISCO
 set "CONFIRMADO=SI"
+call :REGISTRAR CONFIRMACION "palabra=%~1" "ACEPTADA"
 exit /b 0
 :CONFIRMAR_DESTRUCTIVO_DISCO
 set "CONF_DISCO="
@@ -1133,8 +1210,10 @@ set "CONF_DISCO=%CONF_DISCO:"=%"
 set "CONF_DISCO=%CONF_DISCO: =%"
 if "%CONF_DISCO%"=="%DISCO%" set "CONFIRMADO=SI"
 if not "%CONFIRMADO%"=="SI" goto CONFIRMAR_DESTRUCTIVO_NO
+call :REGISTRAR CONFIRMACION "palabra=%~1 disco=%DISCO%" "ACEPTADA"
 exit /b 0
 :CONFIRMAR_DESTRUCTIVO_NO
+call :REGISTRAR CONFIRMACION "palabra=%~1 disco=%DISCO%" "RECHAZADA"
 echo(
 echo   %T_CFM_01%
 exit /b 0
@@ -1145,7 +1224,11 @@ REM  -------------------------------------------------------------------
 REM  Cada linea del guion es UN comando de diskpart, en este orden:
 REM    select disk N           elige el disco (obligatorio antes de nada)
 REM    clean                   borra la tabla de particiones (rapido)
-REM    convert gpt             esquema GPT (el que pide UEFI moderno)
+REM    convert gpt / mbr       esquema de particionado SEGUN EL FIRMWARE:
+REM                            UEFI moderno pide GPT; un equipo antiguo que
+REM                            arranca en BIOS Legacy necesita MBR. Por eso
+REM                            el comando se escribe con %FIRMWARE_FORMATO%
+REM                            y no con un valor fijo.
 REM    create partition primary  una particion con TODO el espacio libre
 REM    format fs=ntfs quick label="SISTEMA"  NTFS rapido con etiqueta
 REM    assign                  asigna la primera letra de unidad libre
@@ -1158,10 +1241,11 @@ if not defined DISCO exit /b 0
 > "%F_SCRIPT%" echo rem JAH-WinPe - maquetacion rapida del Disco %DISCO%
 >> "%F_SCRIPT%" echo select disk %DISCO%
 >> "%F_SCRIPT%" echo clean
->> "%F_SCRIPT%" echo convert gpt
+>> "%F_SCRIPT%" echo convert %FIRMWARE_FORMATO%
 >> "%F_SCRIPT%" echo create partition primary
 >> "%F_SCRIPT%" echo format fs=ntfs quick label="SISTEMA"
 >> "%F_SCRIPT%" echo assign
+call :REGISTRAR MAQUETAR "disco=%DISCO% esquema=%FIRMWARE_FORMATO%" "GUION_GENERADO"
 exit /b 0
 
 REM ---------------------------------------------------------------------
@@ -1179,6 +1263,7 @@ if not defined DISCO exit /b 0
 > "%F_SCRIPT%" echo rem JAH-WinPe - borrado seguro (clean all) del Disco %DISCO%
 >> "%F_SCRIPT%" echo select disk %DISCO%
 >> "%F_SCRIPT%" echo clean all
+call :REGISTRAR SANITIZAR "disco=%DISCO% comando=clean all" "GUION_GENERADO"
 exit /b 0
 
 REM ---------------------------------------------------------------------
@@ -1219,6 +1304,10 @@ echo   ------------------------------------------------------------------
 echo(
 diskpart /s "%F_SCRIPT%"
 set "RESULTADO=%errorlevel%"
+REM El codigo de salida (0 = exito) es el dato mas importante del log:
+REM queda anotado tanto si funciono como si no, con su numero exacto.
+if "%RESULTADO%"=="0" call :REGISTRAR DISKPART "codigo=0" "OK"
+if not "%RESULTADO%"=="0" call :REGISTRAR DISKPART "codigo=%RESULTADO%" "ERROR"
 echo(
 echo   ------------------------------------------------------------------
 if "%RESULTADO%"=="0" echo   %T_COM_48%
@@ -1331,8 +1420,11 @@ call :LISTAR_DISCOS
 call :DETECTAR_DISCO_ARRANQUE
 call :PEDIR_DISCO
 if not "%DISCO_OK%"=="SI" goto MODULO_PREPARAR_CANCELADO
+call :REGISTRAR DISCO "modulo=maquetar disco=%DISCO%" "SELECCIONADO"
 call :COMPROBAR_DISCO_SEGURO
 if "%BLOQUEADO%"=="SI" goto MODULO_PREPARAR_BLOQUEO
+call :ELEGIR_FORMATO_DUDA
+if not "%FORMATO_OK%"=="SI" goto MODULO_PREPARAR_CANCELADO
 call :GENERAR_SCRIPT_MAQUETAR
 cls
 call :MOSTRAR_CABECERA
@@ -1344,6 +1436,8 @@ echo   %T_COM_51% %DISCO%
 if "%PROTECCION_ESTADO%"=="ACTIVA" echo   %T_SEG_16%
 if "%PROTECCION_ESTADO%"=="DUDA" echo   %T_SEG_17%
 if "%PROTECCION_ESTADO%"=="NA" echo   %T_SEG_18%
+echo   %T_FW_02% %FIRMWARE%   -   %T_FW_03% %FIRMWARE_FORMATO%
+echo   %T_FW_04%
 echo   %T_D1_16%
 echo                   %T_D1_17%
 echo(
@@ -1370,10 +1464,12 @@ call :BORRAR_TEMPORALES
 call :PULSA_TECLA "%T_D1_21%"
 exit /b 0
 :MODULO_PREPARAR_BLOQUEO
+call :REGISTRAR BLOQUEO "modulo=maquetar disco=%DISCO%" "DENEGADO"
 call :MOSTRAR_BLOQUEO
 goto MODULO_BLOQUEADO
 
 :MODULO_PREPARAR_CANCELADO
+call :REGISTRAR CANCELADO "modulo=maquetar disco=%DISCO%" "CANCELADO"
 call :BORRAR_TEMPORALES
 call :PULSA_TECLA "%T_D1_22%"
 exit /b 0
@@ -1412,6 +1508,7 @@ call :LISTAR_DISCOS
 call :DETECTAR_DISCO_ARRANQUE
 call :PEDIR_DISCO
 if not "%DISCO_OK%"=="SI" goto MODULO_SANITIZAR_CANCELADO
+call :REGISTRAR DISCO "modulo=sanitizar disco=%DISCO%" "SELECCIONADO"
 call :COMPROBAR_DISCO_SEGURO
 if "%BLOQUEADO%"=="SI" goto MODULO_SANITIZAR_BLOQUEO
 call :GENERAR_SCRIPT_BORRAR
@@ -1425,6 +1522,7 @@ echo   %T_COM_51% %DISCO%
 if "%PROTECCION_ESTADO%"=="ACTIVA" echo   %T_SEG_16%
 if "%PROTECCION_ESTADO%"=="DUDA" echo   %T_SEG_17%
 if "%PROTECCION_ESTADO%"=="NA" echo   %T_SEG_18%
+echo   %T_FW_02% %FIRMWARE%
 echo   %T_D2_13%
 echo(
 echo   %T_D2_14%
@@ -1469,10 +1567,12 @@ call :BORRAR_TEMPORALES
 call :PULSA_TECLA "%T_D1_21%"
 exit /b 0
 :MODULO_SANITIZAR_BLOQUEO
+call :REGISTRAR BLOQUEO "modulo=sanitizar disco=%DISCO%" "DENEGADO"
 call :MOSTRAR_BLOQUEO
 goto MODULO_BLOQUEADO
 
 :MODULO_SANITIZAR_CANCELADO
+call :REGISTRAR CANCELADO "modulo=sanitizar disco=%DISCO%" "CANCELADO"
 call :BORRAR_TEMPORALES
 call :PULSA_TECLA "%T_D1_22%"
 exit /b 0
@@ -1657,6 +1757,275 @@ echo   %T_SEG_14%
 echo   %T_SEG_15%
 echo(
 exit /b 0
+
+REM #####################################################################
+REM  PASO 13 - FIRMWARE Y AUDITORIA DE TALLER (Fase 4)
+REM #####################################################################
+REM  Dos subsistemas que comparten una idea: dar CONTEXTO y TRAZABILIDAD
+REM  a las operaciones destructivas del taller.
+REM    1) FIRMWARE: detectar si el equipo arranco en UEFI o en Legacy para
+REM       escribir el esquema de particionado correcto (GPT o MBR).
+REM    2) AUDITORIA: dejar un rastro en 'jah-winpe.log' de todo lo que se
+REM       hace, con fecha y hora, para reconstruir una intervencion.
+REM #####################################################################
+
+REM ---------------------------------------------------------------------
+REM  DETECTAR_FIRMWARE - UEFI o BIOS Legacy? (Fase 4)
+REM  -------------------------------------------------------------------
+REM  Rellena:
+REM     FIRMWARE          -^> UEFI / LEGACY / MANUAL / ?
+REM     FIRMWARE_FORMATO  -^> GPT  / MBR
+REM     FIRMWARE_DUDA     -^> SI / NO  (SI = no se pudo verificar)
+REM     FIRMWARE_METODO   -^> REGISTRO / BCDEDIT / MANUAL / ?
+REM
+REM  NO imprime nada: solo datos. La pantalla lo traduce despues (ANEXO A).
+REM  Para entender de donde sale cada dato, lee el bloque "FIRMWARE Y
+REM  AUDITORIA (Fase 4) - RESUMEN PARA MANTENIMIENTO" de la cabecera.
+REM ---------------------------------------------------------------------
+:DETECTAR_FIRMWARE
+set "FIRMWARE=?"
+set "FIRMWARE_FORMATO=GPT"
+set "FIRMWARE_DUDA=SI"
+set "FIRMWARE_METODO=?"
+REM En WinPE la informacion de arranque vive en el registro, pero hay que
+REM pedirle al sistema que la rellene: eso hace 'wpeutil UpdateBootInfo'.
+if not "%ES_WINPE%"=="SI" goto DETECTAR_FIRMWARE_REG
+if not exist "%SystemRoot%\System32\wpeutil.exe" goto DETECTAR_FIRMWARE_REG
+wpeutil UpdateBootInfo >nul 2>&1
+:DETECTAR_FIRMWARE_REG
+REM Capa 1: registro del sistema (la mas fiable, independiente del idioma).
+call :FIRMWARE_POR_REGISTRO
+if not "%FIRMWARE%"=="?" goto DETECTAR_FIRMWARE_FIN
+REM Capa 2: entrada de arranque del BCD (winload.efi frente a winload.exe).
+call :FIRMWARE_POR_BCDEDIT
+if not "%FIRMWARE%"=="?" goto DETECTAR_FIRMWARE_FIN
+REM Si llegamos aqui NINGUN metodo ha funcionado: seguimos con FIRMWARE=?
+REM (nunca adivinamos) y se preguntara al tecnico en el modulo de disco.
+:DETECTAR_FIRMWARE_FIN
+if "%FIRMWARE%"=="UEFI" set "FIRMWARE_FORMATO=GPT"
+if "%FIRMWARE%"=="LEGACY" set "FIRMWARE_FORMATO=MBR"
+if not "%FIRMWARE%"=="?" set "FIRMWARE_DUDA=NO"
+exit /b 0
+
+REM ---------------------------------------------------------------------
+REM  FIRMWARE_POR_REGISTRO - Metodo 1 (registro del sistema)
+REM  -------------------------------------------------------------------
+REM  Clave: HKLM\SYSTEM\CurrentControlSet\Control\SystemInformation
+REM  Valor: SystemFirmwareType  -^>  0x1 = BIOS/Legacy ; 0x2 = UEFI.
+REM  'reg query' deja en el fichero temporal una linea tipo
+REM      SystemFirmwareType    REG_DWORD    0x2
+REM  y el dato que queremos es el TERCER elemento (tokens=3).
+REM  La clave se guarda en una variable para no pasar de 94 columnas.
+REM ---------------------------------------------------------------------
+:FIRMWARE_POR_REGISTRO
+if not exist "%SystemRoot%\System32\reg.exe" exit /b 0
+call :ARCHIVO_TEMP_FW
+set "FW_CLAVE=HKLM\SYSTEM\CurrentControlSet\Control\SystemInformation"
+reg query "%FW_CLAVE%" /v SystemFirmwareType > "%F_FW%" 2>nul
+if not exist "%F_FW%" exit /b 0
+set "FW_REG="
+for /f "usebackq tokens=3" %%A in ("%F_FW%") do set "FW_REG=%%A"
+if exist "%F_FW%" del /f /q "%F_FW%" >nul 2>&1
+if /i "%FW_REG%"=="0x2" set "FIRMWARE=UEFI"
+if /i "%FW_REG%"=="0x2" set "FIRMWARE_METODO=REGISTRO"
+if /i "%FW_REG%"=="0x1" set "FIRMWARE=LEGACY"
+if /i "%FW_REG%"=="0x1" set "FIRMWARE_METODO=REGISTRO"
+exit /b 0
+
+REM ---------------------------------------------------------------------
+REM  ARCHIVO_TEMP_FW - fichero temporal comun para la deteccion de firmware
+REM  -------------------------------------------------------------------
+REM  Se usa tanto para 'reg query' como para 'bcdedit'. Se coloca en la
+REM  carpeta temporal del sistema y SIEMPRE se borra al terminar.
+REM ---------------------------------------------------------------------
+:ARCHIVO_TEMP_FW
+set "F_FW="
+if defined TEMP set "F_FW=%TEMP%\_jah_fw.txt"
+if not defined F_FW set "F_FW=%SystemDrive%\_jah_fw.txt"
+exit /b 0
+
+REM ---------------------------------------------------------------------
+REM  FIRMWARE_POR_BCDEDIT - Metodo 2 (entrada de arranque)
+REM  -------------------------------------------------------------------
+REM  El cargador de arranque es 'winload.efi' en UEFI y 'winload.exe' en
+REM  Legacy. Buscamos esas cadenas en 'bcdedit /enum {current}'.
+REM  Se hacen dos busquedas separadas con 'findstr /c:' (texto LITERAL)
+REM  para que 'winload.efi' no se confunda con 'winload.exe'.
+REM ---------------------------------------------------------------------
+:FIRMWARE_POR_BCDEDIT
+if not exist "%SystemRoot%\System32\bcdedit.exe" exit /b 0
+if not exist "%SystemRoot%\System32\findstr.exe" exit /b 0
+call :ARCHIVO_TEMP_FW
+bcdedit /enum {current} > "%F_FW%" 2>nul
+if not exist "%F_FW%" exit /b 0
+set "FW_BCD="
+findstr /i /c:"winload.efi" "%F_FW%" >nul 2>&1
+if not errorlevel 1 set "FW_BCD=EFI"
+if not defined FW_BCD findstr /i /c:"winload.exe" "%F_FW%" >nul 2>&1
+if not defined FW_BCD if not errorlevel 1 set "FW_BCD=EXE"
+if exist "%F_FW%" del /f /q "%F_FW%" >nul 2>&1
+if "%FW_BCD%"=="EFI" set "FIRMWARE=UEFI"
+if "%FW_BCD%"=="EFI" set "FIRMWARE_METODO=BCDEDIT"
+if "%FW_BCD%"=="EXE" set "FIRMWARE=LEGACY"
+if "%FW_BCD%"=="EXE" set "FIRMWARE_METODO=BCDEDIT"
+exit /b 0
+
+REM ---------------------------------------------------------------------
+REM  ELEGIR_FORMATO_DUDA - pregunta el esquema si no hubo deteccion
+REM  -------------------------------------------------------------------
+REM  Solo actua cuando FIRMWARE_DUDA=SI (los dos metodos fallaron). En ese
+REM  caso preguntamos GPT o MBR en lugar de "adivinar": escribir el
+REM  esquema equivocado haria que el disco no arrancase tras instalar.
+REM  Devuelve FORMATO_OK = SI / NO.
+REM ---------------------------------------------------------------------
+:ELEGIR_FORMATO_DUDA
+set "FORMATO_OK=SI"
+if not "%FIRMWARE_DUDA%"=="SI" exit /b 0
+cls
+call :MOSTRAR_CABECERA
+echo(
+echo   %T_FW_01%
+echo   ------------------------------------------------------------------
+echo(
+echo   %T_FW_05%
+echo(
+call :LEER_OPCION "%T_FW_06%" "1 2"
+if "%OPCION%"=="1" set "FIRMWARE_FORMATO=GPT"
+if "%OPCION%"=="2" set "FIRMWARE_FORMATO=MBR"
+if not "%OPCION%"=="1" if not "%OPCION%"=="2" set "FORMATO_OK=NO"
+if "%FORMATO_OK%"=="NO" echo(
+if "%FORMATO_OK%"=="NO" echo   %T_FW_07%
+if "%FORMATO_OK%"=="SI" set "FIRMWARE=MANUAL"
+if "%FORMATO_OK%"=="SI" set "FIRMWARE_DUDA=NO"
+if "%FORMATO_OK%"=="SI" set "FIRMWARE_METODO=MANUAL"
+if "%FORMATO_OK%"=="SI" call :REGISTRAR FIRMWARE "MANUAL / %FIRMWARE_FORMATO%" "OK"
+exit /b 0
+
+REM ---------------------------------------------------------------------
+REM  PREPARAR_LOG - elige DONDE guardar 'jah-winpe.log' (Fase 4)
+REM  -------------------------------------------------------------------
+REM  Rellena: LOG_ARCHIVO, LOG_PERSISTENTE (SI/NO), LOG_UBICACION, LOG_OK.
+REM  Estrategia (de mas a menos persistente):
+REM    1) Junto al script, si NO corre desde X: (WinPE en RAM).
+REM    2) Cualquier otro disco ESCRIBIBLE del equipo (USB, disco 2...).
+REM    3) %TEMP% (memoria de WinPE): funciona, pero se pierde al apagar.
+REM  Para saber si una carpeta es de verdad escribible se crea y se borra
+REM  un fichero de prueba: no basta con que la carpeta exista.
+REM ---------------------------------------------------------------------
+:PREPARAR_LOG
+set "LOG_NOMBRE=jah-winpe.log"
+set "LOG_ARCHIVO="
+set "LOG_PERSISTENTE=NO"
+set "LOG_UBICACION=RAM"
+set "LOG_OK=SI"
+REM Letra de la unidad desde la que se ejecuta el script (1 caracter).
+set "LETRA_SCRIPT=%~d0"
+if "%LETRA_SCRIPT%"=="" set "LETRA_SCRIPT=%SystemDrive%"
+set "LETRA_SCRIPT=%LETRA_SCRIPT:~0,1%"
+REM --- Intento 1: junto al script (si no es la RAM X:) -----------------
+if /i "%LETRA_SCRIPT%"=="X" goto PREPARAR_LOG_OTRO
+call :PROBAR_ESCRITURA "%~dp0"
+if not "%ESCRIBIBLE%"=="SI" goto PREPARAR_LOG_OTRO
+set "LOG_ARCHIVO=%~dp0%LOG_NOMBRE%"
+set "LOG_PERSISTENTE=SI"
+set "LOG_UBICACION=JUNTO_AL_SCRIPT"
+:PREPARAR_LOG_OTRO
+REM --- Intento 2: otro disco escribible (X: es RAM, se excluye) --------
+if not defined LOG_ARCHIVO call :BUSCAR_UNIDAD_LOG
+REM --- Intento 3: ultimo recurso, la memoria (no persistente) ----------
+if not defined LOG_ARCHIVO call :LOG_EN_MEMORIA
+if not defined LOG_ARCHIVO set "LOG_ARCHIVO=%SystemDrive%\%LOG_NOMBRE%"
+REM --- Cabecera de sesion en el fichero --------------------------------
+>> "%LOG_ARCHIVO%" echo ================================================== 2>nul
+exit /b 0
+
+REM ---------------------------------------------------------------------
+REM  BUSCAR_UNIDAD_LOG - recorre las letras buscando un disco escribible
+REM  -------------------------------------------------------------------
+REM  Se llama desde PREPARAR_LOG. La orden 'for' recorre las letras y la
+REM  subrutina PROBAR_UNIDAD decide. La condicion 'if defined LOG_ARCHIVO'
+REM  de PROBAR_UNIDAD corta el bucle en cuanto encuentra una valida.
+REM ---------------------------------------------------------------------
+:BUSCAR_UNIDAD_LOG
+for %%L in (D E F G H I J K L M N O P Q R S T U V W Y Z A B C) do call :PROBAR_UNIDAD %%L
+exit /b 0
+
+REM ---------------------------------------------------------------------
+REM  PROBAR_UNIDAD - intenta usar ^<letra^>:\ como ubicacion del log
+REM  -------------------------------------------------------------------
+REM  Uso:  call :PROBAR_UNIDAD D
+REM ---------------------------------------------------------------------
+:PROBAR_UNIDAD
+if defined LOG_ARCHIVO exit /b 0
+if /i "%~1"=="X" exit /b 0
+if not exist "%~1:\" exit /b 0
+call :PROBAR_ESCRITURA "%~1:\"
+if not "%ESCRIBIBLE%"=="SI" exit /b 0
+set "LOG_ARCHIVO=%~1:\%LOG_NOMBRE%"
+set "LOG_PERSISTENTE=SI"
+set "LOG_UBICACION=UNIDAD_%~1"
+exit /b 0
+
+REM ---------------------------------------------------------------------
+REM  LOG_EN_MEMORIA - ultimo recurso: dejar el log en la RAM (%TEMP%)
+REM  -------------------------------------------------------------------
+REM  En WinPE, %TEMP% vive en el disco RAM X:. El log funciona, pero se
+REM  pierde al reiniciar; por eso LOG_PERSISTENTE se queda en NO y la
+REM  pantalla lo avisa con un texto traducido (T_LOG_02).
+REM ---------------------------------------------------------------------
+:LOG_EN_MEMORIA
+if defined LOG_ARCHIVO exit /b 0
+if not defined TEMP exit /b 0
+if not exist "%TEMP%\" exit /b 0
+set "LOG_ARCHIVO=%TEMP%\%LOG_NOMBRE%"
+exit /b 0
+
+REM ---------------------------------------------------------------------
+REM  PROBAR_ESCRITURA - comprueba si se puede escribir en una carpeta
+REM  -------------------------------------------------------------------
+REM  Uso:      call :PROBAR_ESCRITURA "D:\carpeta\"   (con barra final)
+REM  Devuelve: ESCRIBIBLE = SI / NO.
+REM  Se crea y se borra un fichero de prueba: es la unica forma honesta de
+REM  saber si la carpeta admite escrituras (los CD/DVD y los medios de
+REM  solo lectura fallan aqui y quedan descartados automaticamente).
+REM ---------------------------------------------------------------------
+:PROBAR_ESCRITURA
+set "ESCRIBIBLE=NO"
+if "%~1"=="" exit /b 0
+if not exist "%~1" exit /b 0
+set "LOG_PRUEBA=%~1_jah_log_prueba.tmp"
+echo prueba> "%LOG_PRUEBA%" 2>nul
+if not exist "%LOG_PRUEBA%" exit /b 0
+del /f /q "%LOG_PRUEBA%" >nul 2>&1
+set "ESCRIBIBLE=SI"
+exit /b 0
+
+REM ---------------------------------------------------------------------
+REM  REGISTRAR - anota UNA linea en el registro de actividad (Fase 4)
+REM  -------------------------------------------------------------------
+REM  Uso:  call :REGISTRAR TIPO "detalle" "resultado"
+REM    TIPO      -^> palabra corta en mayusculas: INICIO, MENU, DISCO,
+REM                 MAQUETAR, SANITIZAR, BLOQUEO, DISKPART, SALIDA...
+REM    detalle   -^> texto SIN comillas ni simbolos raros.
+REM    resultado -^> OK / ERROR / CANCELADO / DENEGADO / un codigo numerico.
+REM
+REM  El '^>^>' ANEXA al final del fichero sin borrar lo anterior: por eso el
+REM  log crece y nunca se pierde lo ya anotado. Cada llamada abre, escribe
+REM  y cierra el fichero, de modo que NO queda bloqueado entre lineas (algo
+REM  importante cuando el disco se esta borrando justo debajo).
+REM  El separador '^|' se escribe escapado para que cmd no lo confunda con
+REM  una tuberia, y el '2^>nul' final silencia cualquier fallo al escribir.
+REM ---------------------------------------------------------------------
+:REGISTRAR
+if not "%LOG_OK%"=="SI" exit /b 0
+if "%~1"=="" exit /b 0
+set "LOG_RES=%~3"
+if "%LOG_RES%"=="" set "LOG_RES=OK"
+>> "%LOG_ARCHIVO%" echo %date% %time:~0,8% ^| %~1 ^| %~2 ^| %LOG_RES% 2>nul
+exit /b 0
+
+REM #####################################################################
+REM  ANEXO A - DICCIONARIO DE TEXTOS (multilenguaje)
 REM #####################################################################
 REM  Cada bloque define LAS MISMAS variables T_xxx con el texto de su
 REM  idioma. No forman parte del flujo normal: se ENTRA en ellos desde el
@@ -1830,7 +2199,7 @@ set "T_D1_05=c) Genera el guion de diskpart con los comandos exactos y te lo"
 set "T_D1_06=muestra para que lo leas ANTES de ejecutar nada."
 set "T_D1_07=d) Exige que teclees la palabra"
 set "T_D1_08=e) Ejecuta y vuelve a listar el equipo para verificar."
-set "T_D1_09=Orden exacto de comandos:  clean  -^>  convert gpt  -^>"
+set "T_D1_09=Orden de comandos:  clean  -^>  convert (GPT o MBR)  -^>"
 set "T_D1_10=create partition primary  -^>  format fs=ntfs quick label=SISTEMA"
 set "T_D1_11=-^>  assign (letra libre que Windows elija)."
 set "T_D1_12=RECUERDA: 'clean' borra la tabla de particiones del disco elegido."
@@ -1838,7 +2207,7 @@ set "T_D1_13=Todo lo que hubiera en él dejará de ser visible de inmediato."
 set "T_D1_14=Pulsa cualquier tecla para empezar por el listado..."
 set "T_D1_15=[1] PREPARACIÓN RÁPIDA DE DISCO - RESUMEN Y CONFIRMACIÓN"
 set "T_D1_16=Acción:         borrar la tabla de particiones y crear una única"
-set "T_D1_17=partición GPT NTFS con la etiqueta SISTEMA."
+set "T_D1_17=partición NTFS (GPT o MBR segun firmware) con la etiqueta SISTEMA."
 set "T_D1_18=ejecución. La protección de arranque bloquea el disco del sistema"
 set "T_D1_19=cuando consigue identificarlo; si arriba no aparece como protegido,"
 set "T_D1_20=el riesgo es tuyo: ante la mínima duda, cancela (letra C:)."
@@ -1883,6 +2252,13 @@ set "T_D2_32=Para el borrado seguro se piden DOS confirmaciones escritas."
 set "T_D2_33=- Borrado seguro (opción 2): el Disco"
 set "T_D2_34=ejecución. La protección de arranque bloquea el disco del sistema"
 set "T_D2_35=aparecerá EN BRUTO"
+set "T_FW_01=FIRMWARE Y ESQUEMA DE PARTICIONADO"
+set "T_FW_02=Firmware detectado:"
+set "T_FW_03=Esquema de particionado:"
+set "T_FW_04=Ajuste automatico: UEFI -^> GPT ;  BIOS Legacy -^> MBR."
+set "T_FW_05=[!] Firmware SIN VERIFICAR (ni registro ni BCD): elige el esquema."
+set "T_FW_06=   Esquema a aplicar [1=GPT / 2=MBR]:  "
+set "T_FW_07=Esquema no elegido: operacion cancelada, no se toca nada."
 set "T_DP_01=EJECUTANDO DISKPART. No pulses teclas, no cierres la ventana y no"
 set "T_DP_02=apagues el equipo mientras el comando esté en curso."
 set "T_DP_03=Nota: diskpart escribe en el idioma del sistema. Si ves caracteres"
@@ -1900,6 +2276,9 @@ set "T_MENU_10=y termina con ENTER.)"
 set "T_MENU_11=   Su opción [1-5]:  "
 set "T_MENU_12=Fecha y hora:"
 set "T_MENU_13=Modo de entrada:"
+set "T_MENU_14=Firmware:"
+set "T_LOG_01=Registro (log): PERSISTENTE en"
+set "T_LOG_02=Registro (log): solo en RAM (se perdera al reiniciar):"
 set "T_SAL_01=[5] SALIR / APAGAR EQUIPO"
 set "T_SAL_02=[1]  Apagar el equipo"
 set "T_SAL_03=[2]  Salir de la herramienta y volver al sistema"
@@ -2095,7 +2474,7 @@ set "T_D1_05=c) Builds the diskpart script with the exact commands and"
 set "T_D1_06=shows it so that you read it BEFORE running anything."
 set "T_D1_07=d) Requires you to type the word"
 set "T_D1_08=e) Runs it and lists the machine again to verify."
-set "T_D1_09=Exact command order:  clean  -^>  convert gpt  -^>"
+set "T_D1_09=Command order:  clean  -^>  convert (GPT or MBR)  -^>"
 set "T_D1_10=create partition primary  -^>  format fs=ntfs quick label=SISTEMA"
 set "T_D1_11=-^>  assign (free letter chosen by Windows)."
 set "T_D1_12=REMEMBER: 'clean' erases the partition table of the chosen disk."
@@ -2103,7 +2482,7 @@ set "T_D1_13=Everything on it stops being visible immediately."
 set "T_D1_14=Press any key to start with the listing..."
 set "T_D1_15=[1] QUICK DISK PREPARATION - SUMMARY AND CONFIRMATION"
 set "T_D1_16=Action:         erase the partition table and create one single"
-set "T_D1_17=GPT NTFS partition with the SISTEMA label."
+set "T_D1_17=NTFS partition (GPT or MBR per firmware) with the SISTEMA label."
 set "T_D1_18=here. The boot protection blocks the system disk when it"
 set "T_D1_19=can identify it; if it does not appear as protected above,"
 set "T_D1_20=the risk is yours: at the slightest doubt, cancel (drive C:)."
@@ -2148,6 +2527,13 @@ set "T_D2_32=For the secure erase TWO written confirmations are required."
 set "T_D2_33=- Secure erase (option 2): Disk"
 set "T_D2_34=here. The boot protection blocks the system disk when it"
 set "T_D2_35=will appear RAW"
+set "T_FW_01=FIRMWARE AND PARTITION LAYOUT"
+set "T_FW_02=Detected firmware:"
+set "T_FW_03=Partition layout:"
+set "T_FW_04=Automatic fit: UEFI -^> GPT ;  BIOS Legacy -^> MBR."
+set "T_FW_05=[!] Firmware UNVERIFIED (no registry or BCD): choose the layout."
+set "T_FW_06=   Layout to apply [1=GPT / 2=MBR]:  "
+set "T_FW_07=No layout chosen: operation cancelled, nothing is touched."
 set "T_DP_01=RUNNING DISKPART. Do not press keys, do not close the window and"
 set "T_DP_02=do not power off the machine while the command is running."
 set "T_DP_03=Note: diskpart writes in the system language. If you see strange"
@@ -2165,6 +2551,9 @@ set "T_MENU_10=and finish with ENTER.)"
 set "T_MENU_11=   Your option [1-5]:  "
 set "T_MENU_12=Date and time:"
 set "T_MENU_13=Input mode:"
+set "T_MENU_14=Firmware:"
+set "T_LOG_01=Activity log: PERSISTENT at"
+set "T_LOG_02=Activity log: RAM only (lost on reboot):"
 set "T_SAL_01=[5] EXIT / SHUT DOWN THE COMPUTER"
 set "T_SAL_02=[1]  Shut down the computer"
 set "T_SAL_03=[2]  Exit the tool and return to the system"

@@ -22,13 +22,15 @@ Desde la **Fase 3** el proyecto además **se compila como ISO arrancable**
 |   Elige idioma / Choose language:  [1] Español   [2] English |
 +--------------------------------------------------------------+
 |   JAH-WinPe  -  Herramienta de Soporte Técnico               |
-|   Versión 1.3.0  -  Fase 2.8  -  Entorno: Windows / WinPE    |
+|   Versión 1.4.0  -  Fase 4.0  -  Entorno: Windows / WinPE    |
 +--------------------------------------------------------------+
 |   [1]  Preparación rápida de disco   limpieza y formato      |
 |   [2]  Borrado seguro / Sanitización destrucción lógica      |
 |   [3]  Consola Avanzada              salir a CMD interactivo |
 |   [4]  Ayuda del sistema             guía rápida del técnico |
 |   [5]  Salir / Apagar equipo                                 |
++--------------------------------------------------------------+
+|   Firmware: UEFI  ->  GPT     |   Log: persistente / RAM     |
 +--------------------------------------------------------------+
 ```
 
@@ -43,7 +45,8 @@ Desde la **Fase 3** el proyecto además **se compila como ISO arrancable**
 | **2.5** | Interfaz **multilenguaje** (Español / English) + README bilingüe | ✅ Completada |
 | **2.8** | **Escudo de seguridad**: bloqueo del disco de arranque + confirmación por palabra | ✅ Completada |
 | **3** | **Entorno WinPE**: arranque automático (`startnet.cmd`) + **ISO arrancable** doble (UEFI/BIOS) | ✅ Completada |
-| **4** | Log de actividad, detección BIOS/UEFI, más idiomas | ⏳ Pendiente |
+| **4** | **Firmware UEFI/Legacy** (esquema GPT/MBR automático) + **registro de actividad** (`jah-winpe.log`) | ✅ Completada |
+| **5** | Más idiomas; leer el tamaño real del disco; recordar el idioma entre sesiones | ⏳ Pendiente |
 
 > **Importante:** las opciones **[1]** y **[2]** ya ejecutan operaciones
 > **destructivas reales** sobre el disco elegido. Ninguna actúa sin que
@@ -55,6 +58,13 @@ Desde la **Fase 3** el proyecto además **se compila como ISO arrancable**
 >
 > Si solo quieres mirar el equipo sin modificar nada, usa la opción
 > **[3] Consola Avanzada**.
+>
+> Desde la **Fase 4**, el programa **detecta el firmware** (UEFI o BIOS
+> Legacy) y elige solo el esquema de particionado correcto (**GPT** en UEFI,
+> **MBR** en Legacy). Si no puede verificar el firmware, **no adivina**:
+> pregunta al técnico qué esquema aplicar. Cada operación relevante queda
+> anotada con fecha y hora en un **registro de actividad** (`jah-winpe.log`)
+> que, cuando existe un disco persistente conectado, sobrevive al reinicio.
 
 ---
 
@@ -187,7 +197,8 @@ JAH-WinPe/
 ├─ src/             Contenido que entra en la imagen WinPE
 │  ├─ menu.bat      Interfaz principal del taller (Batch, comentado).
 │  │                Incluye, al final, los dos diccionarios de idioma
-│  │                (:IDIOMA_ES y :IDIOMA_EN).
+│  │                (:IDIOMA_ES y :IDIOMA_EN). En ejecución genera, junto
+│  │                a sí mismo, el registro de actividad 'jah-winpe.log'.
 │  └─ startnet.cmd  Arranque automático dentro de WinPE (Fase 3):
 │                   wpeinit + búsqueda de menu.bat + lanzamiento.
 ├─ build/           Utilidades de construcción (no van al ISO)
@@ -258,6 +269,24 @@ Estas convenciones están explicadas en detalle dentro de `src\menu.bat`:
     bloques, recuerda que **no pueden contener** comillas dobles `"` ni el
     signo `%` dentro del valor, y que las flechas se siguen escribiendo
     `-^>`.
+13. **Detección de firmware por capas (Fase 4).** Para saber si el equipo
+    arrancó en **UEFI** o en **BIOS Legacy** el script prueba, por orden:
+    (1) el registro `HKLM\...\Control\SystemInformation\SystemFirmwareType`
+    (`0x2` = UEFI, `0x1` = Legacy; en WinPE se rellena antes con
+    `wpeutil UpdateBootInfo`); (2) `bcdedit /enum {current}`, buscando
+    `winload.efi` (UEFI) frente a `winload.exe` (Legacy). El resultado deja
+    listas `FIRMWARE` y `FIRMWARE_FORMATO` (`GPT`/`MBR`) y **se aplica solo**
+    al guion de `diskpart` (`convert %FIRMWARE_FORMATO%`). Si ningún método
+    funciona, **no se adivina**: se pregunta al técnico qué esquema usar.
+14. **Registro de actividad (`jah-winpe.log`, Fase 4).** Cada acción
+    relevante llama a `:REGISTRAR TIPO "detalle" "resultado"`, que **anexa**
+    (con `>>`) una línea `fecha hora | TIPO | detalle | resultado`. El
+    fichero se abre y se cierra en cada anotación, así nunca queda bloqueado
+    (importante mientras se está borrando un disco). Como WinPE vive en RAM
+    (`X:`), el script busca **primero junto a sí mismo**, después **cualquier
+    disco escribible** y, si no hay, deja el log **en RAM** avisando de que
+    se perderá al reiniciar. Nunca guarda texto tecleado por el técnico:
+    solo datos ya validados (números de disco, códigos, palabras clave).
 
 ---
 
@@ -292,6 +321,10 @@ Estas convenciones están explicadas en detalle dentro de `src\menu.bat`:
 - En **SSD**, `clean all` **no** garantiza el borrado físico (el
   controlador reparte las escrituras): usa la herramienta del fabricante o
   el ATA Secure Erase.
+- **Auditoría (Fase 4):** todas las operaciones relevantes (inicio de sesión,
+  disco elegido, limpieza, `clean all`, códigos de error de `diskpart`,
+  bloqueos y salida) quedan registradas con fecha y hora en `jah-winpe.log`,
+  de modo que una intervención se puede reconstruir después.
 
 ---
 
@@ -343,6 +376,21 @@ Estas convenciones están explicadas en detalle dentro de `src\menu.bat`:
 - [ ] Si no hay `menu.bat` en ninguna unidad, sale el aviso `[!]` y una
       consola de emergencia en vez de una pantalla negra.
 
+### Firmware y registro de actividad (Fase 4)
+
+- [ ] El menú muestra una línea `Firmware: UEFI -> GPT` (o `LEGACY -> MBR`)
+      y otra con la ruta del `jah-winpe.log`.
+- [ ] El guion de `[1]` contiene `convert gpt` en UEFI y `convert mbr` en
+      Legacy (mira la línea del guion que se muestra antes de ejecutar).
+- [ ] Si no se puede detectar el firmware, `[1]` **pregunta** `[1=GPT / 2=MBR]`
+      antes de generar el guion (no adivina).
+- [ ] Tras una operación, `jah-winpe.log` contiene las líneas `INICIO`,
+      `IDIOMA`, `FIRMWARE`, `DISCO`, `GUION_GENERADO`, `DISKPART` (con el
+      código de salida) y `SALIDA`, cada una con fecha y hora.
+- [ ] Si arrancas desde un USB (o hay otro disco conectado), el log aparece
+      en ese disco y **sobrevive** al reinicio.
+- [ ] Sin disco persistente, el menú avisa `Registro (log): solo en RAM`.
+
 ---
 
 ## Roadmap (Fases siguientes)
@@ -360,8 +408,11 @@ Estas convenciones están explicadas en detalle dentro de `src\menu.bat`:
       `src/startnet.cmd` (wpeinit + búsqueda de `menu.bat`).
 - [x] **ISO arrancable** doble (UEFI x64 + BIOS Legacy) con `oscdimg` y
       guía de compilación y prueba en QEMU (`docs/BUILD_GUIDE.md`).
-- [ ] Detección de firmware **BIOS/UEFI** para elegir esquema **MBR/GPT** solo.
-- [ ] **Log** de actividad (en la unidad de arranque o `%TEMP%`).
+- [x] **Detección de firmware** BIOS/UEFI (Fase 4) para elegir el esquema
+      **MBR/GPT** automáticamente, con pregunta al técnico si no se puede
+      verificar.
+- [x] **Registro de actividad** (Fase 4): `jah-winpe.log` con fecha, hora,
+      tipo de evento y resultado; persistente si hay un disco escribible.
 - [ ] Lectura del tamaño real del disco para estimar el tiempo de `clean all`.
 - [ ] Modo "solo lectura" / inventario del equipo (`systeminfo`, `wmic`).
 - [ ] Guardar el idioma elegido entre ejecuciones (fichero junto al script).

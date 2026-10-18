@@ -55,7 +55,9 @@ build/work/
 *.vhd
 *.vhdx
 
-# --- Logs y temporales del taller (los generará la Fase 2) -----------
+# --- Logs y temporales del taller (registro de la Fase 4) ------------
+#  menu.bat crea 'jah-winpe.log' junto a si mismo (o en otro disco); es
+#  un registro de EJECUCION, no codigo: nunca debe versionarse.
 logs/
 *.log
 
