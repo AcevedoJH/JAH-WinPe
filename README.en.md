@@ -18,7 +18,7 @@ just the `menu.bat` file.
 |   Elige idioma / Choose language:  [1] Español   [2] English |
 +--------------------------------------------------------------+
 |   JAH-WinPe  -  Herramienta de Soporte Técnico               |
-|   Versión 1.2.0  -  Fase 2.5  -  Entorno: Windows / WinPE    |
+|   Versión 1.3.0  -  Fase 2.8  -  Entorno: Windows / WinPE    |
 +--------------------------------------------------------------+
 |   [1]  Preparación rápida de disco   limpieza y formato      |
 |   [2]  Borrado seguro / Sanitización destrucción lógica      |
@@ -40,14 +40,16 @@ just the `menu.bat` file.
 | **1** | Interface: welcome screen, menu, help, advanced console, shutdown | ✅ Done |
 | **2** | `diskpart` disk modules: quick preparation and secure erase | ✅ Done |
 | **2.5** | **Multilingual** UI (Español / English) + bilingual README | ✅ Done |
+| **2.8** | **Security shield**: boot-disk lock + keyword confirmation | ✅ Done |
 | **3** | Activity log, BIOS/UEFI detection, more languages | ⏳ Pending |
 
 > **Important:** options **[1]** and **[2]** now perform **real destructive
-> operations** on the selected disk. Nothing runs unless you type a
-> confirmation word (`PREPARAR` / `BORRAR` in Spanish, `PREPARE` / `ERASE` in
-> English), and the secure erase also asks you to retype the disk number.
-> Before confirming, the program **shows the `diskpart` script** it is about
-> to run.
+> operations** on the selected disk. Nothing runs unless you type the
+> confirmation word `CONFIRMAR` (`CONFIRM` in English) **and** retype the
+> disk number. Before confirming, the program **shows the `diskpart`
+> script** it is about to run, and it **automatically identifies the boot
+> disk**: if you pick that disk, the operation is **blocked** and no script
+> is generated at all.
 >
 > If you only want to inspect the machine without changing anything, use
 > option **[3] Advanced Console**.
@@ -130,9 +132,10 @@ them in order. `menu.bat` leverages that and always does the same:
    the listing and, if it cannot confirm it, **asks you** instead of guessing.
 3. **Generates the script** in the system temp folder (`_jah_diskpart.txt`).
 4. **Prints the script on screen** so you can read it before it runs.
-5. **Asks for written confirmation**: the word `PREPARAR` or `BORRAR`
-   (`PREPARE` / `ERASE` when the UI is in English). For the secure erase you
-   must also retype the disk number.
+5. **Asks for written confirmation**: the word `CONFIRMAR` (`CONFIRM` when
+   the UI is in English) **plus** the disk number retyped. If the boot-disk
+   shield could not verify which disk is protected, it additionally demands
+   the word `RIESGO` (`RISK`).
 6. **Runs** `diskpart /s` without capturing the output, so you can see the
    progress (`clean all` can take hours).
 7. **Verifies** by listing disks and volumes again.
@@ -203,8 +206,9 @@ These conventions are explained in detail inside `menu.bat`:
     Lines written into that file must not contain redirection symbols, because
     `cmd.exe` would interpret them.
 11. **Before any destructive action** you must type a literal word
-    (`PREPARAR` / `BORRAR`, or `PREPARE` / `ERASE` in English): one extra
-    `ENTER` deletes nothing.
+    (`CONFIRMAR`, or `CONFIRM` in English) plus the disk number: one extra
+    `ENTER` deletes nothing. When the boot disk cannot be verified, an extra
+    `RIESGO`/`RISK` word is required first.
 12. **Multilingual UI (i18n) through variable dictionaries.** There are no
     translation files: the language is resolved with **two blocks of text
     variables** (`:IDIOMA_ES` and `:IDIOMA_EN`) that define **the same names**
@@ -220,19 +224,30 @@ These conventions are explained in detail inside `menu.bat`:
 
 ## Safety
 
-- Every irreversible action asks for **double confirmation**; on any doubtful
-  answer the script **does nothing** and goes back to the menu. Specifically:
-  you type the word `PREPARAR`/`BORRAR` (`PREPARE`/`ERASE` in English) and,
-  for the secure erase, also retype the disk number.
+- **Boot-disk shield (Phase 2.8):** before asking for the disk number, the
+  script identifies the **physical disk WinPE / the tool itself runs from**
+  (drive letters of `SystemDrive` and of the script, converted to a disk
+  index with PowerShell or, if unavailable, with `diskpart detail volume`).
+  If the chosen disk matches that protected disk, the operation is
+  **blocked** with a red screen and **no script is generated or run**.
+- **Verification impossible = risk warning:** if the environment does not
+  allow identifying the boot disk (heavily trimmed WinPE without PowerShell,
+  `diskpart` in an unrecognised language), the script says so with a yellow
+  warning and additionally demands the word `RIESGO` (`RISK` in English)
+  before the normal confirmation. It never claims to be safe when it is not.
+- **Double written confirmation:** every destructive action requires typing
+  `CONFIRMAR` (`CONFIRM` in English) **and** retyping the disk number; on
+  any doubtful answer the script **does nothing** and goes back to the menu.
+  The word is compared case-insensitively (`if /i`).
+- **Validated input:** the typed disk number is cross-checked against the
+  real listing (`list disk`); empty input, letters or non-existent numbers
+  are rejected without generating any script.
 - **Golden rule:** always verify the correct disk
   (`diskpart` → `list disk` → `detail disk` / `list volume`) before touching
   anything. Compare its size against the label on the physical disk.
 - `clean` erases only the partition table (data is still there);
   `clean all` overwrites the media and is slow. Understand the difference
   before using them.
-- On **full Windows**, the disk holding the running system (drive `C:`)
-  **must not be touched**: the module warns you, and on any doubt you should
-  cancel.
 - On **SSDs**, `clean all` does **not** guarantee physical erasure (the
   controller spreads the writes): use the vendor tool or ATA Secure Erase.
 
@@ -242,7 +257,7 @@ These conventions are explained in detail inside `menu.bat`:
 
 - [ ] The language screen appears before the welcome screen and `[1] Español`
       / `[2] English` switches every text (menu, help, warnings).
-- [ ] In English, the destructive confirmation asks for `PREPARE` / `ERASE`.
+- [ ] In English, the destructive confirmation asks for `CONFIRM`.
 - [ ] The menu footer shows `Modo de entrada: CHOICE` (or `SETP` on WinPE
       without `choice.exe`).
 - [ ] Pressing an invalid key: just a *beep*, the script does **not** close.
@@ -257,9 +272,16 @@ These conventions are explained in detail inside `menu.bat`:
 - [ ] `[1]`: letters, symbols or leading zeros are rejected and re-prompted
       (the script does not close).
 - [ ] `[1]`: the script is shown before running and any word other than
-      `PREPARAR` cancels the operation.
-- [ ] `[2]`: asks for `BORRAR` **and** the disk number again; a mismatch
+      `CONFIRMAR` cancels the operation.
+- [ ] `[2]`: asks for `CONFIRMAR` **and** the disk number again; a mismatch
       cancels.
+- [ ] `[1]`/`[2]`: picking the boot disk (the running Windows disk or the
+      WinPE media) shows the **red block screen** and generates no script.
+- [ ] `[1]`/`[2]`: if the number is not in the listing, a doubt screen with
+      three options appears and option 2 demands the word `RIESGO`.
+- [ ] On WinPE without PowerShell (or `diskpart` in another language), the
+      summary shows "Boot protection: UNVERIFIED" and demands `RIESGO`
+      before `CONFIRMAR`.
 - [ ] `[1]`/`[2]`: after finishing, the verification listing shows the
       expected result.
 - [ ] After leaving a module, the `_jah_*.txt` files are gone from the temp
@@ -275,6 +297,9 @@ These conventions are explained in detail inside `menu.bat`:
 - [x] Written confirmation (keyword) before every destructive action.
 - [x] **Multilingual** UI Español / English (dictionaries inside `menu.bat` +
       language selector on start-up).
+- [x] **Security shield** (Phase 2.8): boot-disk lock, disk-existence
+      validation and keyword confirmation (`CONFIRMAR`/`CONFIRM` and
+      `RIESGO`/`RISK`).
 - [ ] **BIOS/UEFI** firmware detection to choose the **MBR/GPT** scheme alone.
 - [ ] Activity **log** (on the boot volume or `%TEMP%`).
 - [ ] Read the real disk size to estimate `clean all` duration.
