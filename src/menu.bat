@@ -306,7 +306,7 @@ call :CARGAR_IDIOMA
 REM --- Deteccion de PowerShell (escudo de seguridad Fase 2.8) -----------
 REM PowerShell es el primer metodo para obtener el numero de disco (exacto,
 REM independiente del idioma). Si no existe, caemos al metodo diskpart.
-REM 'PS_EXE' apunta a la ruta canónica de PS 5.x/Windows.
+REM 'PS_EXE' apunta a la ruta canonica de PS 5.x/Windows.
 set "PS_OK=NO"
 set "PS_EXE=%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe"
 if exist "%PS_EXE%" set "PS_OK=SI"
@@ -1287,7 +1287,7 @@ if "%PARSER_ESTADO%"=="2" exit /b 0
 REM Un campo con '-' es la linea separadora de tablas de diskpart.
 if not "%P1:-=%"=="%P1%" goto PARSER_DISCOS_SEPARADOR
 if "%PARSER_ESTADO%"=="0" exit /b 0
-REM ¿El primer campo es un numero puro? Entonces ya es el identificador.
+REM El primer campo es un numero puro? Entonces ya es el identificador.
 call :ES_DIGITO_CADENA "%P1%"
 if "%CADENA_OK%"=="SI" goto PARSER_DISCOS_GUARDAR
 REM Formato 'Disk 0' / 'Disco 0': el identificador va en el SEGUNDO campo.
@@ -1522,19 +1522,57 @@ exit /b 0
 REM ---------------------------------------------------------------------
 REM  GENERAR_SCRIPT_BORRAR - escribe el guion de la opcion [2].
 REM  -------------------------------------------------------------------
-REM    select disk N   elige el disco
-REM    clean all       escribe CEROS en todas las areas direccionables:
-REM                    destruccion logica de los datos (lenta).
-REM  Nota: no anadimos 'convert gpt' ni formateo. Un disco sanitizado se
-REM  deja EN BRUTO a proposito: asi se ve que ya no queda nada y el
-REM  tecnico decide despues (por ejemplo, con la opcion [1]).
+REM  El guion que se escribe depende del NIVEL elegido en :ELEGIR_NIVEL:
+REM    Nivel 1  select disk N + clean        (SOLO estructura: MBR/GPT y
+REM               firma; instantaneo y sin tocar las celdas)
+REM    Nivel 2  fase 1/3: clean + create partition primary +
+REM               format fs=ntfs quick (prepara un volumen TEMPORAL para
+REM               que PowerShell pueda aplicarle el TRIM en la fase 2/3;
+REM               la fase 3/3 usa :GENERAR_SCRIPT_LIMPIO para acabar)
+REM    Nivel 3  select disk N + clean all    (sobrescritura con ceros)
+REM  Nota: no anadimos 'convert gpt' ni formateo permanente. Un disco
+REM  sanitizado se deja EN BRUTO a proposito: asi se ve que ya no queda
+REM  nada y el tecnico decide despues (por ejemplo, con la opcion [1]).
 REM ---------------------------------------------------------------------
 :GENERAR_SCRIPT_BORRAR
 if not defined DISCO exit /b 0
-> "%F_SCRIPT%" echo rem JAH-WinPe - borrado seguro (clean all) del Disco %DISCO%
+if "%NIVEL_BORRADO%"=="3" goto GENERAR_BORRAR_CEROS
+if "%NIVEL_BORRADO%"=="2" goto GENERAR_BORRAR_TRIM
+REM --- Nivel 1: SOLO estructura ('clean', sin sobrescritura) ----------
+> "%F_SCRIPT%" echo rem JAH-WinPe - nivel 1 limpieza de estructura Disco %DISCO%
+>> "%F_SCRIPT%" echo select disk %DISCO%
+>> "%F_SCRIPT%" echo clean
+call :REGISTRAR SANITIZAR "disco=%DISCO% nivel=%NIVEL_BORRADO% comando=clean" "GUION_GENERADO"
+exit /b 0
+:GENERAR_BORRAR_TRIM
+REM --- Nivel 2, fase 1/3: volumen temporal para el TRIM ---------------
+> "%F_SCRIPT%" echo rem JAH-WinPe - nivel 2 fase 1/3 volumen temporal Disco %DISCO%
+>> "%F_SCRIPT%" echo select disk %DISCO%
+>> "%F_SCRIPT%" echo clean
+>> "%F_SCRIPT%" echo create partition primary
+>> "%F_SCRIPT%" echo format fs=ntfs quick
+call :REGISTRAR SANITIZAR "disco=%DISCO% nivel=2 fase=1 comando=clean+format" "GUION_GENERADO"
+exit /b 0
+:GENERAR_BORRAR_CEROS
+REM --- Nivel 3: sobrescritura completa ('clean all') -------------------
+> "%F_SCRIPT%" echo rem JAH-WinPe - nivel 3 borrado con ceros (clean all) Disco %DISCO%
 >> "%F_SCRIPT%" echo select disk %DISCO%
 >> "%F_SCRIPT%" echo clean all
-call :REGISTRAR SANITIZAR "disco=%DISCO% comando=clean all" "GUION_GENERADO"
+call :REGISTRAR SANITIZAR "disco=%DISCO% nivel=%NIVEL_BORRADO% comando=clean all" "GUION_GENERADO"
+exit /b 0
+
+REM ---------------------------------------------------------------------
+REM  GENERAR_SCRIPT_LIMPIO - guion de 'clean' (estructura) reutilizable.
+REM  -------------------------------------------------------------------
+REM  Pieza COMPARTIDA: es el guion del nivel [1] y tambien la fase 3/3
+REM  del nivel [2] (vuelve a dejar el disco EN BRUTO tras el TRIM).
+REM ---------------------------------------------------------------------
+:GENERAR_SCRIPT_LIMPIO
+if not defined DISCO exit /b 0
+> "%F_SCRIPT%" echo rem JAH-WinPe - limpieza de estructura (clean) Disco %DISCO%
+>> "%F_SCRIPT%" echo select disk %DISCO%
+>> "%F_SCRIPT%" echo clean
+call :REGISTRAR SANITIZAR "disco=%DISCO% nivel=%NIVEL_BORRADO% comando=clean" "GUION_GENERADO"
 exit /b 0
 
 REM ---------------------------------------------------------------------
@@ -1588,6 +1626,61 @@ echo(
 echo   %T_DP_03%
 echo   %T_DP_04%
 echo(
+exit /b 0
+
+REM ---------------------------------------------------------------------
+REM  EJECUTAR_TRIM - fase 2/3 del nivel [2]: reset SSD/NVMe (ReTrim)
+REM  -------------------------------------------------------------------
+REM  Desasigna (TRIM / deallocate) los bloques LIBRES de los volumenes
+REM  del disco elegido: devuelve esos bloques al controlador para que la
+REM  unidad recupere rendimiento de escritura SIN sobrescribir ceros
+REM  celda a celda (cero desgaste de por vida, TBW). Es el paso que
+REM  diferencia el nivel [2] de un simple 'clean'.
+REM
+REM  El comando PowerShell se arma en TROZOS (variable PS_CMD) porque en
+REM  una sola linea pasaria de 94 columnas. Las 'pipe' van DENTRO de las
+REM  comillas del 'set': dentro de comillas cmd no las interpreta como
+REM  operadores y se guardan literales; luego la invocacion tambien las
+REM  mantiene entre comillas ("%PS_CMD%").
+REM
+REM  NUNCA se inventa un resultado: se mira el marcador que solo puede
+REM  escribir el propio PowerShell ('TRIM_OK' / 'SIN_VOLUMENES') y el
+REM  codigo de salida. Si algo falla, se muestra el error tal cual.
+REM  Requiere PowerShell (PS_OK); si no existe se lo dice al tecnico y
+REM  se registra en el log, jamas se finge que el TRIM se aplico.
+REM ---------------------------------------------------------------------
+:EJECUTAR_TRIM
+if not "%PS_OK%"=="SI" goto EJECUTAR_TRIM_SIN_PS
+echo   %T_NIV_36% %DISCO%
+set "PS_CMD=$p=Get-Partition -DiskNumber %DISCO% -ErrorAction SilentlyContinue"
+set "PS_CMD=%PS_CMD%; $v=$p | Get-Volume -ErrorAction SilentlyContinue"
+set "PS_CMD=%PS_CMD%; if(-not $v){ 'SIN_VOLUMENES' } else {"
+set "PS_CMD=%PS_CMD% $v | ForEach-Object { Optimize-Volume -InputObject $_ -ReTrim"
+set "PS_CMD=%PS_CMD% -ErrorAction Stop | Out-Null }; 'TRIM_OK' }"
+"%PS_EXE%" -NoProfile -Command "%PS_CMD%" > "%F_SEG_SAL%" 2>&1
+set "TRIM_RC=%errorlevel%"
+findstr /c:"TRIM_OK" "%F_SEG_SAL%" >nul 2>&1
+if not errorlevel 1 goto EJECUTAR_TRIM_OK
+findstr /c:"SIN_VOLUMENES" "%F_SEG_SAL%" >nul 2>&1
+if not errorlevel 1 goto EJECUTAR_TRIM_VACIO
+goto EJECUTAR_TRIM_ERROR
+:EJECUTAR_TRIM_OK
+echo   %T_NIV_31%
+call :REGISTRAR TRIM "disco=%DISCO% codigo=%TRIM_RC%" "OK"
+exit /b 0
+:EJECUTAR_TRIM_VACIO
+echo   %T_NIV_32%
+call :REGISTRAR TRIM "disco=%DISCO% codigo=%TRIM_RC%" "SIN_VOLUMENES"
+exit /b 0
+:EJECUTAR_TRIM_ERROR
+echo   %T_NIV_33% %TRIM_RC%
+echo   %T_NIV_35%
+if exist "%F_SEG_SAL%" type "%F_SEG_SAL%"
+call :REGISTRAR TRIM "disco=%DISCO% codigo=%TRIM_RC%" "ERROR"
+exit /b 0
+:EJECUTAR_TRIM_SIN_PS
+echo   %T_NIV_34%
+call :REGISTRAR TRIM "disco=%DISCO%" "SIN_POWERSHELL"
 exit /b 0
 
 REM ---------------------------------------------------------------------
@@ -1753,46 +1846,37 @@ call :PULSA_TECLA "%T_D1_22%"
 exit /b 0
 
 REM ---------------------------------------------------------------------
-REM  MODULO_SANITIZAR - opcion [2]: borrado seguro (clean all).
+REM  MODULO_SANITIZAR - opcion [2]: borrado en 3 NIVELES.
 REM  -------------------------------------------------------------------
-REM  Mismos pasos que la opcion 1, con diferencias por ser IRREVERSIBLE:
-REM  el aviso del tiempo estimado (clean all) y la doble confirmacion
-REM  (palabra CONFIRMAR + repetir el numero de disco), ademas del escudo
-REM  de seguridad del disco de arranque (bloquea si coincide).
+REM  El tecnico elige el nivel ANTES de tocar nada (pantalla con 'cls'):
+REM    [1] clean      -^> solo la tabla de particiones (segundos)
+REM    [2] TRIM       -^> desasignacion SSD/NVMe sin ceros (PowerShell)
+REM    [3] clean all  -^> sobrescritura con ceros (horas, solo HDD)
+REM  Despues, los mismos pasos seguros de siempre: entorno, listar,
+REM  elegir disco, escudo de arranque, resumen + guion a la vista y
+REM  doble confirmacion escrita. El aviso de TIEMPO y el AVISO CRITICO
+REM  (obligatorio, y con recuerdo extra si el disco es SSD) son del
+REM  nivel [3]. Retroceso con la tecla directa [0]: en cmd puro ESC no
+REM  es legible (ver el motivo en PULSA_TECLA_MENU).
 REM ---------------------------------------------------------------------
 :MODULO_SANITIZAR
-cls
-call :MOSTRAR_CABECERA
-echo(
-echo   %T_D2_01%
-echo   ------------------------------------------------------------------
-echo(
-echo   %T_D2_02%
-echo   %T_D2_03%
-echo   %T_D2_04%
-echo(
-echo   %T_D2_05%
-echo     %T_D2_06%
-echo                  %T_D2_07%
-echo     %T_D2_08%
-echo                  %T_D2_09%
-echo   %T_D2_10%
-echo   %T_D2_11%
-echo(
-call :PULSA_TECLA_MENU "%T_D1_14%"
-if "%VUELTA_MENU%"=="SI" exit /b 0
+call :ELEGIR_NIVEL
+if not defined NIVEL_BORRADO exit /b 0
 call :PREPARAR_ENTORNO
 if not "%ENTORNO_OK%"=="SI" goto MODULO_SANITIZAR_CANCELADO
 call :LISTAR_DISCOS
 call :DETECTAR_DISCO_ARRANQUE
 call :PEDIR_DISCO
 if not "%DISCO_OK%"=="SI" goto MODULO_SANITIZAR_CANCELADO
-call :REGISTRAR DISCO "modulo=sanitizar disco=%DISCO%" "SELECCIONADO"
+call :REGISTRAR DISCO "modulo=sanitizar disco=%DISCO% nivel=%NIVEL_BORRADO%" "SELECCIONADO"
 call :COMPROBAR_DISCO_SEGURO
 if "%BLOQUEADO%"=="SI" goto MODULO_SANITIZAR_BLOQUEO
-REM  Fase 4.5: leemos el tamano REAL del disco y estimamos el tiempo del
-REM  'clean all' ANTES de generar el guion y de pedir la confirmacion.
-call :CALCULAR_ESTIMACION_BORRADO
+REM  Fase 4.5: el tamano y la estimacion de TIEMPO solo interesan al
+REM  nivel [3] ('clean all' puede durar horas); los niveles [1] y [2] son
+REM  instantaneos. Para el [2] detectamos ademas el TIPO de medio (sin
+REM  preguntar) para avisar si el disco es HDD y el TRIM no aporta.
+if "%NIVEL_BORRADO%"=="3" call :CALCULAR_ESTIMACION_BORRADO
+if "%NIVEL_BORRADO%"=="2" call :DETECTAR_MEDIA
 call :GENERAR_SCRIPT_BORRAR
 cls
 call :MOSTRAR_CABECERA
@@ -1805,11 +1889,35 @@ if "%PROTECCION_ESTADO%"=="ACTIVA" echo   %T_SEG_16%
 if "%PROTECCION_ESTADO%"=="DUDA" echo   %T_SEG_17%
 if "%PROTECCION_ESTADO%"=="NA" echo   %T_SEG_18%
 echo   %T_FW_02% %FIRMWARE%
-echo   %T_D2_13%
+REM --- Accion y duracion segun el nivel elegido en :ELEGIR_NIVEL ------
+if "%NIVEL_BORRADO%"=="1" echo   %T_NIV_13%
+if "%NIVEL_BORRADO%"=="2" echo   %T_NIV_14%
+if "%NIVEL_BORRADO%"=="3" echo   %T_D2_13%
+if "%NIVEL_BORRADO%"=="2" echo     %T_NIV_37%
+if "%NIVEL_BORRADO%"=="2" echo     %T_NIV_38%
+if "%NIVEL_BORRADO%"=="2" echo     %T_NIV_39%
 echo(
-echo   %T_D2_14%
-call :MOSTRAR_TIEMPO_ESTIMADO
+if "%NIVEL_BORRADO%"=="3" echo   %T_D2_14%
+if "%NIVEL_BORRADO%"=="3" call :MOSTRAR_TIEMPO_ESTIMADO
+if "%NIVEL_BORRADO%"=="1" echo   %T_NIV_15%
+if "%NIVEL_BORRADO%"=="2" echo   %T_NIV_16%
 echo(
+REM --- Avisos: los niveles [1] y [2] NO sobrescriben, son cortos ------
+if "%NIVEL_BORRADO%"=="3" goto MODULO_SANITIZAR_AVISOS_N3
+echo   %T_D2_20%
+echo     %T_NIV_17%
+echo     %T_NIV_18%
+echo       %T_NIV_19%
+echo     %T_D2_27%
+echo       %T_D2_28%
+if "%NIVEL_BORRADO%"=="2" echo     %T_NIV_20%
+if "%NIVEL_BORRADO%"=="2" echo       %T_NIV_21%
+if "%NIVEL_BORRADO%"=="2" if "%MEDIA_TIPO%"=="HDD" echo     %T_NIV_24%
+if "%NIVEL_BORRADO%"=="2" if "%MEDIA_TIPO%"=="HDD" echo       %T_NIV_25%
+if "%NIVEL_BORRADO%"=="2" if "%PS_OK%"=="NO" echo   %T_NIV_22%
+if "%NIVEL_BORRADO%"=="2" if "%PS_OK%"=="NO" echo       %T_NIV_23%
+goto MODULO_SANITIZAR_AVISOS_FIN
+:MODULO_SANITIZAR_AVISOS_N3
 echo   %T_D2_20%
 echo     %T_D2_21%
 echo       %T_D2_22%
@@ -1819,6 +1927,7 @@ echo       %T_D2_25%
 echo     %T_D2_26%
 echo     %T_D2_27%
 echo       %T_D2_28%
+:MODULO_SANITIZAR_AVISOS_FIN
 echo(
 if "%ES_WINPE%"=="SI" goto MODULO_SANITIZAR_AVISO_OK
 echo   %T_D2_29%
@@ -1828,7 +1937,8 @@ echo       %T_D2_31%
 echo(
 :MODULO_SANITIZAR_AVISO_OK
 call :MOSTRAR_SCRIPT
-call :MOSTRAR_AVISO_TIEMPO
+if "%NIVEL_BORRADO%"=="3" call :MOSTRAR_AVISO_TIEMPO
+if "%NIVEL_BORRADO%"=="3" call :MOSTRAR_AVISO_CRITICO
 echo(
 echo   %T_D2_32%
 echo(
@@ -1841,7 +1951,25 @@ if not "%CONFIRMADO%"=="SI" goto MODULO_SANITIZAR_CANCELADO
 :MODULO_SANITIZAR_CONFIRMAR
 call :CONFIRMAR_DESTRUCTIVO "%T_CFM_05%" DISCO
 if not "%CONFIRMADO%"=="SI" goto MODULO_SANITIZAR_CANCELADO
+if "%NIVEL_BORRADO%"=="2" goto MODULO_SANITIZAR_NIVEL2
 call :EJECUTAR_DISKPART
+goto MODULO_SANITIZAR_FIN_EJEC
+:MODULO_SANITIZAR_NIVEL2
+REM  Nivel [2] en TRES FASES: (1) diskpart deja un volumen temporal,
+REM  (2) PowerShell desasigna los bloques libres con ReTrim (TRIM) y
+REM  (3) diskpart vuelve a dejar el disco EN BRUTO con 'clean'.
+REM  La fase [3] solo se lanza si la fase [1] salio bien (RESULTADO=0).
+echo(
+echo   %T_NIV_37%
+call :EJECUTAR_DISKPART
+if not "%RESULTADO%"=="0" call :REGISTRAR SANITIZAR "nivel=2 fase=1" "ERROR"
+if not "%RESULTADO%"=="0" goto MODULO_SANITIZAR_FIN_EJEC
+echo   %T_NIV_38%
+call :EJECUTAR_TRIM
+call :GENERAR_SCRIPT_LIMPIO
+echo   %T_NIV_39%
+call :EJECUTAR_DISKPART
+:MODULO_SANITIZAR_FIN_EJEC
 call :MOSTRAR_RESULTADO
 call :BORRAR_TEMPORALES
 call :PULSA_TECLA "%T_D1_21%"
@@ -1859,6 +1987,96 @@ exit /b 0
 
 :MODULO_BLOQUEADO
 call :BORRAR_TEMPORALES
+exit /b 0
+
+REM ---------------------------------------------------------------------
+REM  ELEGIR_NIVEL - submenu de los 3 niveles de la opcion [2].
+REM  -------------------------------------------------------------------
+REM  Pinta una pantalla NUEVA (cls) con los tres niveles de borrado y
+REM  devuelve NIVEL_BORRADO:
+REM      1 / 2 / 3   -^> nivel elegido (el modulo sigue)
+REM      (sin definir) -^> el tecnico pulso [0]: vuelta al menu sin
+REM                       tocar nada.
+REM
+REM  Retroceso con la tecla directa [0] y no con ESC: en cmd puro ESC no
+REM  es legible ('choice' lo rechaza y 'set /p' no lo distingue, motivo
+REM  documentado en PULSA_TECLA_MENU). Ademas [0] es una sola tecla en
+REM  modo choice, como el resto del guion: rapido para el tecnico y
+REM  simple de mantener.
+REM
+REM  ENTRADA DUAL igual que el resto del menu:
+REM    - MODO_ENTRADA=CHOICE  -^> elige :LEER_OPCION con lista "1 2 3 0"
+REM      y 'choice /c 1230'. OJO: choice devuelve el INDICE de la tecla
+REM      ('0' es la CUARTA del listado, errorlevel 4), no el digito, asi
+REM      que aqui se traduce 4 -^> 0 antes de mapear el nivel.
+REM    - MODO_ENTRADA=SETP    -^> :LEER_OPCION con set /p; la lista
+REM      blanca compara el digito literal y devuelve "0" directamente.
+REM  Solo 1, 2 y 3 rellenan NIVEL_BORRADO; cualquier otra lectura
+REM  (tecla rara, Ctrl+C) deja el nivel vacio y el modulo vuelve al menu.
+REM ---------------------------------------------------------------------
+:ELEGIR_NIVEL
+set "NIVEL_BORRADO="
+cls
+call :MOSTRAR_CABECERA
+echo(
+echo   %T_D2_01%
+echo   ------------------------------------------------------------------
+echo(
+echo   %T_NIV_01%
+echo(
+echo   %T_NIV_02%
+echo     %T_NIV_03%
+echo     %T_NIV_04%
+echo(
+echo   %T_NIV_05%
+echo     %T_NIV_06%
+echo     %T_NIV_07%
+echo(
+echo   %T_NIV_08%
+echo     %T_NIV_09%
+echo     %T_NIV_10%
+echo(
+echo   %T_NIV_11%
+echo(
+echo   %T_D2_05%
+echo     %T_D2_06%
+echo       %T_D2_07%
+echo     %T_D2_08%
+echo       %T_D2_09%
+echo(
+call :LEER_OPCION "%T_NIV_12%" "1 2 3 0"
+if "%OPCION%"=="4" set "OPCION=0"
+set "NIVEL_BORRADO="
+if "%OPCION%"=="1" set "NIVEL_BORRADO=1"
+if "%OPCION%"=="2" set "NIVEL_BORRADO=2"
+if "%OPCION%"=="3" set "NIVEL_BORRADO=3"
+if defined NIVEL_BORRADO call :REGISTRAR SANITIZAR "nivel=%NIVEL_BORRADO%" "ELEGIDO"
+exit /b 0
+
+REM ---------------------------------------------------------------------
+REM  MOSTRAR_AVISO_CRITICO - aviso OBLIGATORIO del nivel [3].
+REM  -------------------------------------------------------------------
+REM  La sobrescritura con ceros es destructiva e INADECUADA en SSD/NVMe
+REM  (gasta celdas NAND y acorta su vida util), asi que antes de las dos
+REM  confirmaciones se muestra este aviso EN PANTALLA, obligatorio, tal
+REM  como lo exige el diseno del taller. Se pinta en amarillo (color 0E)
+REM  como el aviso de riesgo y se vuelve al blanco normal (0F) al salir.
+REM  Si el disco se detecto como SSD, se anade un RECORDATORIO EXTRA
+REM  con la alternativa (nivel [2] TRIM); nunca se bloquea el nivel [3].
+REM ---------------------------------------------------------------------
+:MOSTRAR_AVISO_CRITICO
+color 0E
+echo(
+echo   ==================================================================
+echo   %T_NIV_26%
+echo   ==================================================================
+echo(
+echo   %T_NIV_27%
+echo   %T_NIV_28%
+echo   %T_NIV_29%
+if "%MEDIA_TIPO%"=="SSD" echo   %T_NIV_30%
+echo(
+color 0F
 exit /b 0
 
 REM #####################################################################
@@ -2956,16 +3174,11 @@ set "T_D1_27=  3) create partition primary"
 set "T_D1_28=  4) format fs=ntfs quick label=SISTEMA"
 set "T_D1_29=  5) assign (letra libre que Windows elija)"
 set "T_D2_01=[2] BORRADO SEGURO / SANITIZACIÓN"
-set "T_D2_02=Qué hace: escribe CEROS sobre todas las áreas direccionables del"
-set "T_D2_03=disco para que los datos anteriores no se puedan recuperar con"
-set "T_D2_04=utilidades de recuperación. En diskpart:  clean all"
 set "T_D2_05=Marco de referencia (NIST SP 800-88, nivel PURGE):"
 set "T_D2_06='clean'      destruye solo la tabla de particiones (segundos),"
 set "T_D2_07=pero los datos siguen en el disco: se recuperan."
 set "T_D2_08='clean all'  sobrescribe el contenido (horas) y la recuperación"
-set "T_D2_09=práctica deja de ser viable. Es lo que haremos."
-set "T_D2_10=Para el nivel DESTROY (destrucción física del medio) no hay"
-set "T_D2_11=software que valga: trituradora o incineradora certificadas."
+set "T_D2_09=práctica deja de ser viable."
 set "T_D2_12=[2] BORRADO SEGURO - RESUMEN Y CONFIRMACIÓN"
 set "T_D2_13=Acción:         clean all  (sobrescritura completa con ceros)"
 set "T_D2_14=TIEMPO ESTIMADO (orientativo; depende del disco y de su conexión):"
@@ -2990,6 +3203,45 @@ set "T_D2_32=Para el borrado seguro se piden DOS confirmaciones escritas."
 set "T_D2_33=- Borrado seguro (opción 2): el Disco"
 set "T_D2_34=ejecución. La protección de arranque bloquea el disco del sistema"
 set "T_D2_35=aparecerá EN BRUTO"
+set "T_NIV_01=Elige el nivel de borrado (o pulsa [0] para volver al menú):"
+set "T_NIV_02=  [1] Limpieza rápida (Solo Estructura)"
+set "T_NIV_03=      Borra solo la tabla de particiones (MBR/GPT) y la firma del"
+set "T_NIV_04=      disco: al instante y sin desgaste en las celdas de almacenamiento."
+set "T_NIV_05=  [2] Reset SSD / NVMe (Optimización TRIM / Deallocate)"
+set "T_NIV_06=      Desasigna bloques libres a nivel de controlador y libera"
+set "T_NIV_07=      espacio sin escribir ceros: evita el desgaste prematuro (TBW)."
+set "T_NIV_08=  [3] Limpieza profunda / Sobrescritura de ceros (Solo HDDs)"
+set "T_NIV_09=      'clean all': sobrescribe TODOS los sectores con ceros."
+set "T_NIV_10=      Lento. NO recomendado en SSD o NVMe (desgaste NAND)."
+set "T_NIV_11=  [0] Volver al menú principal"
+set "T_NIV_12=   Su nivel [0-3]:  "
+set "T_NIV_13=Acción:         clean     (solo estructura, sin sobrescritura)"
+set "T_NIV_14=Acción:         TRIM + clean  (reset SSD/NVMe, sin ceros)"
+set "T_NIV_15=Duración:       instantánea (sin sobrescritura de sectores)"
+set "T_NIV_16=Duración:       segundos (TRIM + limpieza de estructura)"
+set "T_NIV_17=- NO se sobrescribe ningún sector con ceros en este nivel."
+set "T_NIV_18=- Los datos anteriores dejan de ser visibles para el sistema,"
+set "T_NIV_19=  pero esto no recupera discos con fallos físicos."
+set "T_NIV_20=- El TRIM solo desasigna bloques LIBRES: no es un borrado de"
+set "T_NIV_21=  contenido; para destruir datos usa el nivel [3] (solo HDD)."
+set "T_NIV_22=[!] PowerShell no disponible: el paso TRIM se omitirá y solo"
+set "T_NIV_23=se aplicará la limpieza de estructura (como el nivel [1])."
+set "T_NIV_24=- Este disco es HDD: el TRIM no aplicará; solo limpieza de"
+set "T_NIV_25=  estructura. Para sobrescribir contenido usa el nivel [3]."
+set "T_NIV_26=[AVISO CRÍTICO] Esta opción sobrescribe todos los sectores del disco con ceros."
+set "T_NIV_27=Está diseñada exclusivamente para discos duros mecánicos (HDD). NO"
+set "T_NIV_28=RECOMENDADA en unidades SSD o NVMe ya que acorta severamente su vida"
+set "T_NIV_29=útil por desgaste de celdas NAND Flash."
+set "T_NIV_30=[i] Este disco es SSD/NVMe: valora el nivel [2] antes de seguir."
+set "T_NIV_31=TRIM completado: bloques libres desasignados (ReTrim)."
+set "T_NIV_32=TRIM: el disco no expone volúmenes; no hay nada que desasignar."
+set "T_NIV_33=TRIM no completado. Código de salida de PowerShell:"
+set "T_NIV_34=PowerShell no disponible: se omite el TRIM (solo limpieza de estructura)."
+set "T_NIV_35=Salida de PowerShell:"
+set "T_NIV_36=Enviando órdenes TRIM / Deallocate al Disco"
+set "T_NIV_37=FASE 1/3  diskpart: crea un volumen temporal y lo formatea"
+set "T_NIV_38=FASE 2/3  PowerShell: ordena TRIM / Deallocate a los volúmenes"
+set "T_NIV_39=FASE 3/3  diskpart: 'clean' final, deja el disco EN BRUTO"
 set "T_EST_01=ADVERTENCIA: TIEMPO ESTIMADO DEL BORRADO SEGURO (clean all)"
 set "T_EST_02=Disco número"
 set "T_EST_03=Tamaño real detectado:"
@@ -3041,7 +3293,7 @@ set "T_DP_03=Nota: diskpart escribe en el idioma del sistema. Si ves caracteres"
 set "T_DP_04=raros, prueba en la Consola Avanzada:  chcp 850   y luego  chcp 65001"
 set "T_MENU_01=MENÚ PRINCIPAL"
 set "T_MENU_02=[1]  Preparación rápida de disco        limpieza y formato básico"
-set "T_MENU_03=[2]  Borrado seguro / Sanitización      destrucción lógica de datos"
+set "T_MENU_03=[2]  Borrado seguro / Sanitización      3 niveles (estructura/TRIM/ceros)"
 set "T_MENU_04=[3]  Diagnóstico / Inventario           consulta sin modificar nada"
 set "T_MENU_05=[4]  Consola Avanzada                   salir a CMD interactivo"
 set "T_MENU_06=[5]  Ayuda del sistema                  guía rápida del técnico"
@@ -3277,16 +3529,11 @@ set "T_D1_27=  3) create partition primary"
 set "T_D1_28=  4) format fs=ntfs quick label=SISTEMA"
 set "T_D1_29=  5) assign (free letter chosen by Windows)"
 set "T_D2_01=[2] SECURE ERASE / SANITIZATION"
-set "T_D2_02=What it does: writes ZEROS over every addressable area of the"
-set "T_D2_03=disk so that the previous data cannot be recovered with"
-set "T_D2_04=recovery utilities. In diskpart:  clean all"
 set "T_D2_05=Reference framework (NIST SP 800-88, PURGE level):"
 set "T_D2_06='clean'      destroys only the partition table (seconds),"
 set "T_D2_07=but the data stays on the disk: it can be recovered."
 set "T_D2_08='clean all'  overwrites the content (hours) and practical"
-set "T_D2_09=recovery is no longer viable. That is what we will do."
-set "T_D2_10=For the DESTROY level (physical destruction of the media) no"
-set "T_D2_11=software helps: a certified shredder or incinerator."
+set "T_D2_09=recovery is no longer viable."
 set "T_D2_12=[2] SECURE ERASE - SUMMARY AND CONFIRMATION"
 set "T_D2_13=Action:         clean all  (full overwrite with zeros)"
 set "T_D2_14=ESTIMATED TIME (rough; depends on the disk and its connection):"
@@ -3311,6 +3558,45 @@ set "T_D2_32=For the secure erase TWO written confirmations are required."
 set "T_D2_33=- Secure erase (option 2): Disk"
 set "T_D2_34=here. The boot protection blocks the system disk when it"
 set "T_D2_35=will appear RAW"
+set "T_NIV_01=Choose the erase level (or press [0] to return to the menu):"
+set "T_NIV_02=  [1] Quick clean (Structure only)"
+set "T_NIV_03=      Deletes only the partition table (MBR/GPT) and the disk"
+set "T_NIV_04=      signature: instant, with zero wear on storage cells."
+set "T_NIV_05=  [2] SSD / NVMe reset (TRIM / Deallocate optimization)"
+set "T_NIV_06=      Deallocates free blocks at controller level and frees"
+set "T_NIV_07=      space without writing zeros: avoids premature wear (TBW)."
+set "T_NIV_08=  [3] Deep clean / Zero overwrite (HDDs only)"
+set "T_NIV_09=      'clean all': overwrites EVERY sector with zeros."
+set "T_NIV_10=      Slow. NOT recommended on SSD or NVMe (NAND wear)."
+set "T_NIV_11=  [0] Back to main menu"
+set "T_NIV_12=   Your level [0-3]:  "
+set "T_NIV_13=Action:         clean     (structure only, no overwrite)"
+set "T_NIV_14=Action:         TRIM + clean  (SSD/NVMe reset, no zeros)"
+set "T_NIV_15=Duration:       instant (no sector overwrite)"
+set "T_NIV_16=Duration:       seconds (TRIM + structure clean)"
+set "T_NIV_17=- NO sector is overwritten with zeros at this level."
+set "T_NIV_18=- Previous data becomes invisible to the system, but this"
+set "T_NIV_19=  does not repair disks with physical faults."
+set "T_NIV_20=- TRIM only deallocates FREE blocks: it is not a data"
+set "T_NIV_21=  wipe; to destroy data use level [3] (HDDs only)."
+set "T_NIV_22=[!] PowerShell not available: the TRIM step will be skipped"
+set "T_NIV_23=and only the structure clean will run (like level [1])."
+set "T_NIV_24=- This disk is an HDD: TRIM will not apply; structure clean"
+set "T_NIV_25=  only. To overwrite content use level [3]."
+set "T_NIV_26=[CRITICAL WARNING] This option overwrites every sector of the disk with zeros."
+set "T_NIV_27=It is designed exclusively for mechanical hard drives (HDD). NOT"
+set "T_NIV_28=RECOMMENDED on SSD or NVMe units as it shortens their useful life"
+set "T_NIV_29=severely through NAND cell wear."
+set "T_NIV_30=[i] This disk is SSD/NVMe: consider level [2] before proceeding."
+set "T_NIV_31=TRIM completed: free blocks deallocated (ReTrim)."
+set "T_NIV_32=TRIM: the disk exposes no volumes; nothing to deallocate."
+set "T_NIV_33=TRIM not completed. PowerShell exit code:"
+set "T_NIV_34=PowerShell not available: TRIM skipped (structure clean only)."
+set "T_NIV_35=PowerShell output:"
+set "T_NIV_36=Sending TRIM / Deallocate orders to Disk"
+set "T_NIV_37=PHASE 1/3  diskpart: creates a temporary volume and formats it"
+set "T_NIV_38=PHASE 2/3  PowerShell: issues TRIM / Deallocate on the volumes"
+set "T_NIV_39=PHASE 3/3  diskpart: final 'clean', leaves the disk RAW"
 set "T_EST_01=WARNING: ESTIMATED TIME FOR THE SECURE ERASE (clean all)"
 set "T_EST_02=Disk number"
 set "T_EST_03=Actual size detected:"
@@ -3362,7 +3648,7 @@ set "T_DP_03=Note: diskpart writes in the system language. If you see strange"
 set "T_DP_04=characters, try the Advanced Console:  chcp 850   then  chcp 65001"
 set "T_MENU_01=MAIN MENU"
 set "T_MENU_02=[1]  Quick disk preparation             wipe table and format"
-set "T_MENU_03=[2]  Secure erase / Sanitization        logical data destruction"
+set "T_MENU_03=[2]  Secure erase / Sanitization        3 levels (structure/TRIM/zeros)"
 set "T_MENU_04=[3]  Diagnostics / Inventory            read-only machine info"
 set "T_MENU_05=[4]  Advanced console                   drop to interactive CMD"
 set "T_MENU_06=[5]  System help                        technician quick guide"
