@@ -844,35 +844,36 @@ REM  directa al menu principal.
 REM  -------------------------------------------------------------------
 REM  USO:      call :PULSA_TECLA_MENU "texto de la pantalla"
 REM  Devuelve: VUELTA_MENU = SI / NO.
-REM    - NO  -^> el tecnico decidio continuar: el llamante sigue su flujo.
-REM    - SI  -^> pulso la tecla directa de retroceso [0]: el llamante
-REM      debe volver al menu. Los modulos encadenados con 'call' hacen
+REM    - NO  -^> el tecnico tecleo C + ENTER (continuar): el llamante
+REM      sigue su flujo.
+REM    - SI  -^> el tecnico tecleo M + ENTER (menu): el llamante debe
+REM      volver al menu. Los modulos encadenados con 'call' hacen
 REM      'exit /b 0' (despues el bloque OP_x pinta el menu con
 REM      'goto MENU') y las pantallas encadenadas con 'goto' saltan
 REM      directamente a MENU, que repinta con 'cls'.
 REM
-REM  Por que la tecla [0] y no ESC? Porque en cmd puro ESC no se puede
-REM  leer: 'choice' rechaza ESC (solo admite a-z, A-Z, 0-9 y los codigos
-REM  128-254) y 'set /p' la absorbe sin devolver el turno (comprobado
-REM  con pruebas reales de inyeccion de teclas). Asi que usamos una
-REM  tecla DIRECTA de retroceso: una sola pulsacion, sin ENTER.
-REM    - Modo choice: teclas sueltas; [1] continua, [0] vuelve al menu.
-REM    - Modo set /p: [1] + ENTER continua, [0] + ENTER vuelve al menu
-REM      (en este modo no existe lectura de una sola tecla: limitacion
-REM      documentada del entorno, no del guion).
+REM  Por que C y M con ENTER? Porque 'choice' no puede leer ENTER (solo
+REM  admite a-z, A-Z, 0-9 y los codigos 128-254) y un ENTER vacio como
+REM  "continuar" se saltaria la pantalla con el minimo impulso (riesgo
+REM  de salto accidental). Con 'set /p' se leen lineas completas y las
+REM  dos teclas quedan simetricas: C + ENTER continua, M + ENTER vuelve
+REM  al menu, y cualquier otra letra vuelve a pedirla. Como 'set /p'
+REM  sirve igual en los dos modos, desaparece la bifurcacion
+REM  choice/setp de esta pantalla. (ESC sigue sin ser legible en cmd:
+REM  ver el motivo en PULSA_TECLA).
 REM ---------------------------------------------------------------------
 :PULSA_TECLA_MENU
 set "VUELTA_MENU=NO"
 echo(
-if "%MODO_ENTRADA%"=="CHOICE" echo   %~1
-if "%MODO_ENTRADA%"=="CHOICE" echo   %T_COM_54%
-if "%MODO_ENTRADA%"=="CHOICE" choice /c 10 /n
-if "%MODO_ENTRADA%"=="CHOICE" if errorlevel 2 set "VUELTA_MENU=SI"
-if "%MODO_ENTRADA%"=="CHOICE" exit /b 0
-REM Modo set /p: LEER_OPCION valida la entrada contra la lista blanca.
-call :LEER_OPCION "%~1 %T_COM_55%" "1 0"
-if "%OPCION%"=="0" set "VUELTA_MENU=SI"
-exit /b 0
+echo   %~1
+:PULSA_TECLA_MENU_BUCLE
+echo   %T_COM_54%
+set "TECLA_MENU="
+set /p "TECLA_MENU=%T_COM_55%"
+if /i "%TECLA_MENU%"=="C" exit /b 0
+if /i "%TECLA_MENU%"=="M" set "VUELTA_MENU=SI"
+if "%VUELTA_MENU%"=="SI" exit /b 0
+goto PULSA_TECLA_MENU_BUCLE
 
 REM ---------------------------------------------------------------------
 REM  LEER_OPCION - captura SEGURA de una opcion numerica.
@@ -1295,8 +1296,17 @@ call :ES_DIGITO_CADENA "%P2%"
 if "%CADENA_OK%"=="SI" goto PARSER_DISCOS_GUARDAR2
 exit /b 0
 :PARSER_DISCOS_SEPARADOR
-if "%PARSER_ESTADO%"=="0" set "PARSER_ESTADO=1"
-if "%PARSER_ESTADO%"=="1" set "PARSER_ESTADO=2"
+REM CUIDADO - trampa clasica de cmd: aqui NO hay 'else' y cada linea se
+REM evalua ya con el valor nuevo. Si el primer 'if' sube el estado 0 a 1,
+REM la linea siguiente lo veria como 1 y lo subiria a 2 de un salto: el
+REM PRIMER separador borraria todas las filas de discos de golpe (bug real
+REM que dejaba LISTA_DISCOS vacia y hacia fallar la eleccion de disco 0).
+REM Por eso cada transicion vive en su PROPIO bloque via 'goto'.
+if "%PARSER_ESTADO%"=="0" goto PARSER_SEP_A_1
+set "PARSER_ESTADO=2"
+exit /b 0
+:PARSER_SEP_A_1
+set "PARSER_ESTADO=1"
 exit /b 0
 :PARSER_DISCOS_GUARDAR
 call :PARSER_SUMAR_DISCO "%P1%"
@@ -3135,8 +3145,8 @@ set "T_COM_50=[!] diskpart no ha podido completar el listado. Código de error:"
 set "T_COM_51=Disco elegido:"
 set "T_COM_52=   Recibido: "
 set "T_COM_53=Teclas directas: A = cancelar, S = confirmar si el número ya es correcto (sin ENTER)."
-set "T_COM_54=      [1] Continuar      [0] Menú principal"
-set "T_COM_55=   [1] Continuar   [0] Menú principal:  "
+set "T_COM_54=      [C] Continuar      [M] Menú principal"
+set "T_COM_55=   Teclea tu opción:  "
 set "T_CONS_01=[4] CONSOLA AVANZADA"
 set "T_CONS_02=Abriendo una consola CMD interactiva en la MISMA ventana."
 set "T_CONS_03=- Escribe 'exit' para volver al menú principal."
@@ -3490,8 +3500,8 @@ set "T_COM_50=[!] diskpart could not complete the listing. Error code:"
 set "T_COM_51=Selected disk:"
 set "T_COM_52=   Received: "
 set "T_COM_53=Direct keys: A = cancel, S = confirm if the number is already correct (no ENTER)."
-set "T_COM_54=      [1] Continue       [0] Main menu"
-set "T_COM_55=   [1] Continue   [0] Main menu:  "
+set "T_COM_54=      [C] Continue       [M] Main menu"
+set "T_COM_55=   Type your choice:  "
 set "T_CONS_01=[4] ADVANCED CONSOLE"
 set "T_CONS_02=Opening an interactive CMD console in the SAME window."
 set "T_CONS_03=- Type 'exit' to return to the main menu."
