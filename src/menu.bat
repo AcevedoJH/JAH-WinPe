@@ -493,6 +493,10 @@ REM  PASO 4 - MENU PRINCIPAL (bucle infinito: SIEMPRE vuelve aqui)
 REM =====================================================================
 :MENU
 cls
+REM SALIDA_M marca una vuelta al menu pedida por el tecnico con la letra
+REM M: se limpia en cada repinta para que un M antiguo no influya nunca en
+REM el comportamiento de una operacion posterior.
+set "SALIDA_M=NO"
 call :MOSTRAR_CABECERA
 echo(
 echo   %T_MENU_01%
@@ -757,7 +761,8 @@ echo      %T_SAL_02%
 echo      %T_SAL_03%
 echo      %T_SAL_04%
 echo(
-call :LEER_OPCION "%T_SAL_05%" "1 2 3"
+call :LEER_OPCION "%T_SAL_05%" "1 2 3" M
+if /i "%OPCION%"=="M" goto MENU
 if "%OPCION%"=="1" goto CONFIRMAR_APAGADO
 if "%OPCION%"=="2" goto FIN_SCRIPT
 if "%OPCION%"=="3" goto MENU
@@ -928,10 +933,12 @@ goto PULSA_TECLA_MENU_BUCLE
 REM ---------------------------------------------------------------------
 REM  LEER_OPCION - captura SEGURA de una opcion numerica.
 REM  -------------------------------------------------------------------
-REM  USO:    call :LEER_OPCION "texto del prompt" "1 2 3 4 5"
+REM  USO:    call :LEER_OPCION "texto del prompt" "1 2 3 4 5" [M]
 REM            %~1 -^> mensaje que vera el tecnico (sin comillas)
 REM            %~2 -^> digitos permitidos, separados por espacios
 REM                    (es la LISTA BLANCA de entradas validas)
+REM            %~3 -^> opcional: 'M' para admitir tambien la letra M y
+REM                    volver al menu principal de forma inmediata
 REM  RESULTADO:
 REM            %OPCION% -^> el digito elegido (o vacio, si algo fallo)
 REM
@@ -941,6 +948,10 @@ REM  se cierra ni sale del menu; como maximo, vuelve a pedir la opcion.
 REM ---------------------------------------------------------------------
 :LEER_OPCION
 set "OPCION="
+REM  Tercer argumento opcional: si vale M, la letra M se acepta como
+REM  salida al menu principal ademas de los digitos de la lista blanca.
+set "PERMITE_M=NO"
+if /i "%~3"=="M" set "PERMITE_M=SI"
 if "%MODO_ENTRADA%"=="CHOICE" goto LEER_CON_CHOICE
 goto LEER_CON_SETP
 
@@ -957,6 +968,7 @@ set "CLAVES=%~2"
 set "CLAVES=%CLAVES: =%"
 REM   /n oculta la lista automatica de teclas (nuestro prompt ya la dice)
 REM   /m muestra el mensaje que pasamos en %~1
+if "%PERMITE_M%"=="SI" goto LEER_CON_CHOICE_M
 choice /c %CLAVES% /n /m "%C_VERDE%%~1%C_FIN%"
 REM choice devuelve en ERRORLEVEL el INDICE de la tecla pulsada (la
 REM primera tecla de la lista = 1, la segunda = 2, y asi sucesivamente).
@@ -968,6 +980,28 @@ REM   choice devuelve 0 (o 255 si hay error): quedara fuera de la lista
 REM   blanca y el menu simplemente repintara e insistira.
 REM ADVERTENCIA classica: %ERRORLEVEL% es una variable mas y podria ser
 REM "sombreada" con 'set errorlevel=...'. No la usamos jamas para eso.
+set "OPCION=%errorlevel%"
+exit /b 0
+
+REM --- Ruta choice con la tecla M admitida -------------------------------
+REM Solo se llega aqui si el llamante puso 'M' como tercer argumento. La
+REM tecla M se anade AL FINAL de la lista, asi que su posicion es el
+REM numero de digitos mas uno; contamos los digitos con un bucle para no
+REM depender del tamano de la lista. Si el tecnico pulsa M, OPCION queda
+REM en M y el llamante decide que hacer (normalmente, volver al menu).
+:LEER_CON_CHOICE_M
+set "CLAVES_N=0"
+set "CLAVES_TMP=%CLAVES%"
+:LEER_CON_CHOICE_M_CONTAR
+if not defined CLAVES_TMP goto LEER_CON_CHOICE_M_LISTO
+set "CLAVES_TMP=%CLAVES_TMP:~1%"
+set /a CLAVES_N+=1
+goto LEER_CON_CHOICE_M_CONTAR
+:LEER_CON_CHOICE_M_LISTO
+set /a CLAVES_M=CLAVES_N+1
+choice /c %CLAVES%M /n /m "%C_VERDE%%~1%C_FIN%"
+if "%errorlevel%"=="%CLAVES_M%" set "OPCION=M"
+if "%OPCION%"=="M" exit /b 0
 set "OPCION=%errorlevel%"
 exit /b 0
 
@@ -991,6 +1025,12 @@ REM comillas al valor deja SIEMPRE la linea bien formada:
 REM     if "valor_limpio"=="1"  -^> siempre balanceada, nunca rompe.
 set "OPCION=%OPCION:"=%"
 set "OPCION=%OPCION: =%"
+REM --- Salida directa al menu: tecla M admitida -------------------------
+REM Solo si el llamante la pidio como tercer argumento: asi los menus que
+REM no ofrecen M (idioma, formato, tipo de medio) siguen siendo estrictos.
+if not "%PERMITE_M%"=="SI" goto LEER_CON_SETP_LISTA
+if /i "%OPCION%"=="M" exit /b 0
+:LEER_CON_SETP_LISTA
 REM --- Lista blanca ---
 REM 'for' recorre cada digito de la lista (%~2) y compara con lo
 REM tecleado. Si coincide, marcamos VALIDA=1. La comparacion entre
@@ -1204,6 +1244,9 @@ exit /b 0
 :LEER_NUMERO_CANCELAR
 echo(
 set "NUM_OK=CANCELAR"
+REM El tecnico pidio volver al menu con M: el llamante debe abandonar el
+REM modulo SIN ninguna pausa intermedia (vuelta inmediata al menu).
+set "SALIDA_M=SI"
 exit /b 0
 :LEER_NUMERO_ERROR
 echo(
@@ -1544,7 +1587,9 @@ echo       %T_SEG_21%
 echo       %T_SEG_22%
 echo       %T_SEG_23%
 echo(
-call :LEER_OPCION "%T_COM_24%" "1 2 3"
+call :LEER_OPCION "%T_COM_24%" "1 2 3" M
+if /i "%OPCION%"=="M" set "SALIDA_M=SI"
+if /i "%OPCION%"=="M" exit /b 0
 if "%OPCION%"=="1" goto PEDIR_DISCO_BUCLE
 if "%OPCION%"=="2" goto PEDIR_DISCO_RIESGO
 exit /b 0
@@ -1971,6 +2016,9 @@ goto MODULO_BLOQUEADO
 :MODULO_PREPARAR_CANCELADO
 call :REGISTRAR CANCELADO "modulo=maquetar disco=%DISCO%" "CANCELADO"
 call :BORRAR_TEMPORALES
+REM Si la cancelacion vino de la tecla M no hay pausa: vuelta INMEDIATA
+REM al menu principal (el llamante hace exit /b y luego goto MENU).
+if "%SALIDA_M%"=="SI" exit /b 0
 call :PULSA_TECLA "%T_D1_22%"
 exit /b 0
 
@@ -2115,6 +2163,8 @@ goto MODULO_BLOQUEADO
 :MODULO_SANITIZAR_CANCELADO
 call :REGISTRAR CANCELADO "modulo=sanitizar disco=%DISCO%" "CANCELADO"
 call :BORRAR_TEMPORALES
+REM Cancelacion con la tecla M: sin pausa, vuelta INMEDIATA al menu.
+if "%SALIDA_M%"=="SI" exit /b 0
 call :PULSA_TECLA "%T_D1_22%"
 exit /b 0
 
@@ -2179,7 +2229,8 @@ echo       %T_D2_09%
 echo     %T_D2_36%
 echo       %T_D2_37%
 echo(
-call :LEER_OPCION "%T_NIV_12%" "1 2 3 0"
+call :LEER_OPCION "%T_NIV_12%" "1 2 3 0" M
+if /i "%OPCION%"=="M" exit /b 0
 if "%OPCION%"=="4" set "OPCION=0"
 set "NIVEL_BORRADO="
 if "%OPCION%"=="1" set "NIVEL_BORRADO=1"
@@ -2690,13 +2741,50 @@ REM  es informacion en bruto, no un texto que debamos traducir nosotros.
 REM #####################################################################
 
 REM ---------------------------------------------------------------------
-REM  MODULO_INVENTARIO - pantalla de diagnostico (solo lectura)
+REM  MODULO_INVENTARIO - MENU de diagnostico (solo lectura + chkdsk)
 REM ---------------------------------------------------------------------
-REM  Sigue el mismo patron que los modulos de disco: se llama con
-REM  'call :MODULO_INVENTARIO' y vuelve con 'exit /b 0'. Imprime una
-REM  cabecera, cinco bloques de informacion y una pausa final.
+REM  Pantalla intermedia de la opcion [3]. Desde aqui el tecnico elige
+REM  entre el inventario completo (solo lectura), la comprobacion de una
+REM  unidad con chkdsk y la consulta de salud SMART. El modulo se llama
+REM  con 'call' y vuelve con 'exit /b 0'; el bloque OP_INVENTARIO pinta
+REM  despues el menu principal.
+REM
+REM  DIAG_MENU es la bandera de salida: si vale SI, alguna pantalla pidio
+REM  el menu principal con M y hay que desenrollar SIN pausas hasta OP_x.
 REM ---------------------------------------------------------------------
 :MODULO_INVENTARIO
+set "DIAG_MENU=NO"
+:MODULO_INVENTARIO_BUCLE
+cls
+call :MOSTRAR_CABECERA
+echo(
+echo   %T_DIAG_01%
+echo   %C_VERDE%------------------------------------------------------------------%C_FIN%
+echo(
+echo   %T_DIAG_02%
+echo(
+echo     %T_DIAG_03%
+echo     %T_DIAG_04%
+echo     %T_DIAG_05%
+echo(
+echo   %T_DIAG_06%
+echo(
+call :LEER_OPCION "%T_DIAG_07%" "1 2 3 0" M
+if /i "%OPCION%"=="M" exit /b 0
+REM  En modo choice la tecla "0" es la CUARTA de la lista: errorlevel=4.
+REM  Normalizamos 4 -^> 0 para que el resto del codigo compare siempre "0".
+if "%OPCION%"=="4" set "OPCION=0"
+if "%OPCION%"=="0" exit /b 0
+if "%OPCION%"=="1" call :DIAG_HARDWARE
+if "%OPCION%"=="2" call :DIAG_CHKDSK
+if "%OPCION%"=="3" call :DIAG_SMART
+if "%DIAG_MENU%"=="SI" exit /b 0
+goto MODULO_INVENTARIO_BUCLE
+
+REM ---------------------------------------------------------------------
+REM  DIAG_HARDWARE - inventario completo del equipo (solo lectura)
+REM ---------------------------------------------------------------------
+:DIAG_HARDWARE
 cls
 call :MOSTRAR_CABECERA
 echo(
@@ -2721,8 +2809,253 @@ call :INV_DISCOS
 echo(
 REM  Dejamos constancia en el log de que se consulto el equipo. El detalle
 REM  va en ASCII y sin datos personales: es una linea de auditoria.
-call :REGISTRAR INVENTARIO "consulta=completa" "OK"
-call :PULSA_TECLA "%T_INV_09%"
+call :REGISTRAR DIAGNOSTICO "consulta=hardware" "OK"
+call :PULSA_TECLA_MENU "%T_DIAG_08%"
+if "%VUELTA_MENU%"=="SI" set "DIAG_MENU=SI"
+exit /b 0
+
+REM ---------------------------------------------------------------------
+REM  DIAG_CHKDSK - comprobacion de una unidad logica con chkdsk
+REM ---------------------------------------------------------------------
+REM  Solo se ejecuta sobre unidades CON LETRA y nunca sobre X: (la unidad
+REM  RAM de WinPE). Antes de lanzar nada se muestra el comando exacto y se
+REM  pide confirmacion S/N. La letra se valida contra A-Z y contra la
+REM  existencia real de la unidad, asi que un tecleo raro no ejecuta nada.
+REM ---------------------------------------------------------------------
+:DIAG_CHKDSK
+if not exist "%SystemRoot%\System32\chkdsk.exe" goto DIAG_CHKDSK_SIN_EXE
+cls
+call :MOSTRAR_CABECERA
+echo(
+echo   %T_DIAG_10%
+echo   %C_VERDE%------------------------------------------------------------------%C_FIN%
+echo(
+echo   %T_DIAG_11%
+echo   %T_DIAG_12%
+echo   %T_DIAG_13%
+echo(
+call :DIAG_LISTAR_UNIDADES
+echo(
+:DIAG_CHKDSK_PEDIR
+set "CHK_LETRA="
+set /p "CHK_LETRA=%C_VERDE%%T_DIAG_14%%C_FIN%"
+if not defined CHK_LETRA goto DIAG_CHKDSK_PEDIR
+set "CHK_LETRA=%CHK_LETRA:"=%"
+set "CHK_LETRA=%CHK_LETRA: =%"
+if not defined CHK_LETRA goto DIAG_CHKDSK_PEDIR
+if /i "%CHK_LETRA%"=="M" goto DIAG_CHKDSK_MENU
+if "%CHK_LETRA%"=="0" exit /b 0
+if not "%CHK_LETRA:~1%"=="" goto DIAG_CHKDSK_INVALIDA
+set "CHK_LETRA_OK=NO"
+for %%L in (A B C D E F G H I J K L M N O P Q R S T U V W X Y Z) do if /i "%CHK_LETRA%"=="%%L" set "CHK_LETRA_OK=SI"
+if not "%CHK_LETRA_OK%"=="SI" goto DIAG_CHKDSK_INVALIDA
+if /i "%CHK_LETRA%"=="X" goto DIAG_CHKDSK_X
+if not exist "%CHK_LETRA%:\" goto DIAG_CHKDSK_NO_EXISTE
+goto DIAG_CHKDSK_MODO
+
+:DIAG_CHKDSK_MODO
+cls
+call :MOSTRAR_CABECERA
+echo(
+echo   %T_DIAG_15% %CHK_LETRA%:
+echo   %C_VERDE%------------------------------------------------------------------%C_FIN%
+echo(
+echo     %T_DIAG_16%
+echo     %T_DIAG_17%
+echo     %T_DIAG_18%
+echo(
+echo   %T_DIAG_19%
+echo(
+call :LEER_OPCION "%T_DIAG_20%" "1 2 3 0" M
+if /i "%OPCION%"=="M" goto DIAG_CHKDSK_MENU
+if "%OPCION%"=="4" set "OPCION=0"
+if "%OPCION%"=="0" exit /b 0
+set "CHK_ARGS="
+if "%OPCION%"=="1" set "CHK_ARGS=/scan"
+if "%OPCION%"=="2" set "CHK_ARGS=/f"
+if "%OPCION%"=="3" set "CHK_ARGS=/f /r"
+if not defined CHK_ARGS goto DIAG_CHKDSK_MODO
+set "CHK_MODO=%OPCION%"
+echo(
+echo   %T_DIAG_22% chkdsk %CHK_LETRA%: %CHK_ARGS%
+echo(
+call :LEER_SN "%T_DIAG_21%"
+if not "%SN%"=="SI" goto DIAG_CHKDSK_CANCELADO
+echo(
+echo   %T_DIAG_23%
+chkdsk %CHK_LETRA%: %CHK_ARGS%
+set "CHK_RC=%errorlevel%"
+call :DIAG_CHKDSK_RESULTADO
+call :REGISTRAR DIAGNOSTICO "chkdsk=%CHK_LETRA% modo=%CHK_MODO% codigo=%CHK_RC%" "OK"
+echo(
+call :PULSA_TECLA_MENU "%T_DIAG_29%"
+if "%VUELTA_MENU%"=="SI" set "DIAG_MENU=SI"
+exit /b 0
+
+:DIAG_CHKDSK_RESULTADO
+if "%CHK_RC%"=="0" goto DIAG_CHKDSK_RC_OK
+if "%CHK_RC%"=="1" goto DIAG_CHKDSK_RC_OK
+if "%CHK_RC%"=="2" goto DIAG_CHKDSK_RC_WARN
+if "%CHK_RC%"=="3" goto DIAG_CHKDSK_RC_WARN
+<nul set /p "=%C_AMARILLO%"
+echo   %T_DIAG_28% %CHK_RC%
+<nul set /p "=%C_FIN%"
+exit /b 0
+:DIAG_CHKDSK_RC_OK
+<nul set /p "=%C_VERDE%"
+if "%CHK_RC%"=="0" echo   %T_DIAG_24%
+if "%CHK_RC%"=="1" echo   %T_DIAG_25%
+<nul set /p "=%C_FIN%"
+exit /b 0
+:DIAG_CHKDSK_RC_WARN
+<nul set /p "=%C_AMARILLO%"
+if "%CHK_RC%"=="2" echo   %T_DIAG_26%
+if "%CHK_RC%"=="3" echo   %T_DIAG_27%
+<nul set /p "=%C_FIN%"
+exit /b 0
+
+:DIAG_CHKDSK_INVALIDA
+echo(
+echo   %T_DIAG_30%
+goto DIAG_CHKDSK_PEDIR
+:DIAG_CHKDSK_X
+echo(
+echo   %T_DIAG_31%
+goto DIAG_CHKDSK_PEDIR
+:DIAG_CHKDSK_NO_EXISTE
+echo(
+echo   %T_DIAG_32% %CHK_LETRA%:
+goto DIAG_CHKDSK_PEDIR
+:DIAG_CHKDSK_CANCELADO
+echo(
+echo   %T_DIAG_33%
+call :PULSA_TECLA_MENU "%T_DIAG_34%"
+if "%VUELTA_MENU%"=="SI" set "DIAG_MENU=SI"
+exit /b 0
+:DIAG_CHKDSK_MENU
+set "DIAG_MENU=SI"
+exit /b 0
+:DIAG_CHKDSK_SIN_EXE
+echo(
+echo   %T_DIAG_37%
+call :PULSA_TECLA_MENU "%T_DIAG_29%"
+if "%VUELTA_MENU%"=="SI" set "DIAG_MENU=SI"
+exit /b 0
+
+REM ---------------------------------------------------------------------
+REM  DIAG_LISTAR_UNIDADES - lista de unidades logicas con letra
+REM ---------------------------------------------------------------------
+REM  Preferimos PowerShell (Win32_LogicalDisk) porque da letra, etiqueta,
+REM  sistema de archivos y tamanos en una linea; si no esta, caemos a wmic.
+REM  La salida se imprime con 'type' para que una etiqueta con caracteres
+REM  raros nunca se interprete como un comando.
+REM ---------------------------------------------------------------------
+:DIAG_LISTAR_UNIDADES
+echo   %T_DIAG_35%
+if "%PS_OK%"=="SI" goto DIAG_LISTAR_UNIDADES_PS
+if exist "%SystemRoot%\System32\wbem\wmic.exe" goto DIAG_LISTAR_UNIDADES_WMIC
+echo       %T_INV_10%
+goto DIAG_LISTAR_UNIDADES_FIN
+:DIAG_LISTAR_UNIDADES_PS
+set "PS_CMD=$v=@(Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3' -ErrorAction SilentlyContinue)"
+set "PS_CMD=%PS_CMD%; if($v.Count -gt 0){$v|ForEach-Object{'  '+$_.DeviceID+'  '+$_.VolumeName+'  '+$_.FileSystem+'  '+[math]::Round($_.Size/1GB)+' GB  '+[math]::Round($_.FreeSpace/1GB)+' GB'}}else{'SIN_DATOS'}"
+call :ARCHIVO_TEMP_INV
+"%PS_EXE%" -NoProfile -Command "%PS_CMD%" > "%F_INV%" 2>&1
+call :MOSTRAR_TEMP_O_NA
+goto DIAG_LISTAR_UNIDADES_FIN
+:DIAG_LISTAR_UNIDADES_WMIC
+wmic logicaldisk where drivetype=3 get deviceid,volumename,filesystem,size,freespace
+:DIAG_LISTAR_UNIDADES_FIN
+<nul set /p "=%C_AMARILLO%"
+echo   %T_DIAG_36%
+<nul set /p "=%C_FIN%"
+exit /b 0
+
+REM ---------------------------------------------------------------------
+REM  DIAG_SMART - salud general / SMART de los discos fisicos
+REM ---------------------------------------------------------------------
+REM  Se muestran dos fuentes complementarias si estan disponibles:
+REM    - Get-PhysicalDisk : HealthStatus (Healthy / Warning / Unhealthy).
+REM    - Win32_DiskDrive  : Status (OK / Pred Fail), el aviso clasico.
+REM    - MSStorageDriver_FailurePredictStatus : PredictFailure (SMART).
+REM  El veredicto final lo decide el propio PowerShell (VERDICT|OK/BAD/NA)
+REM  y la consola lo pinta en verde, rojo o amarillo. Nunca se inventa un
+REM  "OK": si no hay datos, se dice con claridad.
+REM ---------------------------------------------------------------------
+:DIAG_SMART
+cls
+call :MOSTRAR_CABECERA
+echo(
+echo   %T_DIAG_40%
+echo   %C_VERDE%------------------------------------------------------------------%C_FIN%
+echo(
+echo   %T_DIAG_41%
+echo   %T_DIAG_46%
+echo(
+if "%PS_OK%"=="SI" goto DIAG_SMART_PS
+if exist "%SystemRoot%\System32\wbem\wmic.exe" goto DIAG_SMART_WMIC
+echo       %T_INV_10%
+goto DIAG_SMART_FIN
+:DIAG_SMART_PS
+set "PS_CMD=$d=@(); $w=@(); $bad=$false"
+set "PS_CMD=%PS_CMD%; if(Get-Command Get-PhysicalDisk -ErrorAction SilentlyContinue){$d=@(Get-PhysicalDisk -ErrorAction SilentlyContinue)}"
+set "PS_CMD=%PS_CMD%; if($d.Count -gt 0){$d|ForEach-Object{'['+$_.DeviceId+'] '+$_.FriendlyName+'  ('+$_.MediaType+')  '+$_.HealthStatus+' / '+$_.OperationalStatus+'  '+[math]::Round($_.Size/1GB)+' GB'}"
+set "PS_CMD=%PS_CMD%; if(@($d|Where-Object{$_.HealthStatus -ne 'Healthy'}).Count -gt 0){$bad=$true}}"
+set "PS_CMD=%PS_CMD%; if($d.Count -eq 0){$w=@(Get-CimInstance Win32_DiskDrive -ErrorAction SilentlyContinue)"
+set "PS_CMD=%PS_CMD%; if($w.Count -gt 0){$w|ForEach-Object{'['+$_.Index+'] '+$_.Model+'  ('+$_.InterfaceType+')  '+$_.Status+'  '+[math]::Round($_.Size/1GB)+' GB'}"
+set "PS_CMD=%PS_CMD%; if(@($w|Where-Object{$_.Status -ne 'OK'}).Count -gt 0){$bad=$true}}}"
+set "PS_CMD=%PS_CMD%; try{$f=@(Get-CimInstance -Namespace root\wmi -ClassName MSStorageDriver_FailurePredictStatus -ErrorAction Stop)}catch{$f=@()}"
+set "PS_CMD=%PS_CMD%; if($f.Count -gt 0){$f|ForEach-Object{'SMART-PREDICT: '+$_.InstanceName+' = '+$_.PredictFailure}"
+set "PS_CMD=%PS_CMD%; if(@($f|Where-Object{$_.PredictFailure}).Count -gt 0){$bad=$true}}"
+set "PS_CMD=%PS_CMD%; if($d.Count -eq 0 -and $w.Count -eq 0){'SIN_DATOS'; 'VERDICT|NA'}"
+set "PS_CMD=%PS_CMD%; elseif($bad){'VERDICT|BAD'} else {'VERDICT|OK'}"
+call :ARCHIVO_TEMP_INV
+"%PS_EXE%" -NoProfile -Command "%PS_CMD%" > "%F_INV%" 2>&1
+if not exist "%F_INV%" goto DIAG_SMART_SIN_ARCHIVO
+set "SMART_VERDICT=NA"
+findstr /c:"VERDICT|OK" "%F_INV%" >nul 2>&1
+if not errorlevel 1 set "SMART_VERDICT=OK"
+findstr /c:"VERDICT|BAD" "%F_INV%" >nul 2>&1
+if not errorlevel 1 set "SMART_VERDICT=BAD"
+findstr /v /c:"VERDICT|" "%F_INV%" | findstr /v /c:"SIN_DATOS"
+if exist "%F_INV%" del /f /q "%F_INV%" >nul 2>&1
+goto DIAG_SMART_VEREDICTO
+:DIAG_SMART_WMIC
+call :ARCHIVO_TEMP_INV
+wmic diskdrive get index,model,status,size > "%F_INV%" 2>&1
+set "SMART_VERDICT=OK"
+findstr /i /c:"No Instance" /c:"No hay instancias" "%F_INV%" >nul 2>&1
+if not errorlevel 1 set "SMART_VERDICT=NA"
+findstr /i /c:"Pred Fail" "%F_INV%" >nul 2>&1
+if not errorlevel 1 set "SMART_VERDICT=BAD"
+type "%F_INV%"
+if exist "%F_INV%" del /f /q "%F_INV%" >nul 2>&1
+goto DIAG_SMART_VEREDICTO
+:DIAG_SMART_SIN_ARCHIVO
+set "SMART_VERDICT=NA"
+goto DIAG_SMART_VEREDICTO
+:DIAG_SMART_VEREDICTO
+if "%SMART_VERDICT%"=="OK" goto DIAG_SMART_OK
+if "%SMART_VERDICT%"=="BAD" goto DIAG_SMART_BAD
+<nul set /p "=%C_AMARILLO%"
+echo   %T_DIAG_44%
+<nul set /p "=%C_FIN%"
+goto DIAG_SMART_LOG
+:DIAG_SMART_OK
+<nul set /p "=%C_VERDE%"
+echo   %T_DIAG_42%
+<nul set /p "=%C_FIN%"
+goto DIAG_SMART_LOG
+:DIAG_SMART_BAD
+<nul set /p "=%C_ROJO%"
+echo   %T_DIAG_43%
+<nul set /p "=%C_FIN%"
+:DIAG_SMART_LOG
+call :REGISTRAR DIAGNOSTICO "consulta=smart estado=%SMART_VERDICT%" "OK"
+:DIAG_SMART_FIN
+echo(
+call :PULSA_TECLA_MENU "%T_DIAG_45%"
+if "%VUELTA_MENU%"=="SI" set "DIAG_MENU=SI"
 exit /b 0
 
 REM ---------------------------------------------------------------------
@@ -2735,9 +3068,22 @@ REM  que en la tabla ancha por defecto. Si no hay wmic, caemos a 'ver',
 REM  que solo da la version numerica: menos, pero siempre disponible.
 REM ---------------------------------------------------------------------
 :INV_SISTEMA
-if not exist "%SystemRoot%\System32\wbem\wmic.exe" goto INV_SISTEMA_VER
+if exist "%SystemRoot%\System32\wbem\wmic.exe" goto INV_SISTEMA_WMIC
+if "%PS_OK%"=="SI" goto INV_SISTEMA_PS
+goto INV_SISTEMA_VER
+:INV_SISTEMA_WMIC
 wmic os get caption,version /value
 wmic csproduct get vendor,name /value
+exit /b 0
+:INV_SISTEMA_PS
+set "PS_CMD=$o=Get-CimInstance Win32_OperatingSystem -ErrorAction SilentlyContinue"
+set "PS_CMD=%PS_CMD%; $c=Get-CimInstance Win32_ComputerSystem -ErrorAction SilentlyContinue"
+set "PS_CMD=%PS_CMD%; if($o){'OS: '+$o.Caption+' '+$o.Version}"
+set "PS_CMD=%PS_CMD%; if($c){'System: '+$c.Manufacturer+' '+$c.Model}"
+set "PS_CMD=%PS_CMD%; if(-not $o -and -not $c){'SIN_DATOS'}"
+call :ARCHIVO_TEMP_INV
+"%PS_EXE%" -NoProfile -Command "%PS_CMD%" > "%F_INV%" 2>&1
+call :MOSTRAR_TEMP_O_NA
 exit /b 0
 :INV_SISTEMA_VER
 echo       %T_INV_14%
@@ -2755,8 +3101,18 @@ REM  %PROCESSOR_IDENTIFIER% y %NUMBER_OF_PROCESSORS%, que valen incluso
 REM  en el WinPE mas recortado.
 REM ---------------------------------------------------------------------
 :INV_CPU
-if not exist "%SystemRoot%\System32\wbem\wmic.exe" goto INV_CPU_ENV
-wmic cpu get name,numberofcores,numberoflogicalprocessors /value
+if exist "%SystemRoot%\System32\wbem\wmic.exe" goto INV_CPU_WMIC
+if "%PS_OK%"=="SI" goto INV_CPU_PS
+goto INV_CPU_ENV
+:INV_CPU_WMIC
+wmic cpu get name,numberofcores,numberoflogicalprocessors,maxclockspeed /value
+exit /b 0
+:INV_CPU_PS
+set "PS_CMD=$c=Get-CimInstance Win32_Processor -ErrorAction SilentlyContinue"
+set "PS_CMD=%PS_CMD%; if($c){'CPU: '+$c.Name+' | C='+$c.NumberOfCores+' L='+$c.NumberOfLogicalProcessors+' '+$c.MaxClockSpeed+' MHz'}else{'SIN_DATOS'}"
+call :ARCHIVO_TEMP_INV
+"%PS_EXE%" -NoProfile -Command "%PS_CMD%" > "%F_INV%" 2>&1
+call :MOSTRAR_TEMP_O_NA
 exit /b 0
 :INV_CPU_ENV
 echo       %PROCESSOR_IDENTIFIER%
@@ -2764,19 +3120,56 @@ if defined NUMBER_OF_PROCESSORS echo       %T_INV_13% %NUMBER_OF_PROCESSORS%
 exit /b 0
 
 REM ---------------------------------------------------------------------
-REM  INV_RAM - memoria RAM total y disponible
+REM  INV_RAM - memoria RAM instalada, disponible y modulos
 REM ---------------------------------------------------------------------
-REM  wmic devuelve la RAM en KILOBYTES en dos propiedades distintas:
-REM    TotalVisibleMemorySize -^> RAM total (Win32_OperatingSystem).
-REM    FreePhysicalMemory     -^> RAM libre ahora.
-REM  Convertimos a MB y a GB con 'set /a' (division entera por 1024 dos
-REM  veces). NOTA IMPORTANTE: usamos KILOBYTES y no BYTES porque 'set /a'
-REM  trabaja con enteros de 32 bits: un numero en bytes (8 GB ya son
-REM  8.589.934.592) se DESBORDARIA y daria un resultado falso. En
-REM  kilobytes, incluso 32 GB (33.554.432) entra sin problema.
+REM  Metodo preferido: PowerShell. Win32_PhysicalMemory da la capacidad de
+REM  CADA modulo (Capacity, en bytes), su velocidad (Speed) y la ranura
+REM  fisica (DeviceLocator); sumando Capacity se obtiene la RAM instalada
+REM  REAL, aunque la BIOS reserve parte (que es lo que hacia fallar al
+REM  metodo anterior basado solo en wmic OS). Win32_OperatingSystem aporta
+REM  la RAM libre actual.
+REM
+REM  RESPALDO SIN PowerShell: wmic OS (total visible y libre) mas
+REM  'wmic memorychip' para las ranuras. Ultimo recurso: aviso T_INV_10.
 REM ---------------------------------------------------------------------
 :INV_RAM
-if not exist "%SystemRoot%\System32\wbem\wmic.exe" goto INV_RAM_NA
+if "%PS_OK%"=="SI" goto INV_RAM_PS
+if exist "%SystemRoot%\System32\wbem\wmic.exe" goto INV_RAM_WMIC
+echo       %T_INV_10%
+echo       %T_INV_17%
+exit /b 0
+:INV_RAM_PS
+set "PS_CMD=$m=@(Get-CimInstance Win32_PhysicalMemory -ErrorAction SilentlyContinue)"
+set "PS_CMD=%PS_CMD%; $o=Get-CimInstance Win32_OperatingSystem -ErrorAction SilentlyContinue"
+set "PS_CMD=%PS_CMD%; if($m.Count -gt 0){"
+set "PS_CMD=%PS_CMD% $t=($m|Measure-Object -Property Capacity -Sum).Sum"
+set "PS_CMD=%PS_CMD%; $f=0; if($o){$f=[math]::Round($o.FreePhysicalMemory/1MB)}"
+set "PS_CMD=%PS_CMD%; 'RAM|'+[math]::Round($t/1GB)+'|'+$m.Count+'|'+$f"
+set "PS_CMD=%PS_CMD%; $m|ForEach-Object{'RAMSLOT|'+$_.DeviceLocator+'|'+[math]::Round($_.Capacity/1GB)+'|'+$_.Speed}"
+set "PS_CMD=%PS_CMD%; } else { 'SIN_DATOS' }"
+call :ARCHIVO_TEMP_INV
+"%PS_EXE%" -NoProfile -Command "%PS_CMD%" > "%F_INV%" 2>&1
+if not exist "%F_INV%" goto INV_RAM_NA
+set "RAM_HECHO=NO"
+set "RAM_SLOTS="
+for /f "usebackq tokens=1-4 delims=|" %%A in ("%F_INV%") do if "%%A"=="RAM" call :INV_RAM_TOTAL "%%B" "%%C" "%%D"
+if defined RAM_SLOTS echo       %T_INV_19%
+for /f "usebackq tokens=1-4 delims=|" %%A in ("%F_INV%") do if "%%A"=="RAMSLOT" call :INV_RAM_SLOT "%%B" "%%C" "%%D"
+if exist "%F_INV%" del /f /q "%F_INV%" >nul 2>&1
+if not "%RAM_HECHO%"=="SI" goto INV_RAM_NA
+exit /b 0
+:INV_RAM_TOTAL
+set "RAM_HECHO=SI"
+set "RAM_SLOTS=%~2"
+<nul set /p "=%C_BLANCO%"
+echo       %T_INV_11% %~1 %T_INV_16%   %T_INV_18% %~2
+if not "%~3"=="" echo       %T_INV_12% %~3 %T_INV_16%
+<nul set /p "=%C_FIN%"
+exit /b 0
+:INV_RAM_SLOT
+echo         %~1: %~2 %T_INV_16%   %~3 %T_INV_20%
+exit /b 0
+:INV_RAM_WMIC
 call :ARCHIVO_TEMP_INV
 wmic OS get TotalVisibleMemorySize /value > "%F_INV%" 2>nul
 set "RAM_TOTAL="
@@ -2792,11 +3185,13 @@ if not defined RAM_TOTAL goto INV_RAM_NA
 set /a RAM_T_MB=%RAM_TOTAL%/1024
 set /a RAM_T_GB=%RAM_T_MB%/1024
 echo       %T_INV_11% %RAM_T_MB% %T_INV_15%  ^(%RAM_T_GB% %T_INV_16%^)
-if not defined RAM_LIBRE goto INV_RAM_FIN
+if not defined RAM_LIBRE goto INV_RAM_WMIC_SLOTS
 set /a RAM_L_MB=%RAM_LIBRE%/1024
 set /a RAM_L_GB=%RAM_L_MB%/1024
 echo       %T_INV_12% %RAM_L_MB% %T_INV_15%  ^(%RAM_L_GB% %T_INV_16%^)
-:INV_RAM_FIN
+:INV_RAM_WMIC_SLOTS
+echo       %T_INV_19%
+wmic memorychip get devicelocator,speed,capacity
 exit /b 0
 :INV_RAM_NA
 echo       %T_INV_10%
@@ -2807,8 +3202,18 @@ REM ---------------------------------------------------------------------
 REM  INV_PLACA - placa base
 REM ---------------------------------------------------------------------
 :INV_PLACA
-if not exist "%SystemRoot%\System32\wbem\wmic.exe" goto INV_PLACA_NA
+if exist "%SystemRoot%\System32\wbem\wmic.exe" goto INV_PLACA_WMIC
+if "%PS_OK%"=="SI" goto INV_PLACA_PS
+goto INV_PLACA_NA
+:INV_PLACA_WMIC
 wmic baseboard get manufacturer,product /value
+exit /b 0
+:INV_PLACA_PS
+set "PS_CMD=$b=Get-CimInstance Win32_BaseBoard -ErrorAction SilentlyContinue"
+set "PS_CMD=%PS_CMD%; if($b){'BaseBoard: '+$b.Manufacturer+' '+$b.Product}else{'SIN_DATOS'}"
+call :ARCHIVO_TEMP_INV
+"%PS_EXE%" -NoProfile -Command "%PS_CMD%" > "%F_INV%" 2>&1
+call :MOSTRAR_TEMP_O_NA
 exit /b 0
 :INV_PLACA_NA
 echo       %T_INV_10%
@@ -2828,6 +3233,7 @@ REM ---------------------------------------------------------------------
 set "INV_DISCOS_HECHO=NO"
 if exist "%SystemRoot%\System32\diskpart.exe" call :INV_DISCOS_DP
 if exist "%SystemRoot%\System32\wbem\wmic.exe" call :INV_DISCOS_WMIC
+if not exist "%SystemRoot%\System32\wbem\wmic.exe" if "%PS_OK%"=="SI" call :INV_DISCOS_PS
 if "%INV_DISCOS_HECHO%"=="NO" echo       %T_INV_10%
 exit /b 0
 
@@ -2845,6 +3251,18 @@ set "INV_DISCOS_HECHO=SI"
 echo(
 echo       %T_INV_08%
 wmic diskdrive get index,model,size,status
+exit /b 0
+
+:INV_DISCOS_PS
+set "INV_DISCOS_HECHO=SI"
+echo(
+echo       %T_INV_08%
+set "PS_CMD=$d=@(); if(Get-Command Get-PhysicalDisk -ErrorAction SilentlyContinue){$d=@(Get-PhysicalDisk -ErrorAction SilentlyContinue)}"
+set "PS_CMD=%PS_CMD%; if($d.Count -gt 0){$d|ForEach-Object{'['+$_.DeviceId+'] '+$_.FriendlyName+'  '+$_.MediaType+'  '+$_.HealthStatus+'  '+[math]::Round($_.Size/1GB)+' GB'}}"
+set "PS_CMD=%PS_CMD%; if($d.Count -eq 0){$w=@(Get-CimInstance Win32_DiskDrive -ErrorAction SilentlyContinue); if($w.Count -gt 0){$w|ForEach-Object{'['+$_.Index+'] '+$_.Model+'  '+$_.InterfaceType+'  '+$_.Status+'  '+[math]::Round($_.Size/1GB)+' GB'}}else{'SIN_DATOS'}}"
+call :ARCHIVO_TEMP_INV
+"%PS_EXE%" -NoProfile -Command "%PS_CMD%" > "%F_INV%" 2>&1
+call :MOSTRAR_TEMP_O_NA
 exit /b 0
 
 REM #####################################################################
@@ -2867,6 +3285,32 @@ REM ---------------------------------------------------------------------
 set "F_INV="
 if defined TEMP set "F_INV=%TEMP%\_jah_inv.txt"
 if not defined F_INV set "F_INV=%SystemDrive%\_jah_inv.txt"
+exit /b 0
+
+REM ---------------------------------------------------------------------
+REM  MOSTRAR_TEMP_O_NA - imprime la salida guardada en %F_INV%
+REM -------------------------------------------------------------------
+REM  Varias consultas de diagnostico (CPU, placa, sistema, discos, unidades)
+REM  vuelcan su salida en %F_INV% y la muestran tal cual con 'findstr'.
+REM  Motivo: asi un modelo o una etiqueta con '&', '|' o parentesis NUNCA
+REM  se interpreta como un comando de cmd; se imprime byte a byte.
+REM  Si el fichero solo contiene el centinela SIN_DATOS, se avisa con
+REM  T_INV_10. El temporal se borra siempre, pase lo que pase.
+REM -------------------------------------------------------------------
+:MOSTRAR_TEMP_O_NA
+set "TEMP_HECHO=SI"
+if not exist "%F_INV%" set "TEMP_HECHO=NO"
+if not exist "%F_INV%" goto MOSTRAR_TEMP_O_NA_FIN
+if not exist "%SystemRoot%\System32\findstr.exe" goto MOSTRAR_TEMP_O_NA_TYPE
+findstr /c:"SIN_DATOS" "%F_INV%" >nul 2>&1
+if not errorlevel 1 set "TEMP_HECHO=NO"
+if "%TEMP_HECHO%"=="SI" findstr /v /c:"SIN_DATOS" "%F_INV%"
+if not "%TEMP_HECHO%"=="SI" echo       %T_INV_10%
+goto MOSTRAR_TEMP_O_NA_FIN
+:MOSTRAR_TEMP_O_NA_TYPE
+type "%F_INV%"
+:MOSTRAR_TEMP_O_NA_FIN
+if exist "%F_INV%" del /f /q "%F_INV%" >nul 2>&1
 exit /b 0
 
 REM ---------------------------------------------------------------------
@@ -3356,7 +3800,7 @@ set "T_D2_32=Para el borrado seguro se piden DOS confirmaciones escritas."
 set "T_D2_33=- Borrado seguro (opción 2): el Disco"
 set "T_D2_34=ejecución. La protección de arranque bloquea el disco del sistema"
 set "T_D2_35=aparecerá EN BRUTO"
-set "T_NIV_01=Elige el nivel de borrado (o pulsa [0] para volver al menú):"
+set "T_NIV_01=Elige el nivel de borrado ([0] o M para volver al menú):"
 set "T_NIV_02=  [1] Limpieza rápida (Solo Estructura)"
 set "T_NIV_03=      Borra solo la tabla de particiones (MBR/GPT) y la firma del"
 set "T_NIV_04=      disco: al instante y sin desgaste en las celdas de almacenamiento."
@@ -3366,7 +3810,7 @@ set "T_NIV_07=      controlador limpia los bloques (GC), rápido y sin ceros."
 set "T_NIV_08=  [3] Limpieza profunda / Sobrescritura de ceros (Solo HDDs)"
 set "T_NIV_09=      'clean all': sobrescribe TODOS los sectores con ceros."
 set "T_NIV_10=      Lento. NO recomendado en SSD o NVMe (desgaste NAND)."
-set "T_NIV_11=  [0] Salir / Cancelar (volver al menú principal)"
+set "T_NIV_11=  [0] Salir / Cancelar      [M] Menú principal (M + ENTER)"
 set "T_NIV_12=   Su nivel [0-3]:  "
 set "T_NIV_13=Acción:         clean     (solo estructura, sin sobrescritura)"
 set "T_NIV_14=Acción:         TRIM + clean  (reset SSD/NVMe, sin ceros)"
@@ -3418,7 +3862,7 @@ set "T_INV_01=[3] DIAGNÓSTICO / INVENTARIO - SOLO LECTURA"
 set "T_INV_02=Este módulo NO modifica discos ni particiones: solo informa."
 set "T_INV_03=EQUIPO Y SISTEMA"
 set "T_INV_04=PROCESADOR"
-set "T_INV_05=MEMORIA RAM (total / disponible)"
+set "T_INV_05=MEMORIA RAM (total / disponible / módulos)"
 set "T_INV_06=PLACA BASE"
 set "T_INV_07=DISCOS FÍSICOS (índice, tamaño y estado)"
 set "T_INV_08=Modelos de disco:"
@@ -3431,6 +3875,52 @@ set "T_INV_14=Sistema (ver):"
 set "T_INV_15=MB"
 set "T_INV_16=GB"
 set "T_INV_17=No legible aquí: prueba 'systeminfo' en la Consola (opción 4)."
+set "T_INV_18=Slots ocupados:"
+set "T_INV_19=Detalle por módulo (ranura / tamaño / velocidad):"
+set "T_INV_20=MHz"
+set "T_DIAG_01=[3] DIAGNÓSTICO Y SALUD DEL HARDWARE"
+set "T_DIAG_02=Consulta el equipo y permite comprobar sus unidades (chkdsk, SMART)."
+set "T_DIAG_03=  [1] Hardware completo       CPU, RAM, placa base y discos"
+set "T_DIAG_04=  [2] Comprobar unidad        chkdsk: /scan, /f o /f /r"
+set "T_DIAG_05=  [3] Salud SMART             estado OK / Pre-fail de los discos"
+set "T_DIAG_06=  [0] Volver al menú principal     [M] Menú principal (M + ENTER)"
+set "T_DIAG_07=   Su opción [0-3] (M = menú):  "
+set "T_DIAG_08=Fin del inventario de hardware."
+set "T_DIAG_10=[2] CHKDSK - COMPROBACIÓN DE UNA UNIDAD"
+set "T_DIAG_11=Comprueba la unidad que elijas; no borra archivos."
+set "T_DIAG_12=No uses X: (unidad RAM de WinPE)."
+set "T_DIAG_13=La letra debe ser una unidad montada (C:, D:, E:...)."
+set "T_DIAG_14=   Letra de unidad (ej. C, 0 = volver, M = menú):  "
+set "T_DIAG_15=Unidad seleccionada:"
+set "T_DIAG_16=  [1] Análisis rápido (/scan)      no desmonta la unidad"
+set "T_DIAG_17=  [2] Reparar errores (/f)         puede pedir reinicio"
+set "T_DIAG_18=  [3] Reparar + sectores (/f /r)   muy lento, para HDD"
+set "T_DIAG_19=  [0] Volver al diagnóstico      [M] Menú principal"
+set "T_DIAG_20=   Modo [0-3] (M = menú):  "
+set "T_DIAG_21=   ¿Ejecutar chkdsk con estas opciones? [S/N]:  "
+set "T_DIAG_22=Comando:"
+set "T_DIAG_23=Ejecutando chkdsk. No cierres la ventana ni apagues el equipo..."
+set "T_DIAG_24=[OK] chkdsk terminó sin errores (código 0)."
+set "T_DIAG_25=[OK] chkdsk encontró y corrigió errores (código 1)."
+set "T_DIAG_26=[!] chkdsk pide una limpieza adicional (código 2)."
+set "T_DIAG_27=[!] chkdsk no pudo comprobar la unidad (código 3)."
+set "T_DIAG_28=[i] Código de salida de chkdsk:"
+set "T_DIAG_29=Pulsa [C] para volver al diagnóstico o [M] para el menú."
+set "T_DIAG_30=[!] Letra no válida: escribe UNA letra de unidad (A-Z)."
+set "T_DIAG_31=[!] X: es la unidad RAM de WinPE: no se comprueba con chkdsk."
+set "T_DIAG_32=[!] La unidad no existe o no está montada:"
+set "T_DIAG_33=Comprobación cancelada: no se ha ejecutado chkdsk."
+set "T_DIAG_34=Pulsa [C] para volver al diagnóstico o [M] para el menú."
+set "T_DIAG_35=Unidades lógicas detectadas (letra, etiqueta, FS, total, libre):"
+set "T_DIAG_36=Nota: X: es la unidad RAM de WinPE; no ejecutes chkdsk sobre ella."
+set "T_DIAG_37=[!] No encuentro chkdsk.exe en esta imagen."
+set "T_DIAG_40=[3] SALUD SMART DE LOS DISCOS"
+set "T_DIAG_41=Consultando el estado SMART y la salud general de los discos..."
+set "T_DIAG_42=[OK] Todos los discos declaran un estado saludable."
+set "T_DIAG_43=[!] ALERTA: hay un disco con aviso SMART (Pre-fail/Warning). Copia los datos."
+set "T_DIAG_44=[i] El estado SMART no se puede leer en esta imagen."
+set "T_DIAG_45=Fin de la consulta SMART."
+set "T_DIAG_46=Formato: [índice] modelo (tipo) salud / estado tamaño"
 set "T_MED_01=TIPO DE DISCO NO DETECTADO"
 set "T_MED_02=No he podido saber si el Disco"
 set "T_MED_03=es un HDD (mecánico) o un SSD (sólido):"
@@ -3728,7 +4218,7 @@ set "T_D2_32=For the secure erase TWO written confirmations are required."
 set "T_D2_33=- Secure erase (option 2): Disk"
 set "T_D2_34=here. The boot protection blocks the system disk when it"
 set "T_D2_35=will appear RAW"
-set "T_NIV_01=Choose the erase level (or press [0] to return to the menu):"
+set "T_NIV_01=Choose the erase level ([0] or M to return to the menu):"
 set "T_NIV_02=  [1] Quick clean (Structure only)"
 set "T_NIV_03=      Deletes only the partition table (MBR/GPT) and the disk"
 set "T_NIV_04=      signature: instant, with zero wear on storage cells."
@@ -3738,7 +4228,7 @@ set "T_NIV_07=      the controller wipes the blocks (GC), fast and no zeros."
 set "T_NIV_08=  [3] Deep clean / Zero overwrite (HDDs only)"
 set "T_NIV_09=      'clean all': overwrites EVERY sector with zeros."
 set "T_NIV_10=      Slow. NOT recommended on SSD or NVMe (NAND wear)."
-set "T_NIV_11=  [0] Exit / Cancel (back to the main menu)"
+set "T_NIV_11=  [0] Exit / Cancel        [M] Main menu (M + ENTER)"
 set "T_NIV_12=   Your level [0-3]:  "
 set "T_NIV_13=Action:         clean     (structure only, no overwrite)"
 set "T_NIV_14=Action:         TRIM + clean  (SSD/NVMe reset, no zeros)"
@@ -3790,7 +4280,7 @@ set "T_INV_01=[3] DIAGNOSTICS / INVENTORY - READ ONLY"
 set "T_INV_02=This module does NOT modify disks or partitions: it only reports."
 set "T_INV_03=MACHINE AND SYSTEM"
 set "T_INV_04=PROCESSOR"
-set "T_INV_05=RAM MEMORY (total / available)"
+set "T_INV_05=RAM MEMORY (total / available / modules)"
 set "T_INV_06=MOTHERBOARD"
 set "T_INV_07=PHYSICAL DISKS (index, size and status)"
 set "T_INV_08=Disk models:"
@@ -3803,6 +4293,52 @@ set "T_INV_14=System (ver):"
 set "T_INV_15=MB"
 set "T_INV_16=GB"
 set "T_INV_17=Not readable here: try 'systeminfo' in the Console (option 4)."
+set "T_INV_18=Populated slots:"
+set "T_INV_19=Detail per module (slot / size / speed):"
+set "T_INV_20=MHz"
+set "T_DIAG_01=[3] HARDWARE DIAGNOSTICS AND HEALTH"
+set "T_DIAG_02=Inspects the machine and lets you check its drives (chkdsk, SMART)."
+set "T_DIAG_03=  [1] Full hardware           CPU, RAM, motherboard and disks"
+set "T_DIAG_04=  [2] Check a drive           chkdsk: /scan, /f or /f /r"
+set "T_DIAG_05=  [3] SMART health            OK / Pre-fail status of the disks"
+set "T_DIAG_06=  [0] Back to the main menu     [M] Main menu (M + ENTER)"
+set "T_DIAG_07=   Your option [0-3] (M = menu):  "
+set "T_DIAG_08=End of the hardware inventory."
+set "T_DIAG_10=[2] CHKDSK - CHECK A DRIVE"
+set "T_DIAG_11=Checks the drive you choose; it does not delete files."
+set "T_DIAG_12=Do not use X: (WinPE RAM drive)."
+set "T_DIAG_13=The letter must be a mounted drive (C:, D:, E:...)."
+set "T_DIAG_14=   Drive letter (e.g. C, 0 = back, M = menu):  "
+set "T_DIAG_15=Selected drive:"
+set "T_DIAG_16=  [1] Quick scan (/scan)          does not dismount the drive"
+set "T_DIAG_17=  [2] Repair errors (/f)          may ask for a restart"
+set "T_DIAG_18=  [3] Repair + sectors (/f /r)    very slow, for HDD"
+set "T_DIAG_19=  [0] Back to diagnostics       [M] Main menu"
+set "T_DIAG_20=   Mode [0-3] (M = menu):  "
+set "T_DIAG_21=   Run chkdsk with these options? [Y/N]:  "
+set "T_DIAG_22=Command:"
+set "T_DIAG_23=Running chkdsk. Do not close the window or power off the machine..."
+set "T_DIAG_24=[OK] chkdsk finished with no errors (code 0)."
+set "T_DIAG_25=[OK] chkdsk found and fixed errors (code 1)."
+set "T_DIAG_26=[!] chkdsk asks for extra cleanup (code 2)."
+set "T_DIAG_27=[!] chkdsk could not check the drive (code 3)."
+set "T_DIAG_28=[i] chkdsk exit code:"
+set "T_DIAG_29=Press [C] to return to diagnostics or [M] for the menu."
+set "T_DIAG_30=[!] Invalid letter: type ONE drive letter (A-Z)."
+set "T_DIAG_31=[!] X: is the WinPE RAM drive: chkdsk is not run on it."
+set "T_DIAG_32=[!] The drive does not exist or is not mounted:"
+set "T_DIAG_33=Check cancelled: chkdsk was not run."
+set "T_DIAG_34=Press [C] to return to diagnostics or [M] for the menu."
+set "T_DIAG_35=Logical drives found (letter, label, FS, total, free):"
+set "T_DIAG_36=Note: X: is the WinPE RAM drive; do not run chkdsk on it."
+set "T_DIAG_37=[!] I cannot find chkdsk.exe in this image."
+set "T_DIAG_40=[3] SMART HEALTH OF THE DISKS"
+set "T_DIAG_41=Checking SMART status and overall disk health..."
+set "T_DIAG_42=[OK] All disks report a healthy status."
+set "T_DIAG_43=[!] WARNING: a disk has a SMART alert (Pre-fail/Warning). Back up the data."
+set "T_DIAG_44=[i] SMART status cannot be read in this image."
+set "T_DIAG_45=End of the SMART check."
+set "T_DIAG_46=Format: [index] model (type) health / status size"
 set "T_MED_01=DISK TYPE NOT DETECTED"
 set "T_MED_02=I could not tell whether Disk"
 set "T_MED_03=is an HDD (mechanical) or an SSD (solid):"
