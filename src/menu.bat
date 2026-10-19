@@ -266,12 +266,12 @@ REM            Se silencia su salida porque 'mode' puede fallar si la
 REM            consola no permite redimensionar (ventanas embebidas en
 REM            otros programas) y ese fallo no debe tumbar el script.
 REM color  -^> DOS digitos hexadecimales: PRIMERO el fondo, SEGUNDO el
-REM            texto.  0 = fondo negro, A = texto verde claro.
-REM            Otros ejemplos: 07 gris, 0B cian, 0E amarillo,
-REM            0F blanco brillante. Solo hay que cambiar esta linea.
+REM            texto.  0 = fondo negro, F = texto blanco brillante.
+REM            Otros ejemplos: 0A verde, 0B cian, 0E amarillo (avisos),
+REM            0C rojo (bloqueos). Solo hay que cambiar esta linea.
 title %TOOL_NAME% v%TOOL_VER%
 mode con: cols=94 lines=44 >nul 2>&1
-color 0A
+color 0F
 
 REM --- Deteccion del metodo de lectura de teclado ----------------------
 REM Preferimos 'choice.exe' porque SOLO acepta las teclas que le
@@ -640,7 +640,8 @@ echo(
 echo     %T_AYU1_31%
 echo     %T_AYU1_32%
 echo(
-call :PULSA_TECLA "%T_AYU1_33%"
+call :PULSA_TECLA_MENU "%T_AYU1_33%"
+if "%VUELTA_MENU%"=="SI" goto MENU
 
 :OP_AYUDA_P2
 cls
@@ -838,6 +839,42 @@ REM comando y descarta la salida estandar (STDOUT).
 exit /b 0
 
 REM ---------------------------------------------------------------------
+REM  PULSA_TECLA_MENU - pausa de pantallas de SOLO LECTURA con salida
+REM  directa al menu principal.
+REM  -------------------------------------------------------------------
+REM  USO:      call :PULSA_TECLA_MENU "texto de la pantalla"
+REM  Devuelve: VUELTA_MENU = SI / NO.
+REM    - NO  -^> el tecnico decidio continuar: el llamante sigue su flujo.
+REM    - SI  -^> pulso la tecla directa de retroceso [0]: el llamante
+REM      debe volver al menu. Los modulos encadenados con 'call' hacen
+REM      'exit /b 0' (despues el bloque OP_x pinta el menu con
+REM      'goto MENU') y las pantallas encadenadas con 'goto' saltan
+REM      directamente a MENU, que repinta con 'cls'.
+REM
+REM  Por que la tecla [0] y no ESC? Porque en cmd puro ESC no se puede
+REM  leer: 'choice' rechaza ESC (solo admite a-z, A-Z, 0-9 y los codigos
+REM  128-254) y 'set /p' la absorbe sin devolver el turno (comprobado
+REM  con pruebas reales de inyeccion de teclas). Asi que usamos una
+REM  tecla DIRECTA de retroceso: una sola pulsacion, sin ENTER.
+REM    - Modo choice: teclas sueltas; [1] continua, [0] vuelve al menu.
+REM    - Modo set /p: [1] + ENTER continua, [0] + ENTER vuelve al menu
+REM      (en este modo no existe lectura de una sola tecla: limitacion
+REM      documentada del entorno, no del guion).
+REM ---------------------------------------------------------------------
+:PULSA_TECLA_MENU
+set "VUELTA_MENU=NO"
+echo(
+if "%MODO_ENTRADA%"=="CHOICE" echo   %~1
+if "%MODO_ENTRADA%"=="CHOICE" echo   %T_COM_54%
+if "%MODO_ENTRADA%"=="CHOICE" choice /c 10 /n
+if "%MODO_ENTRADA%"=="CHOICE" if errorlevel 2 set "VUELTA_MENU=SI"
+if "%MODO_ENTRADA%"=="CHOICE" exit /b 0
+REM Modo set /p: LEER_OPCION valida la entrada contra la lista blanca.
+call :LEER_OPCION "%~1 %T_COM_55%" "1 0"
+if "%OPCION%"=="0" set "VUELTA_MENU=SI"
+exit /b 0
+
+REM ---------------------------------------------------------------------
 REM  LEER_OPCION - captura SEGURA de una opcion numerica.
 REM  -------------------------------------------------------------------
 REM  USO:    call :LEER_OPCION "texto del prompt" "1 2 3 4 5"
@@ -947,14 +984,25 @@ REM              SI       -^> numero valido (0, 1, 2, 12...)
 REM              NO       -^> entrada invalida (ya se ha avisado)
 REM              CANCELAR -^> el tecnico tecleo la letra A
 REM
-REM  Por que no usar 'choice' aqui? Porque el numero de disco NO es una
-REM  lista cerrada: un equipo puede tener 1, 4 o 20 discos. El tecnico
-REM  escribe libremente y NOSOTROS comprobamos caracter a caracter.
+REM  DOS VIA segun lo que ofrezca la imagen (ver MODO_ENTRADA):
+REM    - Modo choice: cada digito se captura SOLO (sin ENTER) y se imprime
+REM      en pantalla EN EL INSTANTE en que se pulsa: entrada visible,
+REM      jamas a ciegas. La tecla A cancela de un solo toque. Si el numero
+REM      tecleado ya existe se confirma al momento; la tecla 'S' fuerza
+REM      la confirmacion cuando tambien podria ser prefijo (1 y 10).
+REM    - Modo set /p (WinPE sin choice.exe): el eco del propio tecleo lo
+REM      pinta la consola (tambien visible), se acepta con ENTER y se
+REM      cancela con A + ENTER. En cmd puro sin choice no hay forma de
+REM      leer una sola tecla: limitacion documentada del entorno.
 REM  Ninguna entrada se usa sin pasar por esta validacion.
 REM ---------------------------------------------------------------------
 :LEER_NUMERO
 set "NUM_OK=NO"
 set "NUM_TXT="
+set "NUM_LARGO=0"
+REM --- Ruta choice: digitos directos, visibles y sin ENTER --------------
+if "%MODO_ENTRADA%"=="CHOICE" goto LEER_NUMERO_CON_CHOICE
+REM --- Ruta set /p (clasica) --------------------------------------------
 REM 'set /p' deja la variable INTACTA si se pulsa ENTER sin escribir
 REM nada; por eso la limpiamos justo antes: asi ENTER significa
 REM "entrada vacia" y no un valor viejo de una vuelta anterior. En un
@@ -989,7 +1037,60 @@ REM existen equipos de taller con mas de 99 discos).
 set /a NUM_LARGO+=1
 if %NUM_LARGO% GTR 2 goto LEER_NUMERO_ERROR
 goto LEER_NUMERO_BUCLE
+
+REM --- Ruta choice: captura de UNA tecla por digito ----------------------
+:LEER_NUMERO_CON_CHOICE
+REM Imprimimos el prompt SIN salto de linea ('set /p' con la entrada en
+REM NUL escribe el texto y, al no tener entrada, se para al instante):
+REM los digitos que lleguen se pegaran justo detras, visibles tecleo a
+REM tecleo. Esta es la garantia de entrada VISIBLE en modo choice.
+set /p "NUM_ECO=%~1" <nul
+:LEER_NUMERO_CHOICE_BUCLE
+REM choice captura UNA sola tecla de la lista y devuelve su posicion:
+REM tecla 0 -^> 1, tecla 1 -^> 2, ..., tecla 9 -^> 10, A -^> 11, S -^> 12.
+REM Las demas teclas hacen 'beep' sin consumirse: jamas entra basura.
+REM (choice solo admite a-z, A-Z, 0-9 y ASCII 128-254: por eso la
+REM tecla de confirmacion es S y no un simbolo como '*').
+choice /c 0123456789AS /n
+if errorlevel 12 goto LEER_NUMERO_CHOICE_CONFIRMAR
+if errorlevel 11 goto LEER_NUMERO_CANCELAR
+REM La posicion N corresponde al digito N-1 (la tecla 0 esta en la 1).
+set /a NUM_VALOR=%errorlevel%-1
+set "CAR=%NUM_VALOR%"
+REM Un disco no lleva ceros a la izquierda: si ya hay un '0' y llega
+REM otro digito, es un error.
+if "%NUM_TXT%"=="0" goto LEER_NUMERO_ERROR
+set /a NUM_LARGO+=1
+if %NUM_LARGO% GTR 2 goto LEER_NUMERO_ERROR
+REM Eco inmediato: el digito se ve en pantalla ANTES de seguir.
+set "NUM_TXT=%NUM_TXT%%CAR%"
+set /p "NUM_ECO=%CAR%" <nul
+REM Sin lista parseada (formato de discopart no reconocido) no hay nada
+REM que comprobar: aceptamos el numero ya validado en formato y luego
+REM DISCO_EXISTE dudara y mandara el tecnico, como en el resto del guion.
+if not defined LISTA_DISCOS goto LEER_NUMERO_VALIDO
+REM Si el numero existe y no puede ser prefijo de otro, ya esta: se
+REM confirma SOLO, sin teclear ENTER.
+call :COMPROBAR_DISCO_LISTA "%NUM_TXT%"
+if "%HAY_EXACTO%"=="SI" if "%HAY_PREFIJO%"=="NO" goto LEER_NUMERO_VALIDO
+REM Si existe pero tambien es prefijo (disco 1 y disco 10): seguimos
+REM esperando otro digito o la tecla 'S' que fuerza la confirmacion.
+if "%HAY_EXACTO%"=="SI" goto LEER_NUMERO_CHOICE_BUCLE
+REM Si es el principio de un numero mayor, seguimos tecleando.
+if "%HAY_PREFIJO%"=="SI" goto LEER_NUMERO_CHOICE_BUCLE
+goto LEER_NUMERO_ERROR
+:LEER_NUMERO_CHOICE_CONFIRMAR
+REM La tecla 'S' solo confirma un numero que YA existe en el listado.
+if not defined NUM_TXT goto LEER_NUMERO_ERROR
+call :COMPROBAR_DISCO_LISTA "%NUM_TXT%"
+if "%HAY_EXACTO%"=="SI" goto LEER_NUMERO_VALIDO
+goto LEER_NUMERO_ERROR
+
 :LEER_NUMERO_VALIDO
+REM Confirmacion visible de lo recibido: prompt + digitos + esta linea.
+REM El tecnico VE que disco ha quedado registrado antes de continuar.
+echo(
+echo   %T_COM_52% %NUM_TXT%
 REM Asignacion indirecta: %2 es el NOMBRE de la variable destino. Con
 REM 'set "%~2=..."' escribimos en esa variable (aqui no hace falta
 REM expansion retrasada porque solo ESCRIBIMOS, no leemos).
@@ -997,6 +1098,7 @@ set "%~2=%NUM_TXT%"
 set "NUM_OK=SI"
 exit /b 0
 :LEER_NUMERO_CANCELAR
+echo(
 set "NUM_OK=CANCELAR"
 exit /b 0
 :LEER_NUMERO_ERROR
@@ -1147,32 +1249,147 @@ if exist "%F_INV%" del /f /q "%F_INV%" >nul 2>&1
 exit /b 0
 
 REM ---------------------------------------------------------------------
+REM  PARSER_DISCOS - extrae los identificadores de disco del listado.
+REM  -------------------------------------------------------------------
+REM  Entrada:  %F_SALIDA% (salida de 'list disk' + 'list volume')
+REM  Devuelve: LISTA_DISCOS = identificadores numericos de la PRIMERA
+REM            columna, separados por espacios y con espacios de
+REM            reserva en los extremos: " 0 1 10 ".
+REM
+REM  Por que un parser propio? Porque diskpart traduce sus mensajes:
+REM  "Disk 0", "Disco 0", "Datentrager 0"... La PALABRA cambia con el
+REM  idioma, pero el NUMERO siempre va en la primera columna. La maquina
+REM  de estados es agnostica al idioma:
+REM    - Estado 0: espera la linea de guiones que abre la tabla discos.
+REM    - Estado 1: lee las filas; el primer campo numerico (o el segundo,
+REM      tras la palabra Disk/Disco/...) es el identificador. El resto de
+REM      campos (tamano, estado) se ignoran.
+REM    - Estado 2: la SEGUNDA linea de guiones abre la tabla de
+REM      volumenes: a partir de ahi ya no se mira nada mas, asi que un
+REM      "Volumen 0" jamas puede colarse en la lista de discos.
+REM  Si el formato no encaja, la lista queda vacia y DISCO_EXISTE duda:
+REM  ante la duda manda el tecnico, nunca una suposicion.
+REM ---------------------------------------------------------------------
+:PARSER_DISCOS
+set "LISTA_DISCOS="
+set "PARSER_ESTADO=0"
+if not exist "%F_SALIDA%" exit /b 0
+for /f "usebackq tokens=1,2" %%A in ("%F_SALIDA%") do call :PARSER_DISCOS_LINEA "%%A" "%%B"
+exit /b 0
+
+:PARSER_DISCOS_LINEA
+REM %~1 y %~2 son los dos primeros campos de la linea. Los pasamos por
+REM variables para poder aplicarles la sustitucion %VAR:busqueda=% (los
+REM argumentos %~1 no admiten sustitucion de texto).
+set "P1=%~1"
+set "P2=%~2"
+if "%PARSER_ESTADO%"=="2" exit /b 0
+REM Un campo con '-' es la linea separadora de tablas de diskpart.
+if not "%P1:-=%"=="%P1%" goto PARSER_DISCOS_SEPARADOR
+if "%PARSER_ESTADO%"=="0" exit /b 0
+REM ¿El primer campo es un numero puro? Entonces ya es el identificador.
+call :ES_DIGITO_CADENA "%P1%"
+if "%CADENA_OK%"=="SI" goto PARSER_DISCOS_GUARDAR
+REM Formato 'Disk 0' / 'Disco 0': el identificador va en el SEGUNDO campo.
+call :ES_DIGITO_CADENA "%P2%"
+if "%CADENA_OK%"=="SI" goto PARSER_DISCOS_GUARDAR2
+exit /b 0
+:PARSER_DISCOS_SEPARADOR
+if "%PARSER_ESTADO%"=="0" set "PARSER_ESTADO=1"
+if "%PARSER_ESTADO%"=="1" set "PARSER_ESTADO=2"
+exit /b 0
+:PARSER_DISCOS_GUARDAR
+call :PARSER_SUMAR_DISCO "%P1%"
+exit /b 0
+:PARSER_DISCOS_GUARDAR2
+call :PARSER_SUMAR_DISCO "%P2%"
+exit /b 0
+:PARSER_SUMAR_DISCO
+REM Solo identificadores de 1 o 2 cifras (no hay equipos con 100+ discos);
+REM cualquier otro numero largo que pudiera aparecer no es un id y se
+REM ignora. El espacio final deja espacios de reserva: " 1 " solo puede
+REM coincidir con el disco entero 1, nunca con el 10.
+set "PID=%~1"
+if not "%PID:~2,1%"=="" exit /b 0
+set "LISTA_DISCOS=%LISTA_DISCOS% %PID% "
+exit /b 0
+
+REM ---------------------------------------------------------------------
+REM  ES_DIGITO_CADENA - comprueba que TODA una cadena son digitos.
+REM  -------------------------------------------------------------------
+REM  Uso:      call :ES_DIGITO_CADENA "texto"
+REM  Devuelve: CADENA_OK = SI (solo digitos) / NO (vacia o con mas cosas)
+REM ---------------------------------------------------------------------
+:ES_DIGITO_CADENA
+set "CADENA_OK=NO"
+set "CTXT=%~1"
+if not defined CTXT exit /b 0
+:ES_DIGITO_CADENA_BUCLE
+if not defined CTXT goto ES_DIGITO_CADENA_FIN
+set "CCAR=%CTXT:~0,1%"
+set "CTXT=%CTXT:~1%"
+call :ES_DIGITO "%CCAR%"
+if not "%DIGITO_OK%"=="SI" exit /b 0
+goto ES_DIGITO_CADENA_BUCLE
+:ES_DIGITO_CADENA_FIN
+set "CADENA_OK=SI"
+exit /b 0
+
+REM ---------------------------------------------------------------------
+REM  COMPROBAR_DISCO_LISTA - prueba de pertenencia contra LISTA_DISCOS.
+REM  -------------------------------------------------------------------
+REM  Uso:      call :COMPROBAR_DISCO_LISTA "1"
+REM  Devuelve: HAY_EXACTO  = SI si ese numero existe tal cual.
+REM            HAY_PREFIJO = SI si existen ids mas largos que empiezan
+REM            igual (p. ej. "1" cuando hay discos 1 y 10). Solo se
+REM            comprueba con UN digito tecleado: los ids tienen como
+REM            maximo 2 cifras, asi que con 2 digitos no puede haber
+REM            ningun id mas largo que los encabece.
+REM ---------------------------------------------------------------------
+:COMPROBAR_DISCO_LISTA
+set "HAY_EXACTO=NO"
+set "HAY_PREFIJO=NO"
+set "CAND=%~1"
+if not defined CAND exit /b 0
+if not defined LISTA_DISCOS exit /b 0
+REM --- Coincidencia exacta: recorremos la lista y comparamos igual a igual
+for %%I in (%LISTA_DISCOS%) do if "%%I"=="%CAND%" set "HAY_EXACTO=SI"
+if not "%CAND:~1%"=="" exit /b 0
+for %%I in (%LISTA_DISCOS%) do call :COMPROBAR_PREFIJO "%%I" "%CAND%"
+exit /b 0
+:COMPROBAR_PREFIJO
+REM %~1 = id de la lista; %~2 = digito tecleado. Si al quitarle el
+REM primer caracter al id queda algo, el id es mas largo: comparamos el
+REM id completo con 'digito + resto'. Asi "10" se detecta como prefijo
+REM de "1", pero "1" no es prefijo de si mismo.
+set "SEGUNDO=%~1"
+set "SEGUNDO=%SEGUNDO:~1%"
+if not defined SEGUNDO exit /b 0
+if "%~1"=="%~2%SEGUNDO%" set "HAY_PREFIJO=SI"
+exit /b 0
+
+REM ---------------------------------------------------------------------
 REM  DISCO_EXISTE - intenta comprobar que el disco elegido existe.
 REM  -------------------------------------------------------------------
-REM  Entrada:  %DISCO% (el numero validado) y %F_SALIDA% (listado previo)
+REM  Entrada:  %DISCO% (el numero validado) y LISTA_DISCOS (parser previo)
 REM  Devuelve: EXISTE = SI / NO / ?
 REM
-REM  COMO se comprueba: se busca en el listado ya capturado una linea que
-REM  empiece por "Disk N " o "Disco N " (diskpart traduce sus mensajes:
-REM  en un Windows en espanol los discos aparecen como "Disco 0"). Con
-REM  'findstr /c:' la busqueda es LITERAL, espacios incluidos, de modo
-REM  que "Disk 1 " nunca confunde al Disco 1 con el Disco 10.
+REM  COMO se comprueba: prueba de pertenencia EXACTA contra la lista de
+REM  identificadores que extrajo PARSER_DISCOS. Los ids estan rodeados de
+REM  espacios de reserva, de modo que el disco 1 nunca se confunde con el
+REM  10 ni con el 11, y no importa en que idioma hable el discopart.
 REM
-REM  LIMITACION HONESTA: si el idioma del sistema usa otras palabras, la
-REM  comprobacion no encuentra nada y devolvemos "?" para que PEDIR_DISCO
-REM  pregunte al tecnico en vez de decidir por el. Nunca inventamos un
-REM  "si" ni un "no": ante la duda, manda la persona.
+REM  LIMITACION HONESTA: si el parser no reconoce el formato del listado
+REM  (lista vacia), devolvemos "?" para que PEDIR_DISCO pregunte al
+REM  tecnico en vez de decidir por el. Nunca inventamos un "si" ni un
+REM  "no": ante la duda, manda la persona.
 REM ---------------------------------------------------------------------
 :DISCO_EXISTE
 set "EXISTE=NO"
 if not defined DISCO exit /b 0
-if not exist "%F_SALIDA%" goto DISCO_EXISTE_DUDA
-REM findstr puede faltar en WinPE muy recortados: si no esta, dudamos.
-if not exist "%SystemRoot%\System32\findstr.exe" goto DISCO_EXISTE_DUDA
-findstr /c:"Disk %DISCO% " "%F_SALIDA%" >nul 2>&1
-if not errorlevel 1 set "EXISTE=SI"
-findstr /c:"Disco %DISCO% " "%F_SALIDA%" >nul 2>&1
-if not errorlevel 1 set "EXISTE=SI"
+if not defined LISTA_DISCOS goto DISCO_EXISTE_DUDA
+call :COMPROBAR_DISCO_LISTA "%DISCO%"
+if "%HAY_EXACTO%"=="SI" set "EXISTE=SI"
 exit /b 0
 :DISCO_EXISTE_DUDA
 set "EXISTE=?"
@@ -1183,7 +1400,8 @@ REM  PEDIR_DISCO - pide, valida y confirma el numero de disco a usar.
 REM  -------------------------------------------------------------------
 REM  Devuelve DISCO (numero) y DISCO_OK = SI / NO.
 REM  Bucle de seguridad: no se sale de aqui hasta tener un numero valido
-REM  o hasta que el tecnico cancele con la letra A.
+REM  o hasta que el tecnico cancele con la letra A (tecla directa en modo
+REM  choice; A + ENTER en modo set /p).
 REM ---------------------------------------------------------------------
 :PEDIR_DISCO
 set "DISCO_OK=NO"
@@ -1195,7 +1413,11 @@ echo   ------------------------------------------------------------------
 echo   %T_COM_15%
 echo   %T_COM_16%
 echo   %T_COM_17%
-echo   %T_COM_18%
+REM El aviso de cancelacion cambia con el modo de entrada: en modo
+REM choice basta pulsar A (una tecla, sin ENTER); en modo set /p hace
+REM falta A + ENTER, porque ahi no existe lectura de una sola tecla.
+if "%MODO_ENTRADA%"=="CHOICE" echo   %T_COM_53%
+if not "%MODO_ENTRADA%"=="CHOICE" echo   %T_COM_18%
 echo   ------------------------------------------------------------------
 call :LEER_NUMERO "%T_COM_19%" DISCO
 if "%NUM_OK%"=="CANCELAR" exit /b 0
@@ -1412,6 +1634,9 @@ echo(
 diskpart /s "%F_SCRIPT%" > "%F_SALIDA%" 2>&1
 set "RESULTADO_LISTADO=%errorlevel%"
 if not "%RESULTADO_LISTADO%"=="0" goto LISTAR_DISCOS_FIN
+REM Construimos la lista de identificadores (agnostica al idioma) ANTES
+REM de pintar: luego DISCO_EXISTE solo tiene que comprobar pertenencia.
+call :PARSER_DISCOS
 type "%F_SALIDA%"
 echo(
 echo   %T_COM_32%
@@ -1456,13 +1681,17 @@ echo     %T_D1_07% %T_CFM_05% %T_D1_26%
 echo     %T_D1_08%
 echo(
 echo   %T_D1_09%
-echo   %T_D1_10%
-echo   %T_D1_11%
+echo     %T_D1_10%
+echo     %T_D1_11%
+echo     %T_D1_27%
+echo     %T_D1_28%
+echo     %T_D1_29%
 echo(
 echo   %T_D1_12%
 echo   %T_D1_13%
 echo(
-call :PULSA_TECLA "%T_D1_14%"
+call :PULSA_TECLA_MENU "%T_D1_14%"
+if "%VUELTA_MENU%"=="SI" exit /b 0
 call :PREPARAR_ENTORNO
 if not "%ENTORNO_OK%"=="SI" goto MODULO_PREPARAR_CANCELADO
 call :LISTAR_DISCOS
@@ -1501,7 +1730,7 @@ echo(
 call :EVALUAR_SEGURIDAD
 if not "%RIESGO_NECESARIO%"=="SI" goto MODULO_PREPARAR_CONFIRMAR
 call :MOSTRAR_AVISO_RIESGO
-color 0A
+color 0F
 call :CONFIRMAR_DESTRUCTIVO "%T_CFM_06%"
 if not "%CONFIRMADO%"=="SI" goto MODULO_PREPARAR_CANCELADO
 :MODULO_PREPARAR_CONFIRMAR
@@ -1550,7 +1779,8 @@ echo                  %T_D2_09%
 echo   %T_D2_10%
 echo   %T_D2_11%
 echo(
-call :PULSA_TECLA "%T_D1_14%"
+call :PULSA_TECLA_MENU "%T_D1_14%"
+if "%VUELTA_MENU%"=="SI" exit /b 0
 call :PREPARAR_ENTORNO
 if not "%ENTORNO_OK%"=="SI" goto MODULO_SANITIZAR_CANCELADO
 call :LISTAR_DISCOS
@@ -1605,7 +1835,7 @@ echo(
 call :EVALUAR_SEGURIDAD
 if not "%RIESGO_NECESARIO%"=="SI" goto MODULO_SANITIZAR_CONFIRMAR
 call :MOSTRAR_AVISO_RIESGO
-color 0A
+color 0F
 call :CONFIRMAR_DESTRUCTIVO "%T_CFM_06%"
 if not "%CONFIRMADO%"=="SI" goto MODULO_SANITIZAR_CANCELADO
 :MODULO_SANITIZAR_CONFIRMAR
@@ -1777,7 +2007,7 @@ echo(
 echo   %T_SEG_08%
 echo(
 call :PULSA_TECLA "%T_SEG_09%"
-color 0A
+color 0F
 exit /b 0
 
 REM ---------------------------------------------------------------------
@@ -2501,8 +2731,9 @@ REM ---------------------------------------------------------------------
 REM  MOSTRAR_AVISO_TIEMPO - aviso amarillo antes de la confirmacion
 REM ---------------------------------------------------------------------
 REM  Se pinta en amarillo (color 0E) para que destaque, igual que el aviso
-REM  de riesgo de la Fase 2.8, y se vuelve al verde normal al terminar. Se
-REM  muestra DESPUES del guion y ANTES de pedir la palabra de confirmacion.
+REM  de riesgo de la Fase 2.8, y se vuelve al blanco normal (0F) al
+REM  terminar. Se muestra DESPUES del guion y ANTES de pedir la palabra
+REM  de confirmacion.
 REM ---------------------------------------------------------------------
 :MOSTRAR_AVISO_TIEMPO
 color 0E
@@ -2521,7 +2752,7 @@ echo   %T_EST_14%
 echo   %T_EST_15%
 echo   %T_EST_16%
 echo(
-color 0A
+color 0F
 exit /b 0
 
 REM #####################################################################
@@ -2582,7 +2813,7 @@ set "T_AYU1_29=FORMAT X: /fs:ntfs /q ......... formateo rápido (sin usar diskpa
 set "T_AYU1_30=FORMAT X: /fs:ntfs /q /p:1 .... + un pase de ceros (Windows completo)"
 set "T_AYU1_31=Los guiones temporales de las opciones 1 y 2 se crean en la"
 set "T_AYU1_32=carpeta temporal del sistema y se borran al terminar."
-set "T_AYU1_33=Pulsa cualquier tecla para continuar con la página 2..."
+set "T_AYU1_33=Continúa a la página 2 de la ayuda..."
 set "T_AYU2_01=[5] AYUDA DEL SISTEMA - Página 2 de 2: sistema, red y utilidades"
 set "T_AYU2_02=SISTEMA E INVENTARIO"
 set "T_AYU2_03=systeminfo .................... ficha técnica completa del equipo"
@@ -2639,7 +2870,7 @@ set "T_CFM_04=Repite el NÚMERO del disco afectado"
 set "T_CFM_05=CONFIRMAR"
 set "T_CFM_06=RIESGO"
 set "T_COM_01=[!] Entrada no válida. Teclea solo uno de los digitos permitidos."
-set "T_COM_02=[!] Entrada no válida: escribe SOLO el número de disco (por"
+set "T_COM_02=[!] Entrada no válida: introduce SOLO el número de disco (por"
 set "T_COM_03=ejemplo: 0, 1, 2, 10), sin ceros a la izquierda, o la letra"
 set "T_COM_04=A para cancelar y volver al menú."
 set "T_COM_05=[!] Esta consola NO parece tener permisos de administrador."
@@ -2659,13 +2890,13 @@ set "T_COM_18=Para cancelar y volver al menu: teclea  A  y pulsa ENTER."
 set "T_COM_19=   Número de disco:  "
 set "T_COM_24=   ¿Qué hacemos? [1=Corregir / 2=Continuar / 3=Cancelar]:  "
 set "T_COM_25=VERIFICACIÓN FINAL: este es el estado ACTUAL del equipo."
-set "T_COM_26=Cómo comprobar el resultado:"
+set "T_COM_26=[Ayuda] Cómo comprobar el resultado:"
 set "T_COM_27=en 'list volume', un volumen SISTEMA en NTFS con su letra."
 set "T_COM_28=(sin particiones ni volúmenes). Eso es lo correcto."
 set "T_COM_29=- Si el disco no muestra el resultado esperado, revisa el aviso"
 set "T_COM_30=que dio diskpart antes de repetir cualquier operación."
 set "T_COM_31=Consultando los discos del equipo con diskpart (solo lectura)..."
-set "T_COM_32=Cómo leer este listado:"
+set "T_COM_32=[Ayuda] Cómo leer este listado:"
 set "T_COM_33=- 'list disk'    los discos físicos: mira la PRIMERA columna"
 set "T_COM_34=(Disk 0, Disk 1...) y compárala con el TAMAÑO."
 set "T_COM_35=- Estado 'Online' o 'En línea': el disco está operativo."
@@ -2684,6 +2915,10 @@ set "T_COM_48=[OK] diskpart terminó sin errores (código 0)."
 set "T_COM_49=[!] diskpart devolvió el código de error"
 set "T_COM_50=[!] diskpart no ha podido completar el listado. Código de error:"
 set "T_COM_51=Disco elegido:"
+set "T_COM_52=   Recibido: "
+set "T_COM_53=Teclas directas: A = cancelar, S = confirmar si el número ya es correcto (sin ENTER)."
+set "T_COM_54=      [1] Continuar      [0] Menú principal"
+set "T_COM_55=   [1] Continuar   [0] Menú principal:  "
 set "T_CONS_01=[4] CONSOLA AVANZADA"
 set "T_CONS_02=Abriendo una consola CMD interactiva en la MISMA ventana."
 set "T_CONS_03=- Escribe 'exit' para volver al menú principal."
@@ -2699,12 +2934,12 @@ set "T_D1_05=c) Genera el guion de diskpart con los comandos exactos y te lo"
 set "T_D1_06=muestra para que lo leas ANTES de ejecutar nada."
 set "T_D1_07=d) Exige que teclees la palabra"
 set "T_D1_08=e) Ejecuta y vuelve a listar el equipo para verificar."
-set "T_D1_09=Orden de comandos:  clean  -^>  convert (GPT o MBR)  -^>"
-set "T_D1_10=create partition primary  -^>  format fs=ntfs quick label=SISTEMA"
-set "T_D1_11=-^>  assign (letra libre que Windows elija)."
+set "T_D1_09=Orden de comandos:"
+set "T_D1_10=  1) clean"
+set "T_D1_11=  2) convert gpt / mbr (GPT en UEFI, MBR en Legacy)"
 set "T_D1_12=RECUERDA: 'clean' borra la tabla de particiones del disco elegido."
 set "T_D1_13=Todo lo que hubiera en él dejará de ser visible de inmediato."
-set "T_D1_14=Pulsa cualquier tecla para empezar por el listado..."
+set "T_D1_14=Siguiente: se carga el listado de discos con diskpart (solo lectura)..."
 set "T_D1_15=[1] PREPARACIÓN RÁPIDA DE DISCO - RESUMEN Y CONFIRMACIÓN"
 set "T_D1_16=Acción:         borrar la tabla de particiones y crear una única"
 set "T_D1_17=partición NTFS (GPT o MBR segun firmware) con la etiqueta SISTEMA."
@@ -2717,6 +2952,9 @@ set "T_D1_23=- Maquetación (opción 1): el Disco"
 set "T_D1_24=[!] Estás en Windows COMPLETO, no en WinPE: hay un sistema en"
 set "T_D1_25=debe mostrar Gpt y,"
 set "T_D1_26=y repites el número de disco para continuar."
+set "T_D1_27=  3) create partition primary"
+set "T_D1_28=  4) format fs=ntfs quick label=SISTEMA"
+set "T_D1_29=  5) assign (letra libre que Windows elija)"
 set "T_D2_01=[2] BORRADO SEGURO / SANITIZACIÓN"
 set "T_D2_02=Qué hace: escribe CEROS sobre todas las áreas direccionables del"
 set "T_D2_03=disco para que los datos anteriores no se puedan recuperar con"
@@ -2896,7 +3134,7 @@ set "T_AYU1_29=FORMAT X: /fs:ntfs /q ......... quick format (without diskpart)"
 set "T_AYU1_30=FORMAT X: /fs:ntfs /q /p:1 .... + one zero pass (full Windows)"
 set "T_AYU1_31=The temporary scripts of options 1 and 2 are created in the"
 set "T_AYU1_32=system temp folder and are deleted when finished."
-set "T_AYU1_33=Press any key to continue to page 2..."
+set "T_AYU1_33=Continues to page 2 of the help..."
 set "T_AYU2_01=[5] SYSTEM HELP - Page 2 of 2: system, network and tools"
 set "T_AYU2_02=SYSTEM AND INVENTORY"
 set "T_AYU2_03=systeminfo .................... full technical sheet of the machine"
@@ -2953,7 +3191,7 @@ set "T_CFM_04=Type the NUMBER of the affected disk again"
 set "T_CFM_05=CONFIRM"
 set "T_CFM_06=RISK"
 set "T_COM_01=[!] Invalid input. Type only one of the allowed digits."
-set "T_COM_02=[!] Invalid input: type ONLY the disk number (for"
+set "T_COM_02=[!] Invalid input: enter ONLY the disk number (for"
 set "T_COM_03=example: 0, 1, 2, 10), with no leading zeros, or the letter"
 set "T_COM_04=A to cancel and return to the menu."
 set "T_COM_05=[!] This console does NOT seem to have administrator rights."
@@ -2973,13 +3211,13 @@ set "T_COM_18=To cancel and return to the menu: type  A  and press ENTER."
 set "T_COM_19=   Disk number:  "
 set "T_COM_24=   What do we do? [1=Fix / 2=Continue / 3=Cancel]:  "
 set "T_COM_25=FINAL CHECK: this is the CURRENT state of the machine."
-set "T_COM_26=How to check the result:"
+set "T_COM_26=[Help] How to check the result:"
 set "T_COM_27=in 'list volume', a SISTEMA volume in NTFS with its letter."
 set "T_COM_28=(with no partitions or volumes). That is correct."
 set "T_COM_29=- If the disk does not show the expected result, check the"
 set "T_COM_30=warning diskpart gave before repeating any operation."
 set "T_COM_31=Reading the machine disks with diskpart (read only)..."
-set "T_COM_32=How to read this listing:"
+set "T_COM_32=[Help] How to read this listing:"
 set "T_COM_33=- 'list disk'    the physical disks: look at the FIRST column"
 set "T_COM_34=(Disk 0, Disk 1...) and compare it with the SIZE."
 set "T_COM_35=- Status 'Online': the disk is operational."
@@ -2998,6 +3236,10 @@ set "T_COM_48=[OK] diskpart finished with no errors (code 0)."
 set "T_COM_49=[!] diskpart returned the error code"
 set "T_COM_50=[!] diskpart could not complete the listing. Error code:"
 set "T_COM_51=Selected disk:"
+set "T_COM_52=   Received: "
+set "T_COM_53=Direct keys: A = cancel, S = confirm if the number is already correct (no ENTER)."
+set "T_COM_54=      [1] Continue       [0] Main menu"
+set "T_COM_55=   [1] Continue   [0] Main menu:  "
 set "T_CONS_01=[4] ADVANCED CONSOLE"
 set "T_CONS_02=Opening an interactive CMD console in the SAME window."
 set "T_CONS_03=- Type 'exit' to return to the main menu."
@@ -3013,12 +3255,12 @@ set "T_D1_05=c) Builds the diskpart script with the exact commands and"
 set "T_D1_06=shows it so that you read it BEFORE running anything."
 set "T_D1_07=d) Requires you to type the word"
 set "T_D1_08=e) Runs it and lists the machine again to verify."
-set "T_D1_09=Command order:  clean  -^>  convert (GPT or MBR)  -^>"
-set "T_D1_10=create partition primary  -^>  format fs=ntfs quick label=SISTEMA"
-set "T_D1_11=-^>  assign (free letter chosen by Windows)."
+set "T_D1_09=Command order:"
+set "T_D1_10=  1) clean"
+set "T_D1_11=  2) convert gpt / mbr (GPT on UEFI, MBR on Legacy)"
 set "T_D1_12=REMEMBER: 'clean' erases the partition table of the chosen disk."
 set "T_D1_13=Everything on it stops being visible immediately."
-set "T_D1_14=Press any key to start with the listing..."
+set "T_D1_14=Next: the disk listing is loaded with diskpart (read only)..."
 set "T_D1_15=[1] QUICK DISK PREPARATION - SUMMARY AND CONFIRMATION"
 set "T_D1_16=Action:         erase the partition table and create one single"
 set "T_D1_17=NTFS partition (GPT or MBR per firmware) with the SISTEMA label."
@@ -3031,6 +3273,9 @@ set "T_D1_23=- Layout (option 1): Disk"
 set "T_D1_24=[!] You are in FULL Windows, not in WinPE: a system is running"
 set "T_D1_25=must show Gpt and,"
 set "T_D1_26=and retype the disk NUMBER to continue."
+set "T_D1_27=  3) create partition primary"
+set "T_D1_28=  4) format fs=ntfs quick label=SISTEMA"
+set "T_D1_29=  5) assign (free letter chosen by Windows)"
 set "T_D2_01=[2] SECURE ERASE / SANITIZATION"
 set "T_D2_02=What it does: writes ZEROS over every addressable area of the"
 set "T_D2_03=disk so that the previous data cannot be recovered with"
