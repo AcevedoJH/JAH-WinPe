@@ -144,23 +144,23 @@ $RutaWim  = Join-Path $DirMedia 'sources\boot.wim'
 #  build_iso.ps1...) es intencionada y se mantiene en espanol.
 # ---------------------------------------------------------------------
 function Escribir-Paso {
-    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseApprovedVerbs', Justification = 'Verbo en espanol intencionado: convencion ES/EN del proyecto.')]
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseApprovedVerbs', '', Justification = 'Verbo en espanol intencionado: convencion ES/EN del proyecto.')]
     param([int]$Numero, [int]$Total, [string]$Texto)
     Write-Host ''
     Write-Host ('=== PASO {0}/{1} : {2} ===' -f $Numero, $Total, $Texto) -ForegroundColor Cyan
 }
 function Escribir-Ok {
-    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseApprovedVerbs', Justification = 'Verbo en espanol intencionado: convencion ES/EN del proyecto.')]
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseApprovedVerbs', '', Justification = 'Verbo en espanol intencionado: convencion ES/EN del proyecto.')]
     param([string]$T)
     Write-Host "  [OK] $T" -ForegroundColor Green
 }
 function Escribir-Info {
-    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseApprovedVerbs', Justification = 'Verbo en espanol intencionado: convencion ES/EN del proyecto.')]
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseApprovedVerbs', '', Justification = 'Verbo en espanol intencionado: convencion ES/EN del proyecto.')]
     param([string]$T)
     Write-Host "  [..] $T" -ForegroundColor Gray
 }
 function Escribir-Aviso {
-    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseApprovedVerbs', Justification = 'Verbo en espanol intencionado: convencion ES/EN del proyecto.')]
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseApprovedVerbs', '', Justification = 'Verbo en espanol intencionado: convencion ES/EN del proyecto.')]
     param([string]$T)
     Write-Host "  [!]  $T" -ForegroundColor Yellow
 }
