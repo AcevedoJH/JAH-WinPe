@@ -24,10 +24,10 @@ REM  --------------------------------------------------------------------
 REM    SELECCION_IDIOMA -^> elegir castellano/ingles -^> BIENVENIDA
 REM    BIENVENIDA  -^> bienvenida una sola vez -^> MENU
 REM    MENU        -^> [1] OP_DISCO ......... maquetacion guiada (diskpart)
-REM                -^> [2] OP_SANITIZAR ..... borrado seguro    (diskpart)
+REM                -^> [2] OP_SANITIZAR ..... borrado 3 NIVELES: clean/TRIM/clean all
 REM                -^> [3] OP_INVENTARIO ... diagnostico (SOLO LECTURA)
 REM                -^> [4] OP_CONSOLA ....... CMD interactivo
-REM                -^> [5] OP_AYUDA ......... 2 paginas + help nativo
+REM                -^> [5] OP_AYUDA ......... 2 paginas + comandos reales de WinPE
 REM                -^> [6] OP_SALIR ......... apagar / salir (con confirmacion)
 REM    FIN_SCRIPT  -^> salida limpia del script
 REM    FIN_APAGADO -^> salida tras solicitar el apagado
@@ -426,9 +426,13 @@ REM  Solo muestra datos neutros (marca y version): ni una palabra que
 REM  hubiera que traducir.
 REM ---------------------------------------------------------------------
 :MOSTRAR_CABECERA_BASE
+REM Cabecera en VERDE (0A) estilo consola PowerShell; se vuelve al blanco
+REM brillante base (0F) al terminar para que el cuerpo siga legible.
+color 0A
 echo   ==========================================================================
 echo     %TOOL_NAME%   -   v%TOOL_VER%
 echo   ==========================================================================
+color 0F
 exit /b 0
 
 REM =====================================================================
@@ -597,7 +601,9 @@ cmd
 goto MENU
 
 REM =====================================================================
-REM  PASO 9 - OPCION [5] AYUDA DEL SISTEMA (2 paginas + help nativo)
+REM  PASO 9 - OPCION [5] AYUDA DEL SISTEMA (2 paginas + comandos reales)
+REM  El 'help' nativo NO existe en WinPE: en su lugar se imprime con
+REM  'echo' una lista de comandos que SI estan en la imagen.
 REM =====================================================================
 :OP_AYUDA
 cls
@@ -685,12 +691,27 @@ echo    %T_AYU2_29%
 echo      %T_AYU2_30%
 echo      %T_AYU2_31%
 echo(
-call :LEER_OPCION "%T_AYU2_32%" "1 2"
-if not "%OPCION%"=="1" goto OP_AYUDA_FIN
+call :LEER_SN "%T_AYU2_32%"
+if not "%SN%"=="SI" goto OP_AYUDA_FIN
 echo(
 echo   %T_AYU2_33%
 echo(
-help
+echo   %T_AYU3_02%
+echo   %T_AYU3_03%
+echo   %T_AYU3_04%
+echo   %T_AYU3_05%
+echo   %T_AYU3_06%
+echo   %T_AYU3_07%
+echo   %T_AYU3_08%
+echo(
+echo   %T_AYU3_09%
+echo   %T_AYU3_10%
+echo   %T_AYU3_11%
+echo   %T_AYU3_12%
+echo(
+echo   %T_AYU3_13%
+echo   %T_AYU3_14%
+echo(
 :OP_AYUDA_FIN
 call :PULSA_TECLA "%T_AYU3_01%"
 goto MENU
@@ -735,8 +756,8 @@ echo   %T_SAL_08%
 echo   %T_SAL_09%
 echo   %T_SAL_10%
 echo(
-call :LEER_OPCION "%T_SAL_11%" "1 2"
-if "%OPCION%"=="1" goto DETECTAR_ENTORNO_APAGADO
+call :LEER_SN "%T_SAL_11%"
+if "%SN%"=="SI" goto DETECTAR_ENTORNO_APAGADO
 REM "No" o cualquier respuesta no valida -^> no apagamos y volvemos.
 goto MENU
 
@@ -814,10 +835,15 @@ REM  (Si cambias TOOL_NAME o TOOL_VER, solo se actualizan aqui: nada de
 REM  texto duplicado por el archivo, que es donde nacen los errores.)
 REM ---------------------------------------------------------------------
 :MOSTRAR_CABECERA
+REM Cabecera en VERDE (0A): marca, version y fase destacan como en una
+REM consola PowerShell. Al terminar se vuelve al blanco brillante base
+REM (0F) para que el resto de la pantalla siga siendo legible.
+color 0A
 echo   ==========================================================================
 echo     %TOOL_NAME%   -   %T_COM_42%
 echo     %T_COM_43% %TOOL_VER%   -   %T_COM_44% %TOOL_FASE%   -   %T_COM_45% Windows / WinPE
 echo   ==========================================================================
+color 0F
 exit /b 0
 
 REM ---------------------------------------------------------------------
@@ -955,6 +981,50 @@ REM avisamos y VOLVEMOS A PEDIR sin repintar el menu entero.
 echo(
 echo   %T_COM_01%
 goto LEER_CON_SETP
+
+REM ---------------------------------------------------------------------
+REM  LEER_SN - pregunta de SI/NO con lista blanca (teclas S y N).
+REM  -------------------------------------------------------------------
+REM  USO:       call :LEER_SN "texto del prompt"
+REM  Devuelve:  SN = SI / NO   (vacio solo si algo raro paso en choice)
+REM
+REM  Sustituye a las viejas preguntas '1 = Si / 2 = No': la consola
+REM  estandar espera S/N y con letras no hay que memorizar numeros.
+REM    - Modo choice: 'choice /c SN' lee UNA tecla (S o N), sin ENTER.
+REM    - Modo set /p: lee la linea completa y acepta S, N, SI o NO en
+REM      mayusculas o minusculas; cualquier otra cosa se vuelve a pedir.
+REM  Igual que LEER_OPCION: una tecla rara nunca cancela nada por
+REM  accidente, como mucho repite la pregunta.
+REM ---------------------------------------------------------------------
+:LEER_SN
+set "SN="
+if "%MODO_ENTRADA%"=="CHOICE" goto LEER_SN_CHOICE
+goto LEER_SN_SETP
+:LEER_SN_CHOICE
+choice /c SN /n /m "%~1"
+if errorlevel 2 goto LEER_SN_CHOICE_NO
+if errorlevel 1 goto LEER_SN_CHOICE_SI
+REM errorlevel 0 (fallo de choice o Ctrl+C neutro): repetimos la tecla.
+goto LEER_SN_CHOICE
+:LEER_SN_CHOICE_SI
+set "SN=SI"
+exit /b 0
+:LEER_SN_CHOICE_NO
+set "SN=NO"
+exit /b 0
+:LEER_SN_SETP
+set "SN_TXT="
+set /p "SN_TXT=%~1"
+set "SN_TXT=%SN_TXT:"=%"
+set "SN_TXT=%SN_TXT: =%"
+if /i "%SN_TXT%"=="S" set "SN=SI"
+if /i "%SN_TXT%"=="SI" set "SN=SI"
+if /i "%SN_TXT%"=="N" set "SN=NO"
+if /i "%SN_TXT%"=="NO" set "SN=NO"
+if defined SN exit /b 0
+echo(
+echo   %T_COM_01%
+goto LEER_SN_SETP
 
 REM =====================================================================
 REM  PASO 13 - SUBRUTINAS DE LOS MODULOS DE DISCO (Fase 2)
@@ -1629,8 +1699,13 @@ if "%RESULTADO%"=="0" call :REGISTRAR DISKPART "codigo=0" "OK"
 if not "%RESULTADO%"=="0" call :REGISTRAR DISKPART "codigo=%RESULTADO%" "ERROR"
 echo(
 echo   ------------------------------------------------------------------
+REM Resultado en color: VERDE (0A) si diskpart acabo sin errores, ROJO
+REM (0C) si devolvio un codigo de error. Se vuelve a blanco (0F) siempre.
+if "%RESULTADO%"=="0" color 0A
 if "%RESULTADO%"=="0" echo   %T_COM_48%
+if not "%RESULTADO%"=="0" color 0C
 if not "%RESULTADO%"=="0" echo   %T_COM_49% %RESULTADO%
+color 0F
 echo   ------------------------------------------------------------------
 echo(
 echo   %T_DP_03%
@@ -1675,7 +1750,10 @@ findstr /c:"SIN_VOLUMENES" "%F_SEG_SAL%" >nul 2>&1
 if not errorlevel 1 goto EJECUTAR_TRIM_VACIO
 goto EJECUTAR_TRIM_ERROR
 :EJECUTAR_TRIM_OK
+REM Buenas noticias: el TRIM se aplico. Mensaje en VERDE (0A).
+color 0A
 echo   %T_NIV_31%
+color 0F
 call :REGISTRAR TRIM "disco=%DISCO% codigo=%TRIM_RC%" "OK"
 exit /b 0
 :EJECUTAR_TRIM_VACIO
@@ -1683,13 +1761,19 @@ echo   %T_NIV_32%
 call :REGISTRAR TRIM "disco=%DISCO% codigo=%TRIM_RC%" "SIN_VOLUMENES"
 exit /b 0
 :EJECUTAR_TRIM_ERROR
+REM Error grave del paso TRIM: ROJO (0C) y se muestra la salida cruda.
+color 0C
 echo   %T_NIV_33% %TRIM_RC%
 echo   %T_NIV_35%
 if exist "%F_SEG_SAL%" type "%F_SEG_SAL%"
+color 0F
 call :REGISTRAR TRIM "disco=%DISCO% codigo=%TRIM_RC%" "ERROR"
 exit /b 0
 :EJECUTAR_TRIM_SIN_PS
+REM Precaucion (no hay PowerShell): AMARILLO (0E) y volvemos a blanco.
+color 0E
 echo   %T_NIV_34%
+color 0F
 call :REGISTRAR TRIM "disco=%DISCO%" "SIN_POWERSHELL"
 exit /b 0
 
@@ -1703,6 +1787,8 @@ REM ---------------------------------------------------------------------
 :MOSTRAR_RESULTADO
 echo   %T_COM_25%
 call :LISTAR_DISCOS
+REM Mensaje de exito/verificacion en VERDE (0A); luego se vuelve a 0F.
+color 0A
 echo   %T_COM_26%
 echo     %T_D1_23% %DISCO% %T_D1_25%
 echo       %T_COM_27%
@@ -1710,6 +1796,7 @@ echo     %T_D2_33% %DISCO% %T_D2_35%
 echo       %T_COM_28%
 echo     %T_COM_29%
 echo       %T_COM_30%
+color 0F
 echo(
 exit /b 0
 
@@ -1807,7 +1894,8 @@ if "%BLOQUEADO%"=="SI" goto MODULO_PREPARAR_BLOQUEO
 call :ELEGIR_FORMATO_DUDA
 if not "%FORMATO_OK%"=="SI" goto MODULO_PREPARAR_CANCELADO
 call :GENERAR_SCRIPT_MAQUETAR
-cls
+REM Sin 'cls': durante la ejecucion del modulo el historial se queda
+REM hacia arriba para que el tecnico pueda hacer scroll y revisarlo.
 call :MOSTRAR_CABECERA
 echo(
 echo   %T_D1_15%
@@ -1860,7 +1948,8 @@ REM  MODULO_SANITIZAR - opcion [2]: borrado en 3 NIVELES.
 REM  -------------------------------------------------------------------
 REM  El tecnico elige el nivel ANTES de tocar nada (pantalla con 'cls'):
 REM    [1] clean      -^> solo la tabla de particiones (segundos)
-REM    [2] TRIM       -^> desasignacion SSD/NVMe sin ceros (PowerShell)
+REM    [2] TRIM       -^> libera bloques en SSD/NVMe; el controlador los
+REM                       limpia (Garbage Collection): bloques irrecuperables
 REM    [3] clean all  -^> sobrescritura con ceros (horas, solo HDD)
 REM  Despues, los mismos pasos seguros de siempre: entorno, listar,
 REM  elegir disco, escudo de arranque, resumen + guion a la vista y
@@ -1888,7 +1977,8 @@ REM  preguntar) para avisar si el disco es HDD y el TRIM no aporta.
 if "%NIVEL_BORRADO%"=="3" call :CALCULAR_ESTIMACION_BORRADO
 if "%NIVEL_BORRADO%"=="2" call :DETECTAR_MEDIA
 call :GENERAR_SCRIPT_BORRAR
-cls
+REM Sin 'cls': el resumen y las fases se imprimen hacia abajo para poder
+REM revisar todo el historial con la rueda del raton.
 call :MOSTRAR_CABECERA
 echo(
 echo   %T_D2_12%
@@ -1922,6 +2012,8 @@ echo     %T_D2_27%
 echo       %T_D2_28%
 if "%NIVEL_BORRADO%"=="2" echo     %T_NIV_20%
 if "%NIVEL_BORRADO%"=="2" echo       %T_NIV_21%
+if "%NIVEL_BORRADO%"=="2" echo       %T_NIV_40%
+if "%NIVEL_BORRADO%"=="2" echo       %T_NIV_41%
 if "%NIVEL_BORRADO%"=="2" if "%MEDIA_TIPO%"=="HDD" echo     %T_NIV_24%
 if "%NIVEL_BORRADO%"=="2" if "%MEDIA_TIPO%"=="HDD" echo       %T_NIV_25%
 if "%NIVEL_BORRADO%"=="2" if "%PS_OK%"=="NO" echo   %T_NIV_22%
@@ -2053,6 +2145,8 @@ echo     %T_D2_06%
 echo       %T_D2_07%
 echo     %T_D2_08%
 echo       %T_D2_09%
+echo     %T_D2_36%
+echo       %T_D2_37%
 echo(
 call :LEER_OPCION "%T_NIV_12%" "1 2 3 0"
 if "%OPCION%"=="4" set "OPCION=0"
@@ -2389,7 +2483,8 @@ REM ---------------------------------------------------------------------
 :ELEGIR_FORMATO_DUDA
 set "FORMATO_OK=SI"
 if not "%FIRMWARE_DUDA%"=="SI" exit /b 0
-cls
+REM Sin 'cls': la eleccion GPT/MBR es parte del flujo y el listado previo
+REM sigue visible arriba para consultarlo.
 call :MOSTRAR_CABECERA
 echo(
 echo   %T_FW_01%
@@ -2862,7 +2957,7 @@ REM  en vez de suponer. Por defecto (o si la entrada no es valida) tomamos
 REM  HDD, que es la suposicion CONSERVADORA (la estimacion mas larga).
 REM ---------------------------------------------------------------------
 :ELEGIR_MEDIA_DUDA
-cls
+REM Sin 'cls': la identificacion del disco elegido queda arriba.
 call :MOSTRAR_CABECERA
 echo(
 echo   %T_MED_01%
@@ -3073,9 +3168,22 @@ set "T_AYU2_28=Si un comando no aparece, no está: pruébalo en la opción 4."
 set "T_AYU2_29=- Antes de formatear un disco, mira su estado SMART con la orden"
 set "T_AYU2_30=de arriba: un disco con 'Pred Fail' no merece una instalación"
 set "T_AYU2_31=nueva (el trabajo se perdería en semanas, no en años)."
-set "T_AYU2_32=   Ejecutar también el 'help' nativo de CMD? [1=Sí / 2=No]:  "
-set "T_AYU2_33=--- AYUDA NATIVA DE CMD (rueda del ratón para hacer scroll) ---"
+set "T_AYU2_32=   Mostrar la lista de comandos de esta imagen? [S/N]:  "
+set "T_AYU2_33=--- COMANDOS NATIVOS DE CMD Y DE WINPE (usa la rueda para scroll) ---"
 set "T_AYU3_01=Pulsa cualquier tecla para volver al menú principal..."
+set "T_AYU3_02=DISCO Y ARRANQUE"
+set "T_AYU3_03=diskpart                  list / select / clean / convert"
+set "T_AYU3_04=wmic diskdrive get status . Estado SMART (OK o Pred Fail)"
+set "T_AYU3_05=chkdsk X: /f /r           repara y busca sectores dañados"
+set "T_AYU3_06=bootrec /fixmbr /fixboot  repara el arranque"
+set "T_AYU3_07=bcdboot C:\\Windows /s S: escribe el gestor de arranque"
+set "T_AYU3_08=dism /image:C:\\ /add-driver  inyecta controladores"
+set "T_AYU3_09=SISTEMA Y RED"
+set "T_AYU3_10=systeminfo / ipconfig /all   ficha técnica y de red"
+set "T_AYU3_11=ping / nslookup / netstat -an  conectividad y puertos"
+set "T_AYU3_12=reg load-add-unload           edita el registro fuera de línea"
+set "T_AYU3_13=COMANDOS NATIVOS DE CMD (incorporados)"
+set "T_AYU3_14=dir copy move del type ren md rd ver set exit cls"
 set "T_BIEN_01=Bienvenido, técnico."
 set "T_BIEN_02=Esta herramienta centraliza las operaciones más usadas del taller"
 set "T_BIEN_03=para dar soporte a equipos Windows y preparar discos de forma"
@@ -3104,7 +3212,7 @@ set "T_COM_04=A para cancelar y volver al menú."
 set "T_COM_05=[!] Esta consola NO parece tener permisos de administrador."
 set "T_COM_06=diskpart podrá listar los discos, pero NO podrá modificarlos"
 set "T_COM_07=(devolverá acceso denegado en 'clean')."
-set "T_COM_08=   Continuar de todos modos? [1=Sí / 2=No]:  "
+set "T_COM_08=   Continuar de todos modos? [S/N]:  "
 set "T_COM_09=[!] No he podido crear ficheros de trabajo en:"
 set "T_COM_10=Sin una carpeta escribible no puedo generar el guion de"
 set "T_COM_11=diskpart, y sin guion no se ejecuta nada. ABORTAMOS sin"
@@ -3184,11 +3292,13 @@ set "T_D1_27=  3) create partition primary"
 set "T_D1_28=  4) format fs=ntfs quick label=SISTEMA"
 set "T_D1_29=  5) assign (letra libre que Windows elija)"
 set "T_D2_01=[2] BORRADO SEGURO / SANITIZACIÓN"
-set "T_D2_05=Marco de referencia (NIST SP 800-88, nivel PURGE):"
-set "T_D2_06='clean'      destruye solo la tabla de particiones (segundos),"
-set "T_D2_07=pero los datos siguen en el disco: se recuperan."
-set "T_D2_08='clean all'  sobrescribe el contenido (horas) y la recuperación"
-set "T_D2_09=práctica deja de ser viable."
+set "T_D2_05=Marco de referencia (NIST SP 800-88: Clear y Purge):"
+set "T_D2_06=[1] 'clean'      CLEAR : borra la tabla de particiones; los"
+set "T_D2_07=      datos siguen en el disco y son recuperables."
+set "T_D2_08=[2] 'TRIM'       PURGE : libera bloques en SSD/NVMe y el"
+set "T_D2_09=      controlador los limpia (GC): datos irrecuperables."
+set "T_D2_36=[3] 'clean all'  PURGE : sobrescribe TODO con ceros (horas);"
+set "T_D2_37=      en HDD la recuperación práctica es imposible."
 set "T_D2_12=[2] BORRADO SEGURO - RESUMEN Y CONFIRMACIÓN"
 set "T_D2_13=Acción:         clean all  (sobrescritura completa con ceros)"
 set "T_D2_14=TIEMPO ESTIMADO (orientativo; depende del disco y de su conexión):"
@@ -3218,12 +3328,12 @@ set "T_NIV_02=  [1] Limpieza rápida (Solo Estructura)"
 set "T_NIV_03=      Borra solo la tabla de particiones (MBR/GPT) y la firma del"
 set "T_NIV_04=      disco: al instante y sin desgaste en las celdas de almacenamiento."
 set "T_NIV_05=  [2] Reset SSD / NVMe (Optimización TRIM / Deallocate)"
-set "T_NIV_06=      Desasigna bloques libres a nivel de controlador y libera"
-set "T_NIV_07=      espacio sin escribir ceros: evita el desgaste prematuro (TBW)."
+set "T_NIV_06=      Formatea un volumen temporal y fuerza TRIM masivo: el"
+set "T_NIV_07=      controlador limpia los bloques (GC), rápido y sin ceros."
 set "T_NIV_08=  [3] Limpieza profunda / Sobrescritura de ceros (Solo HDDs)"
 set "T_NIV_09=      'clean all': sobrescribe TODOS los sectores con ceros."
 set "T_NIV_10=      Lento. NO recomendado en SSD o NVMe (desgaste NAND)."
-set "T_NIV_11=  [0] Volver al menú principal"
+set "T_NIV_11=  [0] Salir / Cancelar (volver al menú principal)"
 set "T_NIV_12=   Su nivel [0-3]:  "
 set "T_NIV_13=Acción:         clean     (solo estructura, sin sobrescritura)"
 set "T_NIV_14=Acción:         TRIM + clean  (reset SSD/NVMe, sin ceros)"
@@ -3232,8 +3342,10 @@ set "T_NIV_16=Duración:       segundos (TRIM + limpieza de estructura)"
 set "T_NIV_17=- NO se sobrescribe ningún sector con ceros en este nivel."
 set "T_NIV_18=- Los datos anteriores dejan de ser visibles para el sistema,"
 set "T_NIV_19=  pero esto no recupera discos con fallos físicos."
-set "T_NIV_20=- El TRIM solo desasigna bloques LIBRES: no es un borrado de"
-set "T_NIV_21=  contenido; para destruir datos usa el nivel [3] (solo HDD)."
+set "T_NIV_20=- El TRIM a nivel de controlador SÍ destruye la recuperación"
+set "T_NIV_21=  de datos a nivel de bloques: el controlador recicla las"
+set "T_NIV_40=  celdas liberadas (Garbage Collection) y no escribe ceros,"
+set "T_NIV_41=  así que es rápido, seguro y sin desgaste de celdas (TBW)."
 set "T_NIV_22=[!] PowerShell no disponible: el paso TRIM se omitirá y solo"
 set "T_NIV_23=se aplicará la limpieza de estructura (como el nivel [1])."
 set "T_NIV_24=- Este disco es HDD: el TRIM no aplicará; solo limpieza de"
@@ -3328,7 +3440,7 @@ set "T_SAL_07=Vas a apagar el equipo. Se interrumpirá cualquier trabajo en"
 set "T_SAL_08=curso y, si arrancaste desde WinPE, terminará la sesión de"
 set "T_SAL_09=recuperación actual (los cambios ya guardados en el arranque RAM"
 set "T_SAL_10=no se conservan)."
-set "T_SAL_11=   Confirmar apagado? [1=Sí / 2=No]:  "
+set "T_SAL_11=   Confirmar apagado? [S/N]:  "
 set "T_SAL_12=Enviando señal de apagado con wpeutil (entorno WinPE detectado)..."
 set "T_SAL_13=Apagado programado en 5 segundos."
 set "T_SAL_14=Si te arrepientes desde OTRA consola escribe:  shutdown /a"
@@ -3428,9 +3540,22 @@ set "T_AYU2_28=If a command is missing, it is not there: try it in option 4."
 set "T_AYU2_29=- Before formatting a disk, check its SMART status with the"
 set "T_AYU2_30=command above: a disk with 'Pred Fail' does not deserve a new"
 set "T_AYU2_31=install (the work would be lost in weeks, not in years)."
-set "T_AYU2_32=   Also run the native CMD 'help'? [1=Yes / 2=No]:  "
-set "T_AYU2_33=--- NATIVE CMD HELP (use the mouse wheel to scroll) ---"
+set "T_AYU2_32=   Show the list of commands available in this image? [S/N]:  "
+set "T_AYU2_33=--- NATIVE CMD AND WINPE COMMANDS (use the mouse wheel to scroll) ---"
 set "T_AYU3_01=Press any key to return to the main menu..."
+set "T_AYU3_02=DISK AND BOOT"
+set "T_AYU3_03=diskpart                  list / select / clean / convert"
+set "T_AYU3_04=wmic diskdrive get status . SMART status (OK or Pred Fail)"
+set "T_AYU3_05=chkdsk X: /f /r           repairs and scans bad sectors"
+set "T_AYU3_06=bootrec /fixmbr /fixboot  repair bootloader (MBR/Boot)"
+set "T_AYU3_07=bcdboot C:\\Windows /s S: writes the boot manager"
+set "T_AYU3_08=dism /image:C:\\ /add-driver  injects drivers into Windows"
+set "T_AYU3_09=SYSTEM AND NETWORK"
+set "T_AYU3_10=systeminfo / ipconfig /all   system and network info"
+set "T_AYU3_11=ping / nslookup / netstat -an  connectivity and ports"
+set "T_AYU3_12=reg load-add-unload           edit the offline registry"
+set "T_AYU3_13=NATIVE CMD COMMANDS (built-in)"
+set "T_AYU3_14=dir copy move del type ren md rd ver set exit cls"
 set "T_BIEN_01=Welcome, technician."
 set "T_BIEN_02=This tool brings together the workshop's most common"
 set "T_BIEN_03=operations to service Windows machines and prepare disks"
@@ -3459,7 +3584,7 @@ set "T_COM_04=A to cancel and return to the menu."
 set "T_COM_05=[!] This console does NOT seem to have administrator rights."
 set "T_COM_06=diskpart will be able to list the disks, but NOT to modify them"
 set "T_COM_07=(it will return access denied on 'clean')."
-set "T_COM_08=   Continue anyway? [1=Yes / 2=No]:  "
+set "T_COM_08=   Continue anyway? [S/N]:  "
 set "T_COM_09=[!] I could not create working files in:"
 set "T_COM_10=Without a writable folder I cannot build the diskpart"
 set "T_COM_11=script, and without a script nothing runs. WE ABORT without"
@@ -3539,11 +3664,13 @@ set "T_D1_27=  3) create partition primary"
 set "T_D1_28=  4) format fs=ntfs quick label=SISTEMA"
 set "T_D1_29=  5) assign (free letter chosen by Windows)"
 set "T_D2_01=[2] SECURE ERASE / SANITIZATION"
-set "T_D2_05=Reference framework (NIST SP 800-88, PURGE level):"
-set "T_D2_06='clean'      destroys only the partition table (seconds),"
-set "T_D2_07=but the data stays on the disk: it can be recovered."
-set "T_D2_08='clean all'  overwrites the content (hours) and practical"
-set "T_D2_09=recovery is no longer viable."
+set "T_D2_05=Reference framework (NIST SP 800-88: Clear and Purge):"
+set "T_D2_06=[1] 'clean'      CLEAR : wipes the partition table; the"
+set "T_D2_07=      data stays on the disk and can be recovered."
+set "T_D2_08=[2] 'TRIM'       PURGE : frees blocks on SSD/NVMe and the"
+set "T_D2_09=      controller wipes them (GC): unrecoverable."
+set "T_D2_36=[3] 'clean all'  PURGE : overwrites EVERYTHING with zeros"
+set "T_D2_37=      (hours); on an HDD practical recovery is impossible."
 set "T_D2_12=[2] SECURE ERASE - SUMMARY AND CONFIRMATION"
 set "T_D2_13=Action:         clean all  (full overwrite with zeros)"
 set "T_D2_14=ESTIMATED TIME (rough; depends on the disk and its connection):"
@@ -3573,12 +3700,12 @@ set "T_NIV_02=  [1] Quick clean (Structure only)"
 set "T_NIV_03=      Deletes only the partition table (MBR/GPT) and the disk"
 set "T_NIV_04=      signature: instant, with zero wear on storage cells."
 set "T_NIV_05=  [2] SSD / NVMe reset (TRIM / Deallocate optimization)"
-set "T_NIV_06=      Deallocates free blocks at controller level and frees"
-set "T_NIV_07=      space without writing zeros: avoids premature wear (TBW)."
+set "T_NIV_06=      Formats a temporary volume and forces massive TRIM:"
+set "T_NIV_07=      the controller wipes the blocks (GC), fast and no zeros."
 set "T_NIV_08=  [3] Deep clean / Zero overwrite (HDDs only)"
 set "T_NIV_09=      'clean all': overwrites EVERY sector with zeros."
 set "T_NIV_10=      Slow. NOT recommended on SSD or NVMe (NAND wear)."
-set "T_NIV_11=  [0] Back to main menu"
+set "T_NIV_11=  [0] Exit / Cancel (back to the main menu)"
 set "T_NIV_12=   Your level [0-3]:  "
 set "T_NIV_13=Action:         clean     (structure only, no overwrite)"
 set "T_NIV_14=Action:         TRIM + clean  (SSD/NVMe reset, no zeros)"
@@ -3587,8 +3714,10 @@ set "T_NIV_16=Duration:       seconds (TRIM + structure clean)"
 set "T_NIV_17=- NO sector is overwritten with zeros at this level."
 set "T_NIV_18=- Previous data becomes invisible to the system, but this"
 set "T_NIV_19=  does not repair disks with physical faults."
-set "T_NIV_20=- TRIM only deallocates FREE blocks: it is not a data"
-set "T_NIV_21=  wipe; to destroy data use level [3] (HDDs only)."
+set "T_NIV_20=- Controller-level TRIM DOES destroy block-level data"
+set "T_NIV_21=  recovery: the controller recycles the freed cells"
+set "T_NIV_40=  (Garbage Collection) without writing zeros, so it is"
+set "T_NIV_41=  fast, safe and causes no cell wear (TBW)."
 set "T_NIV_22=[!] PowerShell not available: the TRIM step will be skipped"
 set "T_NIV_23=and only the structure clean will run (like level [1])."
 set "T_NIV_24=- This disk is an HDD: TRIM will not apply; structure clean"
@@ -3683,7 +3812,7 @@ set "T_SAL_07=You are about to shut down the computer. Any work in progress"
 set "T_SAL_08=will be interrupted and, if you booted from WinPE, the current"
 set "T_SAL_09=recovery session will end (changes already saved in the RAM boot"
 set "T_SAL_10=are not kept)."
-set "T_SAL_11=   Confirm shutdown? [1=Yes / 2=No]:  "
+set "T_SAL_11=   Confirm shutdown? [S/N]:  "
 set "T_SAL_12=Sending the shutdown signal with wpeutil (WinPE detected)..."
 set "T_SAL_13=Shutdown scheduled in 5 seconds."
 set "T_SAL_14=If you change your mind from ANOTHER console type:  shutdown /a"
