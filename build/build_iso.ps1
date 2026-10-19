@@ -414,10 +414,16 @@ if (Test-Path -LiteralPath $WorkRoot) {
                 '         Usa -Force para borrarla y regenerar (o borrala a mano).')
     }
 }
-New-Item -ItemType Directory -Path $WorkRoot -Force | Out-Null
+#  NO se pre-crea $WorkRoot aqui: 'copype <arch> <raiz>' exige que su
+#  destino NO exista (la linea 59 de copype.cmd aborta con "Destination
+#  directory exists") y el propio copype crea la raiz con su estructura
+#  interior: <raiz>\media, <raiz>\mount y <raiz>\bootbins.
+#  Antes se pasaba $DirMedia como raiz y todo quedaba anidado un nivel
+#  de mas (work\media\media\sources\boot.wim); el script buscaba en
+#  work\media\sources\boot.wim y abortaba con "no ha creado boot.wim".
 
-Escribir-Info "Ejecutando: copype $Arch `"$DirMedia`""
-& $RutaCopype $Arch $DirMedia
+Escribir-Info "Ejecutando: copype $Arch `"$WorkRoot`""
+& $RutaCopype $Arch $WorkRoot
 if ($LASTEXITCODE -ne 0) {
     Fallar "copype ha devuelto el codigo de error $LASTEXITCODE."
 }
