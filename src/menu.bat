@@ -1,5 +1,33 @@
 @echo off
 REM =====================================================================
+REM  PALETA ANSI (se define ANTES de imprimir cualquier texto)
+REM  -------------------------------------------------------------------
+REM  La consola de Windows/WinPE entiende secuencias ANSI/VT. cmd.exe no
+REM  tiene una variable oficial para el caracter ESC (0x1B), asi que se
+REM  obtiene con el truco clasico de 'prompt':
+REM     $E -^> caracter de escape
+REM  A partir de ESC se definen los colores por linea. NUNCA se usa el
+REM  comando 'color': ese comando repinta toda la consola y provoca el
+REM  parpadeo a blanco que queremos evitar.
+REM  Si ESC no se pudiera obtener, los colores quedan vacios y el texto
+REM  se imprime igual (la interfaz nunca se rompe por falta de color).
+REM  C_FIN devuelve la consola al color de reposo (blanco brillante).
+REM =====================================================================
+set "ESC="
+for /F "tokens=1,2 delims=#" %%a in ('"prompt #$H#$E# & echo on & for %%b in (1) do rem"') do set "ESC=%%b"
+set "C_VERDE="
+set "C_AMARILLO="
+set "C_ROJO="
+set "C_BLANCO="
+set "C_RESET="
+if defined ESC set "C_VERDE=%ESC%[92m"
+if defined ESC set "C_AMARILLO=%ESC%[93m"
+if defined ESC set "C_ROJO=%ESC%[91m"
+if defined ESC set "C_BLANCO=%ESC%[97m"
+if defined ESC set "C_RESET=%ESC%[0m"
+set "C_FIN=%C_RESET%%C_BLANCO%"
+
+REM =====================================================================
 REM  JAH-WinPe  ::  menu.bat  -  INTERFAZ PRINCIPAL DEL TALLER
 REM =====================================================================
 REM  PROYECTO   : JAH-WinPe - herramienta de soporte tecnico en consola
@@ -11,12 +39,12 @@ REM               DETECCION DE FIRMWARE (UEFI / Legacy), REGISTRO DE
 REM               ACTIVIDAD (log), DIAGNOSTICO / INVENTARIO de solo
 REM               lectura, LECTURA DEL TAMANO REAL del disco con
 REM               ESTIMACION del tiempo de borrado y salida ordenada.
-REM  FASE       : 4.5 (anade el modulo de INVENTARIO de hardware de solo
+REM  FASE       : 1.0 (anade el modulo de INVENTARIO de hardware de solo
 REM               lectura y la LECTURA DEL TAMANO REAL del disco para
 REM               ESTIMAR el tiempo del borrado seguro 'clean all'; se
 REM               conservan el firmware, el log, el escudo de seguridad
 REM               y el multilenguaje de las fases anteriores).
-REM  VERSION    : 1.5.0
+REM  VERSION    : 1.0.0
 REM
 REM  --------------------------------------------------------------------
 REM  MAPA DE NAVEGACION (etiquetas del script)
@@ -256,7 +284,7 @@ REM Centralizamos los textos repetidos: si manana cambiamos de version
 REM solo tocamos aqui y se actualiza cabecera, titulo y mensajes.
 set "TOOL_NAME=JAH-WinPe"
 set "TOOL_VER=1.0.0"
-set "TOOL_FASE=4.5"
+set "TOOL_FASE=1.0"
 
 REM --- Apariencia de la consola -----------------------------------------
 REM title  -^> texto de la barra de titulo de la ventana.
@@ -265,13 +293,13 @@ REM            para que quepan cabecera + menu + mensajes sin scroll.
 REM            Se silencia su salida porque 'mode' puede fallar si la
 REM            consola no permite redimensionar (ventanas embebidas en
 REM            otros programas) y ese fallo no debe tumbar el script.
-REM color  -^> DOS digitos hexadecimales: PRIMERO el fondo, SEGUNDO el
-REM            texto.  0 = fondo negro, F = texto blanco brillante.
-REM            Otros ejemplos: 0A verde, 0B cian, 0E amarillo (avisos),
-REM            0C rojo (bloqueos). Solo hay que cambiar esta linea.
+REM color  -^> NO se usa. La paleta se aplica con las variables ANSI
+REM            definidas al inicio (C_VERDE, C_AMARILLO, C_ROJO,
+REM            C_BLANCO, C_RESET). Asi no hay repintados globales ni
+REM            parpadeos a blanco durante la ejecucion de los modulos.
 title %TOOL_NAME% v%TOOL_VER%
 mode con: cols=94 lines=44 >nul 2>&1
-color 0F
+<nul set /p "=%C_BLANCO%"
 
 REM --- Deteccion del metodo de lectura de teclado ----------------------
 REM Preferimos 'choice.exe' porque SOLO acepta las teclas que le
@@ -426,13 +454,11 @@ REM  Solo muestra datos neutros (marca y version): ni una palabra que
 REM  hubiera que traducir.
 REM ---------------------------------------------------------------------
 :MOSTRAR_CABECERA_BASE
-REM Cabecera en VERDE (0A) estilo consola PowerShell; se vuelve al blanco
-REM brillante base (0F) al terminar para que el cuerpo siga legible.
-color 0A
-echo   ==========================================================================
-echo     %TOOL_NAME%   -   v%TOOL_VER%
-echo   ==========================================================================
-color 0F
+REM Cabecera en VERDE ANSI; cada linea vuelve al blanco brillante base
+REM con C_FIN, de modo que el cuerpo de la pantalla siga siendo legible.
+echo   %C_VERDE%==========================================================================%C_FIN%
+echo     %C_VERDE%%TOOL_NAME%   -   v%TOOL_VER%%C_FIN%
+echo   %C_VERDE%==========================================================================%C_FIN%
 exit /b 0
 
 REM =====================================================================
@@ -470,7 +496,7 @@ cls
 call :MOSTRAR_CABECERA
 echo(
 echo   %T_MENU_01%
-echo   ------------------------------------------------------------------
+echo   %C_VERDE%------------------------------------------------------------------%C_FIN%
 echo(
 echo      %T_MENU_02%
 echo      %T_MENU_03%
@@ -479,10 +505,10 @@ echo      %T_MENU_05%
 echo      %T_MENU_06%
 echo      %T_MENU_15%
 echo(
-echo   ------------------------------------------------------------------
+echo   %C_VERDE%------------------------------------------------------------------%C_FIN%
 echo   %T_MENU_07%
 echo          %T_MENU_08%
-echo   ------------------------------------------------------------------
+echo   %C_VERDE%------------------------------------------------------------------%C_FIN%
 echo      %T_MENU_12% %date%  %time:~0,5%
 echo      %T_MENU_13% %MODO_ENTRADA%
 echo      %T_MENU_14% %FIRMWARE%   -^>   %FIRMWARE_FORMATO%
@@ -575,7 +601,7 @@ cls
 call :MOSTRAR_CABECERA
 echo(
 echo   %T_CONS_01%
-echo   ------------------------------------------------------------------
+echo   %C_VERDE%------------------------------------------------------------------%C_FIN%
 echo(
 echo   %T_CONS_02%
 echo(
@@ -610,7 +636,7 @@ cls
 call :MOSTRAR_CABECERA
 echo(
 echo   %T_AYU1_01%
-echo   ------------------------------------------------------------------
+echo   %C_VERDE%------------------------------------------------------------------%C_FIN%
 echo(
 echo   %T_AYU1_02%
 echo       %T_AYU1_03%
@@ -654,7 +680,7 @@ cls
 call :MOSTRAR_CABECERA
 echo(
 echo   %T_AYU2_01%
-echo   ------------------------------------------------------------------
+echo   %C_VERDE%------------------------------------------------------------------%C_FIN%
 echo(
 echo   %T_AYU2_02%
 echo     %T_AYU2_03%
@@ -725,7 +751,7 @@ cls
 call :MOSTRAR_CABECERA
 echo(
 echo   %T_SAL_01%
-echo   ------------------------------------------------------------------
+echo   %C_VERDE%------------------------------------------------------------------%C_FIN%
 echo(
 echo      %T_SAL_02%
 echo      %T_SAL_03%
@@ -749,7 +775,7 @@ cls
 call :MOSTRAR_CABECERA
 echo(
 echo   %T_SAL_06%
-echo   ------------------------------------------------------------------
+echo   %C_VERDE%------------------------------------------------------------------%C_FIN%
 echo(
 echo   %T_SAL_07%
 echo   %T_SAL_08%
@@ -835,15 +861,13 @@ REM  (Si cambias TOOL_NAME o TOOL_VER, solo se actualizan aqui: nada de
 REM  texto duplicado por el archivo, que es donde nacen los errores.)
 REM ---------------------------------------------------------------------
 :MOSTRAR_CABECERA
-REM Cabecera en VERDE (0A): marca, version y fase destacan como en una
-REM consola PowerShell. Al terminar se vuelve al blanco brillante base
-REM (0F) para que el resto de la pantalla siga siendo legible.
-color 0A
-echo   ==========================================================================
-echo     %TOOL_NAME%   -   %T_COM_42%
-echo     %T_COM_43% %TOOL_VER%   -   %T_COM_44% %TOOL_FASE%   -   %T_COM_45% Windows / WinPE
-echo   ==========================================================================
-color 0F
+REM Cabecera en VERDE ANSI: marca, version y fase destacan como en una
+REM consola PowerShell. Cada linea termina en C_FIN (blanco brillante),
+REM asi el resto de la pantalla sigue siendo legible.
+echo   %C_VERDE%==========================================================================%C_FIN%
+echo     %C_VERDE%%TOOL_NAME%   -   %T_COM_42%%C_FIN%
+echo     %C_VERDE%%T_COM_43% %TOOL_VER%   -   %T_COM_44% %TOOL_FASE%   -   %T_COM_45% Windows / WinPE%C_FIN%
+echo   %C_VERDE%==========================================================================%C_FIN%
 exit /b 0
 
 REM ---------------------------------------------------------------------
@@ -893,9 +917,9 @@ set "VUELTA_MENU=NO"
 echo(
 echo   %~1
 :PULSA_TECLA_MENU_BUCLE
-echo   %T_COM_54%
+echo   %C_VERDE%%T_COM_54%%C_FIN%
 set "TECLA_MENU="
-set /p "TECLA_MENU=%T_COM_55%"
+set /p "TECLA_MENU=%C_VERDE%%T_COM_55%%C_FIN%"
 if /i "%TECLA_MENU%"=="C" exit /b 0
 if /i "%TECLA_MENU%"=="M" set "VUELTA_MENU=SI"
 if "%VUELTA_MENU%"=="SI" exit /b 0
@@ -933,7 +957,7 @@ set "CLAVES=%~2"
 set "CLAVES=%CLAVES: =%"
 REM   /n oculta la lista automatica de teclas (nuestro prompt ya la dice)
 REM   /m muestra el mensaje que pasamos en %~1
-choice /c %CLAVES% /n /m "%~1"
+choice /c %CLAVES% /n /m "%C_VERDE%%~1%C_FIN%"
 REM choice devuelve en ERRORLEVEL el INDICE de la tecla pulsada (la
 REM primera tecla de la lista = 1, la segunda = 2, y asi sucesivamente).
 REM Como todos nuestros conjuntos son digitos consecutivos (1..5), el
@@ -957,7 +981,7 @@ REM set /p escribe en la variable lo que se teclee. Si se pulsa solo
 REM ENTER, la variable NO se toca (por eso la limpiamos justo antes:
 REM asi ENTER produce OPCION vacia y no una opcion vieja de un bucle
 REM anterior, que seria un error GRAVE de seguridad en un menu de borrado).
-set /p "OPCION=%~1"
+set /p "OPCION=%C_VERDE%%~1%C_FIN%"
 REM --- Sanitizacion (defensa en profundidad) ---
 REM Eliminamos comillas y espacios tecleados ANTES de comparar. Por que?
 REM Porque la expansion %OPCION% se inserta en la linea del 'if' y un
@@ -983,25 +1007,34 @@ echo   %T_COM_01%
 goto LEER_CON_SETP
 
 REM ---------------------------------------------------------------------
-REM  LEER_SN - pregunta de SI/NO con lista blanca (teclas S y N).
+REM  LEER_SN - pregunta de SI/NO con lista blanca, BILINGUE.
 REM  -------------------------------------------------------------------
 REM  USO:       call :LEER_SN "texto del prompt"
 REM  Devuelve:  SN = SI / NO   (vacio solo si algo raro paso en choice)
 REM
-REM  Sustituye a las viejas preguntas '1 = Si / 2 = No': la consola
-REM  estandar espera S/N y con letras no hay que memorizar numeros.
-REM    - Modo choice: 'choice /c SN' lee UNA tecla (S o N), sin ENTER.
-REM    - Modo set /p: lee la linea completa y acepta S, N, SI o NO en
-REM      mayusculas o minusculas; cualquier otra cosa se vuelve a pedir.
+REM  El juego de teclas depende del idioma activo (LANG):
+REM    ES -^> 'choice /c SN'  y se acepta S, SI, N, NO
+REM    EN -^> 'choice /c YN'  y se acepta Y, YES, N, NO
+REM  Asi el texto en ingles puede mostrar [Y/N] sin enganar al tecnico.
+REM    - Modo choice: lee UNA tecla (sin ENTER).
+REM    - Modo set /p: lee la linea completa (mayusculas o minusculas);
+REM      cualquier otra cosa se vuelve a pedir.
 REM  Igual que LEER_OPCION: una tecla rara nunca cancela nada por
 REM  accidente, como mucho repite la pregunta.
 REM ---------------------------------------------------------------------
 :LEER_SN
 set "SN="
+set "SN_CLAVES=SN"
+set "SN_SI=S"
+set "SN_SI2=SI"
+set "SN_NO=N"
+if /i "%LANG%"=="EN" set "SN_CLAVES=YN"
+if /i "%LANG%"=="EN" set "SN_SI=Y"
+if /i "%LANG%"=="EN" set "SN_SI2=YES"
 if "%MODO_ENTRADA%"=="CHOICE" goto LEER_SN_CHOICE
 goto LEER_SN_SETP
 :LEER_SN_CHOICE
-choice /c SN /n /m "%~1"
+choice /c %SN_CLAVES% /n /m "%C_VERDE%%~1%C_FIN%"
 if errorlevel 2 goto LEER_SN_CHOICE_NO
 if errorlevel 1 goto LEER_SN_CHOICE_SI
 REM errorlevel 0 (fallo de choice o Ctrl+C neutro): repetimos la tecla.
@@ -1014,12 +1047,12 @@ set "SN=NO"
 exit /b 0
 :LEER_SN_SETP
 set "SN_TXT="
-set /p "SN_TXT=%~1"
+set /p "SN_TXT=%C_VERDE%%~1%C_FIN%"
 set "SN_TXT=%SN_TXT:"=%"
 set "SN_TXT=%SN_TXT: =%"
-if /i "%SN_TXT%"=="S" set "SN=SI"
-if /i "%SN_TXT%"=="SI" set "SN=SI"
-if /i "%SN_TXT%"=="N" set "SN=NO"
+if /i "%SN_TXT%"=="%SN_SI%" set "SN=SI"
+if /i "%SN_TXT%"=="%SN_SI2%" set "SN=SI"
+if /i "%SN_TXT%"=="%SN_NO%" set "SN=NO"
 if /i "%SN_TXT%"=="NO" set "SN=NO"
 if defined SN exit /b 0
 echo(
@@ -1053,18 +1086,18 @@ REM  Uso:      call :LEER_NUMERO "texto del prompt" NOMBRE_VARIABLE
 REM  Devuelve: la variable indicada (solo si NUM_OK vale SI) y NUM_OK:
 REM              SI       -^> numero valido (0, 1, 2, 12...)
 REM              NO       -^> entrada invalida (ya se ha avisado)
-REM              CANCELAR -^> el tecnico tecleo la letra A
+REM              CANCELAR -^> el tecnico tecleo la letra M (menu)
 REM
 REM  DOS VIA segun lo que ofrezca la imagen (ver MODO_ENTRADA):
 REM    - Modo choice: cada digito se captura SOLO (sin ENTER) y se imprime
 REM      en pantalla EN EL INSTANTE en que se pulsa: entrada visible,
-REM      jamas a ciegas. La tecla A cancela de un solo toque. Si el numero
-REM      tecleado ya existe se confirma al momento; la tecla 'S' fuerza
-REM      la confirmacion cuando tambien podria ser prefijo (1 y 10).
+REM      jamas a ciegas. La tecla M vuelve al menu de un solo toque. Si el
+REM      numero tecleado ya existe se confirma al momento; la tecla 'S'
+REM      fuerza la confirmacion cuando tambien podria ser prefijo (1 y 10).
 REM    - Modo set /p (WinPE sin choice.exe): el eco del propio tecleo lo
 REM      pinta la consola (tambien visible), se acepta con ENTER y se
-REM      cancela con A + ENTER. En cmd puro sin choice no hay forma de
-REM      leer una sola tecla: limitacion documentada del entorno.
+REM      vuelve al menu con M + ENTER. En cmd puro sin choice no hay forma
+REM      de leer una sola tecla: limitacion documentada del entorno.
 REM  Ninguna entrada se usa sin pasar por esta validacion.
 REM ---------------------------------------------------------------------
 :LEER_NUMERO
@@ -1079,7 +1112,7 @@ REM nada; por eso la limpiamos justo antes: asi ENTER significa
 REM "entrada vacia" y no un valor viejo de una vuelta anterior. En un
 REM menu de borrado, ese detalle es la diferencia entre no hacer nada
 REM y borrar el disco equivocado.
-set /p "NUM_TXT=%~1"
+set /p "NUM_TXT=%C_VERDE%%~1%C_FIN%"
 if not defined NUM_TXT goto LEER_NUMERO_ERROR
 REM --- Limpieza de comillas y espacios (defensa en profundidad) -------
 REM Mismo razonamiento que en LEER_OPCION: el valor se va a insertar en
@@ -1088,8 +1121,8 @@ REM sintaxis de la linea y abortar el guion.
 set "NUM_TXT=%NUM_TXT:"=%"
 set "NUM_TXT=%NUM_TXT: =%"
 if not defined NUM_TXT goto LEER_NUMERO_ERROR
-REM --- Salida voluntaria: la letra A cancela y vuelve al menu ---------
-if /i "%NUM_TXT%"=="A" goto LEER_NUMERO_CANCELAR
+REM --- Salida voluntaria: la letra M vuelve al menu principal ---------
+if /i "%NUM_TXT%"=="M" goto LEER_NUMERO_CANCELAR
 REM --- Un numero de disco no lleva ceros a la izquierda --------------
 if "%NUM_TXT:~0,1%"=="0" if not "%NUM_TXT%"=="0" goto LEER_NUMERO_ERROR
 REM --- Recorrido caracter a caracter ---------------------------------
@@ -1115,14 +1148,14 @@ REM Imprimimos el prompt SIN salto de linea ('set /p' con la entrada en
 REM NUL escribe el texto y, al no tener entrada, se para al instante):
 REM los digitos que lleguen se pegaran justo detras, visibles tecleo a
 REM tecleo. Esta es la garantia de entrada VISIBLE en modo choice.
-set /p "NUM_ECO=%~1" <nul
+set /p "NUM_ECO=%C_VERDE%%~1%C_FIN%" <nul
 :LEER_NUMERO_CHOICE_BUCLE
 REM choice captura UNA sola tecla de la lista y devuelve su posicion:
-REM tecla 0 -^> 1, tecla 1 -^> 2, ..., tecla 9 -^> 10, A -^> 11, S -^> 12.
+REM tecla 0 -^> 1, tecla 1 -^> 2, ..., tecla 9 -^> 10, M -^> 11, S -^> 12.
 REM Las demas teclas hacen 'beep' sin consumirse: jamas entra basura.
 REM (choice solo admite a-z, A-Z, 0-9 y ASCII 128-254: por eso la
 REM tecla de confirmacion es S y no un simbolo como '*').
-choice /c 0123456789AS /n
+choice /c 0123456789MS /n
 if errorlevel 12 goto LEER_NUMERO_CHOICE_CONFIRMAR
 if errorlevel 11 goto LEER_NUMERO_CANCELAR
 REM La posicion N corresponde al digito N-1 (la tecla 0 esta en la 1).
@@ -1269,8 +1302,8 @@ echo   %T_COM_05%
 echo       %T_COM_06%
 echo       %T_COM_07%
 echo(
-call :LEER_OPCION "%T_COM_08%" "1 2"
-if not "%OPCION%"=="1" goto PREPARAR_ENTORNO_SIN_ADMIN
+call :LEER_SN "%T_COM_08%"
+if not "%SN%"=="SI" goto PREPARAR_ENTORNO_SIN_ADMIN
 :PREPARAR_ENTORNO_LISTO
 set "ENTORNO_OK=SI"
 call :REGISTRAR ENTORNO "listo admin=%ES_ADMIN% carpeta=%DIR_TRABAJO%" "OK"
@@ -1480,8 +1513,8 @@ REM  PEDIR_DISCO - pide, valida y confirma el numero de disco a usar.
 REM  -------------------------------------------------------------------
 REM  Devuelve DISCO (numero) y DISCO_OK = SI / NO.
 REM  Bucle de seguridad: no se sale de aqui hasta tener un numero valido
-REM  o hasta que el tecnico cancele con la letra A (tecla directa en modo
-REM  choice; A + ENTER en modo set /p).
+REM  o hasta que el tecnico vuelva al menu con la letra M (tecla directa
+REM  en modo choice; M + ENTER en modo set /p).
 REM ---------------------------------------------------------------------
 :PEDIR_DISCO
 set "DISCO_OK=NO"
@@ -1489,16 +1522,16 @@ set "DISCO="
 if not "%LISTADO_OK%"=="SI" exit /b 0
 :PEDIR_DISCO_BUCLE
 echo(
-echo   ------------------------------------------------------------------
+echo   %C_VERDE%------------------------------------------------------------------%C_FIN%
 echo   %T_COM_15%
 echo   %T_COM_16%
 echo   %T_COM_17%
-REM El aviso de cancelacion cambia con el modo de entrada: en modo
-REM choice basta pulsar A (una tecla, sin ENTER); en modo set /p hace
-REM falta A + ENTER, porque ahi no existe lectura de una sola tecla.
+REM El aviso de vuelta al menu cambia con el modo de entrada: en modo
+REM choice basta pulsar M (una tecla, sin ENTER); en modo set /p hace
+REM falta M + ENTER, porque ahi no existe lectura de una sola tecla.
 if "%MODO_ENTRADA%"=="CHOICE" echo   %T_COM_53%
 if not "%MODO_ENTRADA%"=="CHOICE" echo   %T_COM_18%
-echo   ------------------------------------------------------------------
+echo   %C_VERDE%------------------------------------------------------------------%C_FIN%
 call :LEER_NUMERO "%T_COM_19%" DISCO
 if "%NUM_OK%"=="CANCELAR" exit /b 0
 if not "%NUM_OK%"=="SI" goto PEDIR_DISCO_BUCLE
@@ -1544,7 +1577,7 @@ REM ---------------------------------------------------------------------
 :CONFIRMAR_DESTRUCTIVO
 set "CONFIRMADO=NO"
 set "CONF_TXT="
-set /p "CONF_TXT=   %T_CFM_02% %~1 %T_CFM_03%"
+set /p "CONF_TXT=   %C_VERDE%%T_CFM_02% %~1 %T_CFM_03%%C_FIN%"
 if not defined CONF_TXT exit /b 0
 set "CONF_TXT=%CONF_TXT:"=%"
 set "CONF_TXT=%CONF_TXT: =%"
@@ -1555,7 +1588,7 @@ call :REGISTRAR CONFIRMACION "palabra=%~1" "ACEPTADA"
 exit /b 0
 :CONFIRMAR_DESTRUCTIVO_DISCO
 set "CONF_DISCO="
-set /p "CONF_DISCO=   %T_CFM_04% (%DISCO%): "
+set /p "CONF_DISCO=   %C_VERDE%%T_CFM_04% (%DISCO%): %C_FIN%"
 if not defined CONF_DISCO goto CONFIRMAR_DESTRUCTIVO_NO
 set "CONF_DISCO=%CONF_DISCO:"=%"
 set "CONF_DISCO=%CONF_DISCO: =%"
@@ -1664,12 +1697,12 @@ REM  puede leerlo, compararlo con lo que espera y cancelar si algo no
 REM  cuadra. Un fichero de texto plano se revisa en dos segundos.
 REM ---------------------------------------------------------------------
 :MOSTRAR_SCRIPT
-echo   ------------------------------------------------------------------
+echo   %C_VERDE%------------------------------------------------------------------%C_FIN%
 echo   %T_COM_47%:
 echo   %F_SCRIPT%
-echo   ------------------------------------------------------------------
+echo   %C_VERDE%------------------------------------------------------------------%C_FIN%
 type "%F_SCRIPT%"
-echo   ------------------------------------------------------------------
+echo   %C_VERDE%------------------------------------------------------------------%C_FIN%
 echo(
 exit /b 0
 
@@ -1686,10 +1719,10 @@ REM  capture el texto, y lo consultamos justo despues.
 REM ---------------------------------------------------------------------
 :EJECUTAR_DISKPART
 echo(
-echo   ------------------------------------------------------------------
+echo   %C_VERDE%------------------------------------------------------------------%C_FIN%
 echo   %T_DP_01%
 echo   %T_DP_02%
-echo   ------------------------------------------------------------------
+echo   %C_VERDE%------------------------------------------------------------------%C_FIN%
 echo(
 diskpart /s "%F_SCRIPT%"
 set "RESULTADO=%errorlevel%"
@@ -1698,15 +1731,13 @@ REM queda anotado tanto si funciono como si no, con su numero exacto.
 if "%RESULTADO%"=="0" call :REGISTRAR DISKPART "codigo=0" "OK"
 if not "%RESULTADO%"=="0" call :REGISTRAR DISKPART "codigo=%RESULTADO%" "ERROR"
 echo(
-echo   ------------------------------------------------------------------
-REM Resultado en color: VERDE (0A) si diskpart acabo sin errores, ROJO
-REM (0C) si devolvio un codigo de error. Se vuelve a blanco (0F) siempre.
-if "%RESULTADO%"=="0" color 0A
-if "%RESULTADO%"=="0" echo   %T_COM_48%
-if not "%RESULTADO%"=="0" color 0C
-if not "%RESULTADO%"=="0" echo   %T_COM_49% %RESULTADO%
-color 0F
-echo   ------------------------------------------------------------------
+echo   %C_VERDE%------------------------------------------------------------------%C_FIN%
+REM Resultado en color ANSI por linea: VERDE si diskpart acabo sin
+REM errores, ROJO si devolvio un codigo de error. Nunca se repinta la
+REM consola entera (sin parpadeos a blanco).
+if "%RESULTADO%"=="0" echo   %C_VERDE%%T_COM_48%%C_FIN%
+if not "%RESULTADO%"=="0" echo   %C_ROJO%%T_COM_49% %RESULTADO%%C_FIN%
+echo   %C_VERDE%------------------------------------------------------------------%C_FIN%
 echo(
 echo   %T_DP_03%
 echo   %T_DP_04%
@@ -1750,10 +1781,10 @@ findstr /c:"SIN_VOLUMENES" "%F_SEG_SAL%" >nul 2>&1
 if not errorlevel 1 goto EJECUTAR_TRIM_VACIO
 goto EJECUTAR_TRIM_ERROR
 :EJECUTAR_TRIM_OK
-REM Buenas noticias: el TRIM se aplico. Mensaje en VERDE (0A).
-color 0A
+REM Buenas noticias: el TRIM se aplico. Mensaje en VERDE (C_VERDE).
+<nul set /p "=%C_VERDE%"
 echo   %T_NIV_31%
-color 0F
+<nul set /p "=%C_FIN%"
 call :REGISTRAR TRIM "disco=%DISCO% codigo=%TRIM_RC%" "OK"
 exit /b 0
 :EJECUTAR_TRIM_VACIO
@@ -1761,19 +1792,19 @@ echo   %T_NIV_32%
 call :REGISTRAR TRIM "disco=%DISCO% codigo=%TRIM_RC%" "SIN_VOLUMENES"
 exit /b 0
 :EJECUTAR_TRIM_ERROR
-REM Error grave del paso TRIM: ROJO (0C) y se muestra la salida cruda.
-color 0C
+REM Error grave del paso TRIM: ROJO (C_ROJO) y se muestra la salida cruda.
+<nul set /p "=%C_ROJO%"
 echo   %T_NIV_33% %TRIM_RC%
 echo   %T_NIV_35%
 if exist "%F_SEG_SAL%" type "%F_SEG_SAL%"
-color 0F
+<nul set /p "=%C_FIN%"
 call :REGISTRAR TRIM "disco=%DISCO% codigo=%TRIM_RC%" "ERROR"
 exit /b 0
 :EJECUTAR_TRIM_SIN_PS
-REM Precaucion (no hay PowerShell): AMARILLO (0E) y volvemos a blanco.
-color 0E
+REM Precaucion (no hay PowerShell): AMARILLO (C_AMARILLO) y a blanco.
+<nul set /p "=%C_AMARILLO%"
 echo   %T_NIV_34%
-color 0F
+<nul set /p "=%C_FIN%"
 call :REGISTRAR TRIM "disco=%DISCO%" "SIN_POWERSHELL"
 exit /b 0
 
@@ -1787,8 +1818,8 @@ REM ---------------------------------------------------------------------
 :MOSTRAR_RESULTADO
 echo   %T_COM_25%
 call :LISTAR_DISCOS
-REM Mensaje de exito/verificacion en VERDE (0A); luego se vuelve a 0F.
-color 0A
+REM Mensaje de exito/verificacion en VERDE (C_VERDE); luego vuelve C_FIN.
+<nul set /p "=%C_VERDE%"
 echo   %T_COM_26%
 echo     %T_D1_23% %DISCO% %T_D1_25%
 echo       %T_COM_27%
@@ -1796,7 +1827,7 @@ echo     %T_D2_33% %DISCO% %T_D2_35%
 echo       %T_COM_28%
 echo     %T_COM_29%
 echo       %T_COM_30%
-color 0F
+<nul set /p "=%C_FIN%"
 echo(
 exit /b 0
 
@@ -1859,7 +1890,7 @@ cls
 call :MOSTRAR_CABECERA
 echo(
 echo   %T_D1_01%
-echo   ------------------------------------------------------------------
+echo   %C_VERDE%------------------------------------------------------------------%C_FIN%
 echo(
 echo   %T_D1_02%
 echo(
@@ -1899,7 +1930,7 @@ REM hacia arriba para que el tecnico pueda hacer scroll y revisarlo.
 call :MOSTRAR_CABECERA
 echo(
 echo   %T_D1_15%
-echo   ------------------------------------------------------------------
+echo   %C_VERDE%------------------------------------------------------------------%C_FIN%
 echo(
 echo   %T_COM_51% %DISCO%
 if "%PROTECCION_ESTADO%"=="ACTIVA" echo   %T_SEG_16%
@@ -1921,7 +1952,7 @@ echo(
 call :EVALUAR_SEGURIDAD
 if not "%RIESGO_NECESARIO%"=="SI" goto MODULO_PREPARAR_CONFIRMAR
 call :MOSTRAR_AVISO_RIESGO
-color 0F
+<nul set /p "=%C_FIN%"
 call :CONFIRMAR_DESTRUCTIVO "%T_CFM_06%"
 if not "%CONFIRMADO%"=="SI" goto MODULO_PREPARAR_CANCELADO
 :MODULO_PREPARAR_CONFIRMAR
@@ -1982,7 +2013,7 @@ REM revisar todo el historial con la rueda del raton.
 call :MOSTRAR_CABECERA
 echo(
 echo   %T_D2_12%
-echo   ------------------------------------------------------------------
+echo   %C_VERDE%------------------------------------------------------------------%C_FIN%
 echo(
 echo   %T_COM_51% %DISCO%
 if "%PROTECCION_ESTADO%"=="ACTIVA" echo   %T_SEG_16%
@@ -2047,7 +2078,7 @@ echo(
 call :EVALUAR_SEGURIDAD
 if not "%RIESGO_NECESARIO%"=="SI" goto MODULO_SANITIZAR_CONFIRMAR
 call :MOSTRAR_AVISO_RIESGO
-color 0F
+<nul set /p "=%C_FIN%"
 call :CONFIRMAR_DESTRUCTIVO "%T_CFM_06%"
 if not "%CONFIRMADO%"=="SI" goto MODULO_SANITIZAR_CANCELADO
 :MODULO_SANITIZAR_CONFIRMAR
@@ -2122,7 +2153,7 @@ cls
 call :MOSTRAR_CABECERA
 echo(
 echo   %T_D2_01%
-echo   ------------------------------------------------------------------
+echo   %C_VERDE%------------------------------------------------------------------%C_FIN%
 echo(
 echo   %T_NIV_01%
 echo(
@@ -2163,13 +2194,13 @@ REM  -------------------------------------------------------------------
 REM  La sobrescritura con ceros es destructiva e INADECUADA en SSD/NVMe
 REM  (gasta celdas NAND y acorta su vida util), asi que antes de las dos
 REM  confirmaciones se muestra este aviso EN PANTALLA, obligatorio, tal
-REM  como lo exige el diseno del taller. Se pinta en amarillo (color 0E)
-REM  como el aviso de riesgo y se vuelve al blanco normal (0F) al salir.
+REM  como lo exige el diseno del taller. Se pinta en amarillo ANSI
+REM  (C_AMARILLO) como el aviso de riesgo y vuelve a C_FIN al salir.
 REM  Si el disco se detecto como SSD, se anade un RECORDATORIO EXTRA
 REM  con la alternativa (nivel [2] TRIM); nunca se bloquea el nivel [3].
 REM ---------------------------------------------------------------------
 :MOSTRAR_AVISO_CRITICO
-color 0E
+<nul set /p "=%C_AMARILLO%"
 echo(
 echo   ==================================================================
 echo   %T_NIV_26%
@@ -2180,7 +2211,7 @@ echo   %T_NIV_28%
 echo   %T_NIV_29%
 if "%MEDIA_TIPO%"=="SSD" echo   %T_NIV_30%
 echo(
-color 0F
+<nul set /p "=%C_FIN%"
 exit /b 0
 
 REM #####################################################################
@@ -2310,9 +2341,11 @@ REM ---------------------------------------------------------------------
 REM  MOSTRAR_BLOQUEO - pantalla roja de denegacion
 REM  -------------------------------------------------------------------
 :MOSTRAR_BLOQUEO
-color 0C
 cls
 call :MOSTRAR_CABECERA
+REM El bloque de seguridad se pinta en ROJO DESPUES de la cabecera:
+REM asi el C_FIN de la cabecera no borra el color de aviso.
+<nul set /p "=%C_ROJO%"
 echo(
 echo   ==================================================================
 echo   %T_SEG_01%
@@ -2329,7 +2362,7 @@ echo(
 echo   %T_SEG_08%
 echo(
 call :PULSA_TECLA "%T_SEG_09%"
-color 0F
+<nul set /p "=%C_FIN%"
 exit /b 0
 
 REM ---------------------------------------------------------------------
@@ -2345,7 +2378,7 @@ REM ---------------------------------------------------------------------
 REM  MOSTRAR_AVISO_RIESGO - aviso amarillo cuando no se ha podido verificar
 REM  -------------------------------------------------------------------
 :MOSTRAR_AVISO_RIESGO
-color 0E
+<nul set /p "=%C_AMARILLO%"
 echo(
 echo   ==================================================================
 echo   %T_SEG_10%
@@ -2488,7 +2521,7 @@ REM sigue visible arriba para consultarlo.
 call :MOSTRAR_CABECERA
 echo(
 echo   %T_FW_01%
-echo   ------------------------------------------------------------------
+echo   %C_VERDE%------------------------------------------------------------------%C_FIN%
 echo(
 echo   %T_FW_05%
 echo(
@@ -2668,7 +2701,7 @@ cls
 call :MOSTRAR_CABECERA
 echo(
 echo   %T_INV_01%
-echo   ------------------------------------------------------------------
+echo   %C_VERDE%------------------------------------------------------------------%C_FIN%
 echo   %T_INV_02%
 echo(
 echo   %T_INV_03%
@@ -2961,7 +2994,7 @@ REM Sin 'cls': la identificacion del disco elegido queda arriba.
 call :MOSTRAR_CABECERA
 echo(
 echo   %T_MED_01%
-echo   ------------------------------------------------------------------
+echo   %C_VERDE%------------------------------------------------------------------%C_FIN%
 echo(
 echo   %T_MED_02% %DISCO% %T_MED_03%
 echo(
@@ -3053,13 +3086,13 @@ exit /b 0
 REM ---------------------------------------------------------------------
 REM  MOSTRAR_AVISO_TIEMPO - aviso amarillo antes de la confirmacion
 REM ---------------------------------------------------------------------
-REM  Se pinta en amarillo (color 0E) para que destaque, igual que el aviso
-REM  de riesgo de la Fase 2.8, y se vuelve al blanco normal (0F) al
+REM  Se pinta en amarillo ANSI (C_AMARILLO) para que destaque, igual que
+REM  el aviso de riesgo de la Fase 2.8, y se vuelve a C_FIN al
 REM  terminar. Se muestra DESPUES del guion y ANTES de pedir la palabra
 REM  de confirmacion.
 REM ---------------------------------------------------------------------
 :MOSTRAR_AVISO_TIEMPO
-color 0E
+<nul set /p "=%C_AMARILLO%"
 echo(
 echo   ==================================================================
 echo   %T_EST_01%
@@ -3075,7 +3108,7 @@ echo   %T_EST_14%
 echo   %T_EST_15%
 echo   %T_EST_16%
 echo(
-color 0F
+<nul set /p "=%C_FIN%"
 exit /b 0
 
 REM #####################################################################
@@ -3205,10 +3238,10 @@ set "T_CFM_03=y pulsa ENTER (ENTER vacío cancela):"
 set "T_CFM_04=Repite el NÚMERO del disco afectado"
 set "T_CFM_05=CONFIRMAR"
 set "T_CFM_06=RIESGO"
-set "T_COM_01=[!] Entrada no válida. Teclea solo uno de los digitos permitidos."
+set "T_COM_01=[!] Entrada no válida. Usa solo una de las opciones indicadas."
 set "T_COM_02=[!] Entrada no válida: introduce SOLO el número de disco (por"
 set "T_COM_03=ejemplo: 0, 1, 2, 10), sin ceros a la izquierda, o la letra"
-set "T_COM_04=A para cancelar y volver al menú."
+set "T_COM_04=M para volver al menú principal."
 set "T_COM_05=[!] Esta consola NO parece tener permisos de administrador."
 set "T_COM_06=diskpart podrá listar los discos, pero NO podrá modificarlos"
 set "T_COM_07=(devolverá acceso denegado en 'clean')."
@@ -3222,7 +3255,7 @@ set "T_COM_14=¿Es un WinPE muy recortado? Este módulo no puede continuar."
 set "T_COM_15=Teclea el NUMERO de disco sobre el que quieres trabajar."
 set "T_COM_16=Ese numero es la PRIMERA columna del listado de arriba"
 set "T_COM_17=(Disk 0 / Disco 0, Disk 1 / Disco 1...). Nunca es una letra."
-set "T_COM_18=Para cancelar y volver al menu: teclea  A  y pulsa ENTER."
+set "T_COM_18=Para volver al menu principal: teclea  M  y pulsa ENTER."
 set "T_COM_19=   Número de disco:  "
 set "T_COM_24=   ¿Qué hacemos? [1=Corregir / 2=Continuar / 3=Cancelar]:  "
 set "T_COM_25=VERIFICACIÓN FINAL: este es el estado ACTUAL del equipo."
@@ -3252,7 +3285,7 @@ set "T_COM_49=[!] diskpart devolvió el código de error"
 set "T_COM_50=[!] diskpart no ha podido completar el listado. Código de error:"
 set "T_COM_51=Disco elegido:"
 set "T_COM_52=   Recibido: "
-set "T_COM_53=Teclas directas: A = cancelar, S = confirmar si el número ya es correcto (sin ENTER)."
+set "T_COM_53=Teclas directas: M = menú principal, S = confirmar si el número es correcto (sin ENTER)."
 set "T_COM_54=      [C] Continuar      [M] Menú principal"
 set "T_COM_55=   Teclea tu opción:  "
 set "T_CONS_01=[4] CONSOLA AVANZADA"
@@ -3432,7 +3465,7 @@ set "T_LOG_01=Registro (log): PERSISTENTE en"
 set "T_LOG_02=Registro (log): solo en RAM (se perdera al reiniciar):"
 set "T_SAL_01=[6] SALIR / APAGAR EQUIPO"
 set "T_SAL_02=[1]  Apagar el equipo"
-set "T_SAL_03=[2]  Salir de la herramienta y volver al sistema"
+set "T_SAL_03=[2]  Salir de la herramienta (en WinPE reinicia el equipo)"
 set "T_SAL_04=[3]  Volver al menú principal (me he equivocado)"
 set "T_SAL_05=   Su opción [1-3]:  "
 set "T_SAL_06=!!!  ATENCIÓN  !!!"
@@ -3540,7 +3573,7 @@ set "T_AYU2_28=If a command is missing, it is not there: try it in option 4."
 set "T_AYU2_29=- Before formatting a disk, check its SMART status with the"
 set "T_AYU2_30=command above: a disk with 'Pred Fail' does not deserve a new"
 set "T_AYU2_31=install (the work would be lost in weeks, not in years)."
-set "T_AYU2_32=   Show the list of commands available in this image? [S/N]:  "
+set "T_AYU2_32=   Show the list of commands available in this image? [Y/N]:  "
 set "T_AYU2_33=--- NATIVE CMD AND WINPE COMMANDS (use the mouse wheel to scroll) ---"
 set "T_AYU3_01=Press any key to return to the main menu..."
 set "T_AYU3_02=DISK AND BOOT"
@@ -3577,14 +3610,14 @@ set "T_CFM_03=and press ENTER (empty ENTER cancels):"
 set "T_CFM_04=Type the NUMBER of the affected disk again"
 set "T_CFM_05=CONFIRM"
 set "T_CFM_06=RISK"
-set "T_COM_01=[!] Invalid input. Type only one of the allowed digits."
+set "T_COM_01=[!] Invalid input. Use only one of the options shown."
 set "T_COM_02=[!] Invalid input: enter ONLY the disk number (for"
 set "T_COM_03=example: 0, 1, 2, 10), with no leading zeros, or the letter"
-set "T_COM_04=A to cancel and return to the menu."
+set "T_COM_04=M to return to the main menu."
 set "T_COM_05=[!] This console does NOT seem to have administrator rights."
 set "T_COM_06=diskpart will be able to list the disks, but NOT to modify them"
 set "T_COM_07=(it will return access denied on 'clean')."
-set "T_COM_08=   Continue anyway? [S/N]:  "
+set "T_COM_08=   Continue anyway? [Y/N]:  "
 set "T_COM_09=[!] I could not create working files in:"
 set "T_COM_10=Without a writable folder I cannot build the diskpart"
 set "T_COM_11=script, and without a script nothing runs. WE ABORT without"
@@ -3594,7 +3627,7 @@ set "T_COM_14=Is it a very trimmed WinPE? This module cannot continue."
 set "T_COM_15=Type the disk NUMBER you want to work on."
 set "T_COM_16=That number is the FIRST column of the listing above"
 set "T_COM_17=(Disk 0, Disk 1...). It is never a drive letter."
-set "T_COM_18=To cancel and return to the menu: type  A  and press ENTER."
+set "T_COM_18=To return to the main menu: type  M  and press ENTER."
 set "T_COM_19=   Disk number:  "
 set "T_COM_24=   What do we do? [1=Fix / 2=Continue / 3=Cancel]:  "
 set "T_COM_25=FINAL CHECK: this is the CURRENT state of the machine."
@@ -3624,7 +3657,7 @@ set "T_COM_49=[!] diskpart returned the error code"
 set "T_COM_50=[!] diskpart could not complete the listing. Error code:"
 set "T_COM_51=Selected disk:"
 set "T_COM_52=   Received: "
-set "T_COM_53=Direct keys: A = cancel, S = confirm if the number is already correct (no ENTER)."
+set "T_COM_53=Direct keys: M = main menu, S = confirm if the number is already correct (no ENTER)."
 set "T_COM_54=      [C] Continue       [M] Main menu"
 set "T_COM_55=   Type your choice:  "
 set "T_CONS_01=[4] ADVANCED CONSOLE"
@@ -3804,7 +3837,7 @@ set "T_LOG_01=Activity log: PERSISTENT at"
 set "T_LOG_02=Activity log: RAM only (lost on reboot):"
 set "T_SAL_01=[6] EXIT / SHUT DOWN THE COMPUTER"
 set "T_SAL_02=[1]  Shut down the computer"
-set "T_SAL_03=[2]  Exit the tool and return to the system"
+set "T_SAL_03=[2]  Exit the tool (in WinPE it restarts the computer)"
 set "T_SAL_04=[3]  Return to the main menu (my mistake)"
 set "T_SAL_05=   Your option [1-3]:  "
 set "T_SAL_06=!!!  WARNING  !!!"
@@ -3812,7 +3845,7 @@ set "T_SAL_07=You are about to shut down the computer. Any work in progress"
 set "T_SAL_08=will be interrupted and, if you booted from WinPE, the current"
 set "T_SAL_09=recovery session will end (changes already saved in the RAM boot"
 set "T_SAL_10=are not kept)."
-set "T_SAL_11=   Confirm shutdown? [S/N]:  "
+set "T_SAL_11=   Confirm shutdown? [Y/N]:  "
 set "T_SAL_12=Sending the shutdown signal with wpeutil (WinPE detected)..."
 set "T_SAL_13=Shutdown scheduled in 5 seconds."
 set "T_SAL_14=If you change your mind from ANOTHER console type:  shutdown /a"

@@ -85,14 +85,24 @@ REM  'call' es OBLIGATORIO para ejecutar un .bat/.cmd desde otro: sin
 REM  'call', cmd cederia el control para siempre a menu.bat y, al
 REM  terminar, la sesion quedaria en una pantalla negra sin retorno.
 call "%MENU_RUTA%"
-REM  Si llegamos aqui, el tecnico ha salido del menu. En lugar de dejar
-REM  la pantalla en negro abrimos una consola de emergencia:
-REM    - 'cmd /k' abre el interprete y NO lo cierra al acabar un comando.
-REM    - El tecnico escribe 'exit' cuando quiera reiniciar el equipo.
+REM  Si llegamos aqui, el tecnico ha salido del menu (opcion [2]) o el
+REM  menu termino. En WinPE no hay escritorio al que volver: reiniciamos
+REM  el equipo de forma limpia y directa. Nada de consolas huerfanas ni
+REM  bucles de salida.
+goto REINICIAR
+
+REM ---------------------------------------------------------------------
+REM  REINICIAR - salida limpia del entorno WinPE.
+REM    wpeutil es la herramienta oficial de WinPE y reinicia al instante;
+REM    si no existiera, 'shutdown /r /t 0' hace lo mismo en Windows.
+REM    Si ambas fallan, 'exit /b' devuelve el control sin bloquear.
+REM ---------------------------------------------------------------------
+:REINICIAR
 echo.
-echo  El menu se ha cerrado. Consola de emergencia (escribe 'exit' para reiniciar).
+echo  JAH-WinPe: reiniciando el equipo...
 echo.
-cmd /k
+if exist "%SystemRoot%\System32\wpeutil.exe" wpeutil reboot
+shutdown /r /t 0 >nul 2>&1
 exit /b 0
 
 REM --- menu.bat no encontrado ------------------------------------------
@@ -105,8 +115,8 @@ echo        - Copia menu.bat a la raiz de un pendrive   (ej.: E:\menu.bat)
 echo        - o dentro de una carpeta JAH               (ej.: E:\JAH\menu.bat)
 echo      Despues reinicia el equipo y arranca de nuevo desde WinPE.
 echo.
-echo      Se abre una consola de emergencia para que investigues
-echo      (por ejemplo: diskpart, luego list volume, luego exit).
+echo      Se abre una consola de emergencia SOLO para este error critico.
+echo      Escribe 'exit' para reiniciar el equipo.
 echo.
-cmd /k
-exit /b 0
+cmd
+goto REINICIAR
