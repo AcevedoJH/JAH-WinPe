@@ -255,7 +255,7 @@ REM --- Identidad de la herramienta --------------------------------------
 REM Centralizamos los textos repetidos: si manana cambiamos de version
 REM solo tocamos aqui y se actualiza cabecera, titulo y mensajes.
 set "TOOL_NAME=JAH-WinPe"
-set "TOOL_VER=1.5.0"
+set "TOOL_VER=1.0.0"
 set "TOOL_FASE=4.5"
 
 REM --- Apariencia de la consola -----------------------------------------
