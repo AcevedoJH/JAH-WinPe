@@ -34,15 +34,9 @@ REM  Si esa linea fallara (imagen muy recortada sin wpeinit.exe), el
 REM  script continuara igual: no es critico para el taller.
 wpeinit
 
-REM --- Paso 2: pequena espera de cortesia ------------------------------
-REM  wpeinit puede tardar unos segundos en terminar de enumerar el USB que
-REM  contiene menu.bat. No tenemos 'timeout' ni 'choice' garantizados en
-REM  WinPE, asi que usamos el truco universal: un 'ping' a la direccion de
-REM  bucle local (127.0.0.1) con 6 intentos equivale a ~5 segundos.
-REM  Los mensajes del ping se silencian con  >nul .
-REM  Si la imagen no incluyera ping.exe, la linea solo daria un error
-REM  inofensivo y el script continuaria.
-ping -n 6 127.0.0.1 >nul
+REM --- Paso 2: sin demora (arranque instantaneo) -----------------------
+REM  Se elimina toda espera artificial. wpeinit ya inicializa PnP/USB;
+REM  la busqueda de menu.bat se hace directamente.
 
 REM --- Paso 3: localizar menu.bat --------------------------------------
 REM  Buscamos por orden de PRIORIDAD (gana la primera coincidencia):
