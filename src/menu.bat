@@ -621,14 +621,35 @@ echo   %T_CONS_06%
 echo       %T_CONS_07%
 echo(
 
-REM 'cmd' sin argumentos lanza un shell hijo interactivo y ESPERA a que
-REM el tecnico escriba 'exit'. En ese momento el control regresa a la
-REM linea siguiente de este script (vuelta al menu).
-REM Nota sobre variantes que veras en otros scripts:
-REM   cmd /c comando  -^> ejecuta el comando y TERMINA (no sirve aqui).
-REM   cmd /k comando   -^> ejecuta el comando y mantiene el shell abierto.
-REM   cmd              -^> shell interactivo completo (lo que queremos).
-cmd
+call :OP_CONSOLA_CMD
+goto MENU
+
+REM ---------------------------------------------------------------------
+REM  OP_CONSOLA_CMD - Consola interactiva con flujo CERRADO.
+REM ---------------------------------------------------------------------
+REM  No lanza cmd directamente en la ruta del menu para evitar, bajo
+REM  ninguna circunstancia, que el control quede huerfano. El shell hijo
+REM  se abre aqui dentro de la subrutina y cuando el tecnico escribe 'exit'
+REM  el control vuelve SIEMPRE a MENU, sin pausa intermedia.
+REM ---------------------------------------------------------------------
+:OP_CONSOLA_CMD
+cls
+call :MOSTRAR_CABECERA
+echo(
+echo   %T_CONS_01%
+echo   %C_VERDE%------------------------------------------------------------------%C_FIN%
+echo(
+echo   %T_CONS_02%
+echo(
+echo   %T_CONS_03%
+echo   %T_CONS_04%
+echo   %T_CONS_05%
+echo(
+echo   %T_CONS_06%
+echo       %T_CONS_07%
+echo(
+call cmd
+REM Vuelta inmediata y segura al MENU. Nunca sale a X:\Windows\System32.
 goto MENU
 
 REM =====================================================================
