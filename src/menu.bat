@@ -77,10 +77,10 @@ REM      PEDIR_DISCO ....... numero de disco validado y comprobado
 REM      DISCO_EXISTE ...... contraste del numero con el listado
 REM      COMPROBAR_DISCO_S . BLOQUEA la operacion si es el disco de arranque
 REM      MOSTRAR_BLOQUEO ... pantalla ROJA de denegacion
-REM      EVALUAR_SEGURIDAD . decide si hace falta la palabra de RIESGO
+REM      EVALUAR_SEGURIDAD . decide si hay que anadir el aviso de riesgo
 REM      GENERAR_SCRIPT_* .. escribe el guion temporal de diskpart
 REM      MOSTRAR_SCRIPT .... imprime el guion (auditoria previa)
-REM      CONFIRMAR_DESTR ... el tecnico teclea CONFIRMAR + el numero
+REM      CONFIRMAR_DESTR ... el tecnico responde S/N con UNA sola tecla
 REM      EJECUTAR_DISKPART . lanza diskpart /s y muestra su salida
 REM      MOSTRAR_RESULTADO . vuelve a listar para verificar
 REM      BORRAR_TEMPORALES . limpia los ficheros de trabajo
@@ -108,7 +108,7 @@ REM                          de almacenamiento); si no puede, PREGUNTA.
 REM      CALCULAR_ESTIMADO . convierte tamano + tipo de disco en un
 REM                          rango de tiempo ORIENTATIVO de borrado.
 REM      MOSTRAR_AVISO_T .. pinta ese aviso (en amarillo) ANTES de pedir
-REM                          la palabra de confirmacion del borrado seguro.
+REM                          la confirmacion S/N del borrado seguro.
 REM
 REM    NOTA: los textos del log se escriben en castellano tecnico (es un
 REM    registro de auditoria para el taller), pero los AVISOS de pantalla
@@ -132,13 +132,13 @@ REM      de toda la asignacion): evita espacios finales accidentales.
 REM   4) Expansion retrasada (DelayedExpansion) NO se usa en Fase 1:
 REM      asi los signos de exclamacion del texto se imprimen tal cual.
 REM   5) Ninguna accion destructiva se ejecuta sin confirmacion previa.
-REM      Ademas de pulsar la opcion hay que TECLEAR una palabra literal
-REM      Y repetir el numero de disco: en castellano CONFIRMAR / RIESGO,
-REM      en ingles CONFIRM / RISK (se guardan en T_CFM_05 y T_CFM_06).
-REM      Un tecleo al azar jamas borra un disco. Nota: son palabras SIN
-REM      espacios, porque el script las compara tras quitar espacios al
-REM      texto tecleado (y en comparaciones sensibles a mayusculas, con
-REM      'if /i': CONFIRMAR y confirmar valen lo mismo).
+REM      Ademas de pulsar la opcion hay que RESPONDER con UNA sola tecla:
+REM      'S' en castellano o 'Y' en ingles (la pregunta es T_CFM_02 y se
+REM      muestra como 'S/N' o 'Y/N'). 'N', un ENTER vacio o cualquier
+REM      otra respuesta CANCELAN: jamas un tecleo raro borra un disco.
+REM      El aviso con el resumen y los datos del disco permanece en
+REM      pantalla mientras el tecnico responde (texto saneado con
+REM      'set "VAR=%VAR: =%"' y comparacion con 'if /i').
 REM   6) Los comandos de diskpart se escriben en ficheros TEMPORALES con
 REM      'echo'. En esas lineas no pueden aparecer simbolos de
 REM      redireccion sueltos: cmd los interpretaria como parte del
@@ -156,8 +156,8 @@ REM      arrancado) se DETECTA al principio de cada modulo de disco y
 REM      queda PROHIBIDO: si el tecnico lo elige, la operacion se DENEGA
 REM      en pantalla roja y no se escribe ni se ejecuta ningun guion.
 REM      Si el disco no puede identificarse, el script NO calla: avisa y
-REM      exige una palabra de RIESGO antes de seguir. Ver el bloque
-REM      ESCUDO DE SEGURIDAD en PASO 13.
+REM      exige una confirmacion explicita (tecla S) antes de seguir. Ver
+REM      el bloque ESCUDO DE SEGURIDAD en PASO 13.
 REM --------------------------------------------------------------------
 REM
 REM  ESCUDO DE SEGURIDAD (Fase 2.8) - RESUMEN PARA MANTENIMIENTO:
@@ -169,9 +169,10 @@ REM        Metodo 1: PowerShell (exacto). Metodo 2: diskpart 'detail
 REM        volume' (respaldo universal). Si ambas fallan: estado DUDA.
 REM     2) BLOQUEO (COMPROBAR_DISCO_SEGURO + MOSTRAR_BLOQUEO): si el disco
 REM        elegido coincide con el protegido, no se genera ningun guion.
-REM     3) DOBLE CONFIRMACION (CONFIRMAR_DESTRUCTIVO): palabra CONFIRMAR
-REM        + repeticion del numero de disco, y en casos dudosos una
-REM        palabra extra de RIESGO (RIESGO / RISK).
+REM     3) CONFIRMACION (CONFIRMAR_DESTRUCTIVO): se ve el aviso con los
+REM        datos del disco y responde UNA tecla S/N (Y/N en ingles); si
+REM        el escudo no pudo verificar el disco, a ese mismo aviso se le
+REM        anade la pantalla amarilla de riesgo.
 REM   El escudo NUNCA "adivina": un "?" jamas se convierte en un "no".
 REM  INTERNACIONALIZACION (i18n) - RESUMEN PARA MANTENIMIENTO:
 REM   Patron usado: DOS diccionarios de variables + despacho por etiqueta
@@ -217,7 +218,7 @@ REM     UBICACION: se intenta primero junto al script; si el script corre
 REM     en X: (WinPE, RAM) se busca otro disco ESCRIBIBLE; si no hay, se
 REM     deja en la RAM avisando de que se perdera al reiniciar. Nunca se
 REM     guarda el texto tecleado por el tecnico: solo datos ya validados
-REM     (numeros de disco, codigos de error, palabras clave).
+REM     (numeros de disco, codigos de error y decision de confirmacion).
 REM
 REM  INVENTARIO Y ESTIMACION (Fase 4.5) - RESUMEN PARA MANTENIMIENTO:
 REM   INVENTARIO (SOLO LECTURA): la opcion [3] usa 'wmic' (instrumental de
@@ -1016,6 +1017,16 @@ REM ENTER, la variable NO se toca (por eso la limpiamos justo antes:
 REM asi ENTER produce OPCION vacia y no una opcion vieja de un bucle
 REM anterior, que seria un error GRAVE de seguridad en un menu de borrado).
 set /p "OPCION=%C_VERDE%%~1%C_FIN%"
+REM --- ENTER vacio: sin esto el guion SE ABORTARIA ----------------------
+REM 'set /p' NO escribe nada si se pulsa solo ENTER: la variable queda
+REM SIN DEFINIR. Aplicarle acto seguido una sustitucion de texto
+REM ('%OPCION:"=%') a una variable indefinida hace que cmd deje el patron
+REM LITERAL con las comillas sin balancear, y la siguiente linea 'if'
+REM provoca un error de sintaxis que TERMINA todo menu.bat.
+REM Por eso se comprueba 'if not defined' ANTES de tocar nada, y otra vez
+REM tras quitar las comillas (una entrada de solo comillas deja la
+REM variable vacia).
+if not defined OPCION goto LEER_CON_SETP_INVALIDA
 REM --- Sanitizacion (defensa en profundidad) ---
 REM Eliminamos comillas y espacios tecleados ANTES de comparar. Por que?
 REM Porque la expansion %OPCION% se inserta en la linea del 'if' y un
@@ -1024,6 +1035,7 @@ REM y provocar un error de sintaxis que aborte el guion. Quitarle las
 REM comillas al valor deja SIEMPRE la linea bien formada:
 REM     if "valor_limpio"=="1"  -^> siempre balanceada, nunca rompe.
 set "OPCION=%OPCION:"=%"
+if not defined OPCION goto LEER_CON_SETP_INVALIDA
 set "OPCION=%OPCION: =%"
 REM --- Salida directa al menu: tecla M admitida -------------------------
 REM Solo si el llamante la pidio como tercer argumento: asi los menus que
@@ -1040,6 +1052,7 @@ REM operadores: se imprimen o se comparan, pero no se ejecutan.
 set "VALIDA="
 for %%D in (%~2) do if "%OPCION%"=="%%D" set "VALIDA=1"
 if defined VALIDA exit /b 0
+:LEER_CON_SETP_INVALIDA
 REM Entrada invalida (vacia, de mas de un caracter o fuera de la lista):
 REM avisamos y VOLVEMOS A PEDIR sin repintar el menu entero.
 echo(
@@ -1088,13 +1101,20 @@ exit /b 0
 :LEER_SN_SETP
 set "SN_TXT="
 set /p "SN_TXT=%C_VERDE%%~1%C_FIN%"
+REM ENTER vacio -^> se vuelve a preguntar. La guardia es OBLIGATORIA antes
+REM de las sustituciones: si la variable esta indefinida, cmd deja el
+REM patron literal con las comillas sin balancear y el 'if' siguiente
+REM daria un error de sintaxis que abortaria todo el guion.
+if not defined SN_TXT goto LEER_SN_SETP_INVALIDA
 set "SN_TXT=%SN_TXT:"=%"
+if not defined SN_TXT goto LEER_SN_SETP_INVALIDA
 set "SN_TXT=%SN_TXT: =%"
 if /i "%SN_TXT%"=="%SN_SI%" set "SN=SI"
 if /i "%SN_TXT%"=="%SN_SI2%" set "SN=SI"
 if /i "%SN_TXT%"=="%SN_NO%" set "SN=NO"
 if /i "%SN_TXT%"=="NO" set "SN=NO"
 if defined SN exit /b 0
+:LEER_SN_SETP_INVALIDA
 echo(
 echo   %T_COM_01%
 goto LEER_SN_SETP
@@ -1594,57 +1614,82 @@ if "%OPCION%"=="1" goto PEDIR_DISCO_BUCLE
 if "%OPCION%"=="2" goto PEDIR_DISCO_RIESGO
 exit /b 0
 :PEDIR_DISCO_RIESGO
-REM El tecnico elige 'Continuar' pese a la duda: exigimos palabra de RIESGO.
-call :CONFIRMAR_DESTRUCTIVO "%T_CFM_06%"
-if not "%CONFIRMADO%"=="SI" goto PEDIR_DISCO_BUCLE
+REM El tecnico elige 'Continuar' pese a la duda: una sola pregunta S/N.
+call :CONFIRMAR_DESTRUCTIVO "riesgo"
+if not "%CONFIRMADO%"=="SI" exit /b 0
 goto PEDIR_DISCO_OK
 :PEDIR_DISCO_OK
 set "DISCO_OK=SI"
 exit /b 0
 
 REM ---------------------------------------------------------------------
-REM  CONFIRMAR_DESTRUCTIVO - la barrera humana antes de destruir datos.
+REM  CONFIRMAR_DESTRUCTIVO - autorizacion rapida antes de destruir datos.
 REM  -------------------------------------------------------------------
-REM  Uso:      call :CONFIRMAR_DESTRUCTIVO "PALABRA" [DISCO]
-REM    %~1 = palabra que el tecnico debe teclear EXACTAMENTE (lista blanca
-REM          textual, ej. CONFIRMAR/CONFIRM o RIESGO/RISK). No vale un ENTER,
-REM          ni "si", ni cualquier otra cosa: si no coincide, no se hace nada.
-REM    %~2 = si vale DISCO, se pide ADEMAS repetir el numero de disco
-REM          (doble control: palabra + numero). Se usa en TODAS las
-REM          operaciones destructivas (Fase 2.8).
-REM  Devuelve CONFIRMADO = SI / NO.
+REM  USO:      call :CONFIRMAR_DESTRUCTIVO "etapa"
+REM    %~1 = etiqueta corta para el log de auditoria (maquetar, sanitizar,
+REM          riesgo...). NO se pide ninguna palabra escrita: la pregunta es
+REM          la de T_CFM_02 y basta UNA tecla (+ ENTER en modo set /p).
 REM
-REM  Por que teclear una palabra y no pulsar "s"? Porque un ENTER de mas
-REM  o una tecla rozada no se parece en nada a escribir BORRAR. Es el
-REM  mismo principio que usan los sistemas serios para acciones
-REM  irreversibles, y aqui cuesta dos segundos que ahorran un desastre.
+REM      ES -^> 'S' (Si)       EN -^> 'Y' (Yes)      se ejecuta el guion.
+REM      'N' u cualquier otra respuesta (o ENTER vacio) -^> se CANCELA y no
+REM      se ejecuta nada: el modulo pintara su aviso de operacion cancelada.
+REM
+REM  COMO SE LEE (mismo patron que LEER_SN, dos modos de consola):
+REM    - Modo choice: 'choice /c SN' solo admite esas dos teclas; cualquier
+REM      otra tecla hace 'beep' y NO autoriza jamas (ni puede hacerlo).
+REM    - Modo set /p: se lee la linea completa y TODO lo que no sea
+REM      S/SI (o Y/YES) se trata como un 'no'; tambien un ENTER vacio.
+REM  El aviso con el resumen y los datos del disco permanece en pantalla
+REM  mientras se responde: el tecnico decide viendolo entero.
+REM  Devuelve CONFIRMADO = SI / NO.
 REM ---------------------------------------------------------------------
 :CONFIRMAR_DESTRUCTIVO
 set "CONFIRMADO=NO"
+set "CONF_ETAPA=%~1"
+set "CONF_CLAVES=SN"
+set "CONF_SI=S"
+set "CONF_SI2=SI"
+set "CONF_NO=N"
+if /i "%LANG%"=="EN" set "CONF_CLAVES=YN"
+if /i "%LANG%"=="EN" set "CONF_SI=Y"
+if /i "%LANG%"=="EN" set "CONF_SI2=YES"
+if "%MODO_ENTRADA%"=="CHOICE" goto CONFIRMAR_DESTRUCTIVO_CHOICE
+goto CONFIRMAR_DESTRUCTIVO_SETP
+:CONFIRMAR_DESTRUCTIVO_CHOICE
+choice /c %CONF_CLAVES% /n /m "%C_VERDE%%T_CFM_02%%C_FIN%"
+if errorlevel 2 goto CONFIRMAR_DESTRUCTIVO_NO
+REM errorlevel 1 = la unica tecla admitida del juego: SI que se autoriza.
+if errorlevel 1 set "CONFIRMADO=SI"
+if "%CONFIRMADO%"=="SI" goto CONFIRMAR_DESTRUCTIVO_OK
+REM errorlevel 0 (fallo raro de choice): repetimos, sin autorizar nada.
+goto CONFIRMAR_DESTRUCTIVO_CHOICE
+:CONFIRMAR_DESTRUCTIVO_SETP
 set "CONF_TXT="
-set /p "CONF_TXT=   %C_VERDE%%T_CFM_02% %~1 %T_CFM_03%%C_FIN%"
-if not defined CONF_TXT exit /b 0
+set /p "CONF_TXT=%C_VERDE%%T_CFM_02%%C_FIN%"
+REM ENTER vacio -^> se CANCELA. La guardia es OBLIGATORIA antes de cada
+REM sustitucion: 'set /p' no toca la variable si la linea viene vacia, y
+REM aplicar '%VAR:"=%' a una variable indefinida hace que cmd deje el
+REM patron LITERAL con las comillas sin balancear, de modo que el 'if'
+REM siguiente provoca un error de sintaxis que TERMINA todo menu.bat.
+if not defined CONF_TXT goto CONFIRMAR_DESTRUCTIVO_NO
 set "CONF_TXT=%CONF_TXT:"=%"
+if not defined CONF_TXT goto CONFIRMAR_DESTRUCTIVO_NO
 set "CONF_TXT=%CONF_TXT: =%"
-if /i not "%CONF_TXT%"=="%~1" goto CONFIRMAR_DESTRUCTIVO_NO
-if "%~2"=="DISCO" goto CONFIRMAR_DESTRUCTIVO_DISCO
-set "CONFIRMADO=SI"
-call :REGISTRAR CONFIRMACION "palabra=%~1" "ACEPTADA"
+if /i "%CONF_TXT%"=="%CONF_SI%" set "CONFIRMADO=SI"
+if /i "%CONF_TXT%"=="%CONF_SI2%" set "CONFIRMADO=SI"
+if /i "%CONF_TXT%"=="%CONF_NO%" goto CONFIRMAR_DESTRUCTIVO_NO
+if "%CONFIRMADO%"=="SI" goto CONFIRMAR_DESTRUCTIVO_OK
+REM Cualquier otra cosa tecleada (o un ENTER vacio) CANCELA: jamas un
+REM tecleo raro autoriza una operacion destructiva.
+goto CONFIRMAR_DESTRUCTIVO_MAL
+:CONFIRMAR_DESTRUCTIVO_OK
+call :REGISTRAR CONFIRMACION "etapa=%CONF_ETAPA%" "ACEPTADA"
 exit /b 0
-:CONFIRMAR_DESTRUCTIVO_DISCO
-set "CONF_DISCO="
-set /p "CONF_DISCO=   %C_VERDE%%T_CFM_04% (%DISCO%): %C_FIN%"
-if not defined CONF_DISCO goto CONFIRMAR_DESTRUCTIVO_NO
-set "CONF_DISCO=%CONF_DISCO:"=%"
-set "CONF_DISCO=%CONF_DISCO: =%"
-if "%CONF_DISCO%"=="%DISCO%" set "CONFIRMADO=SI"
-if not "%CONFIRMADO%"=="SI" goto CONFIRMAR_DESTRUCTIVO_NO
-call :REGISTRAR CONFIRMACION "palabra=%~1 disco=%DISCO%" "ACEPTADA"
-exit /b 0
-:CONFIRMAR_DESTRUCTIVO_NO
-call :REGISTRAR CONFIRMACION "palabra=%~1 disco=%DISCO%" "RECHAZADA"
+:CONFIRMAR_DESTRUCTIVO_MAL
 echo(
 echo   %T_CFM_01%
+:CONFIRMAR_DESTRUCTIVO_NO
+call :REGISTRAR CONFIRMACION "etapa=%CONF_ETAPA%" "RECHAZADA"
 exit /b 0
 
 REM ---------------------------------------------------------------------
@@ -1943,7 +1988,7 @@ echo     %T_D1_03%
 echo     %T_D1_04%
 echo     %T_D1_05%
 echo        %T_D1_06%
-echo     %T_D1_07% %T_CFM_05% %T_D1_26%
+echo     %T_D1_07%
 echo     %T_D1_08%
 echo(
 echo   %T_D1_09%
@@ -1998,10 +2043,9 @@ call :EVALUAR_SEGURIDAD
 if not "%RIESGO_NECESARIO%"=="SI" goto MODULO_PREPARAR_CONFIRMAR
 call :MOSTRAR_AVISO_RIESGO
 <nul set /p "=%C_FIN%"
-call :CONFIRMAR_DESTRUCTIVO "%T_CFM_06%"
-if not "%CONFIRMADO%"=="SI" goto MODULO_PREPARAR_CANCELADO
 :MODULO_PREPARAR_CONFIRMAR
-call :CONFIRMAR_DESTRUCTIVO "%T_CFM_05%" DISCO
+REM Autorizacion con UNA sola tecla (S/N) ya visible el resumen completo.
+call :CONFIRMAR_DESTRUCTIVO "maquetar"
 if not "%CONFIRMADO%"=="SI" goto MODULO_PREPARAR_CANCELADO
 call :EJECUTAR_DISKPART
 call :MOSTRAR_RESULTADO
@@ -2127,10 +2171,9 @@ call :EVALUAR_SEGURIDAD
 if not "%RIESGO_NECESARIO%"=="SI" goto MODULO_SANITIZAR_CONFIRMAR
 call :MOSTRAR_AVISO_RIESGO
 <nul set /p "=%C_FIN%"
-call :CONFIRMAR_DESTRUCTIVO "%T_CFM_06%"
-if not "%CONFIRMADO%"=="SI" goto MODULO_SANITIZAR_CANCELADO
 :MODULO_SANITIZAR_CONFIRMAR
-call :CONFIRMAR_DESTRUCTIVO "%T_CFM_05%" DISCO
+REM Autorizacion con UNA sola tecla (S/N) ya visible el resumen completo.
+call :CONFIRMAR_DESTRUCTIVO "sanitizar"
 if not "%CONFIRMADO%"=="SI" goto MODULO_SANITIZAR_CANCELADO
 if "%NIVEL_BORRADO%"=="2" goto MODULO_SANITIZAR_NIVEL2
 call :EJECUTAR_DISKPART
@@ -3178,14 +3221,18 @@ wmic OS get FreePhysicalMemory /value > "%F_INV%" 2>nul
 set "RAM_LIBRE="
 for /f "usebackq tokens=2 delims==" %%A in ("%F_INV%") do set "RAM_LIBRE=%%A"
 if exist "%F_INV%" del /f /q "%F_INV%" >nul 2>&1
-REM  Quitamos los espacios que wmic suele dejar alrededor del valor.
-set "RAM_TOTAL=%RAM_TOTAL: =%"
-set "RAM_LIBRE=%RAM_LIBRE: =%"
+REM  Quitamos los espacios que wmic suele dejar alrededor del valor. Las
+REM  guardias 'if not defined' van ANTES de cada sustitucion: si wmic no
+REM  devuelve nada la variable queda SIN DEFINIR y aplicarle '%VAR: =%' a
+REM  una indefinida deja el patron literal con comillas sin balancear, lo
+REM  que abortaria todo el guion con un error de sintaxis.
 if not defined RAM_TOTAL goto INV_RAM_NA
+set "RAM_TOTAL=%RAM_TOTAL: =%"
 set /a RAM_T_MB=%RAM_TOTAL%/1024
 set /a RAM_T_GB=%RAM_T_MB%/1024
 echo       %T_INV_11% %RAM_T_MB% %T_INV_15%  ^(%RAM_T_GB% %T_INV_16%^)
 if not defined RAM_LIBRE goto INV_RAM_WMIC_SLOTS
+set "RAM_LIBRE=%RAM_LIBRE: =%"
 set /a RAM_L_MB=%RAM_LIBRE%/1024
 set /a RAM_L_GB=%RAM_L_MB%/1024
 echo       %T_INV_12% %RAM_L_MB% %T_INV_15%  ^(%RAM_L_GB% %T_INV_16%^)
@@ -3366,6 +3413,10 @@ wmic diskdrive where "index=%DISCO%" get size /value > "%F_INV%" 2>nul
 if not exist "%F_INV%" exit /b 0
 for /f "usebackq tokens=2 delims==" %%A in ("%F_INV%") do set "DISCO_BYTES=%%A"
 if exist "%F_INV%" del /f /q "%F_INV%" >nul 2>&1
+REM  Guardia ANTES de la sustitucion: si wmic no devuelve nada la variable
+REM  queda SIN DEFINIR y '%VAR: =%' dejaria el patron literal con comillas
+REM  sin balancear, lo que abortaria el guion. Espacios fuera.
+if not defined DISCO_BYTES exit /b 0
 set "DISCO_BYTES=%DISCO_BYTES: =%"
 call :ES_NUMERO_GRANDE "%DISCO_BYTES%"
 if not "%NUM_GRANDE_OK%"=="SI" exit /b 0
@@ -3420,6 +3471,10 @@ if not exist "%F_INV%" exit /b 0
 set "MEDIA_NUM="
 for /f "usebackq tokens=2 delims==" %%A in ("%F_INV%") do set "MEDIA_NUM=%%A"
 if exist "%F_INV%" del /f /q "%F_INV%" >nul 2>&1
+REM  Guardia ANTES de la sustitucion: con wmic sin salida la variable queda
+REM  SIN DEFINIR y '%VAR: =%' la dejaria convertida en patron literal con
+REM  comillas sin balancear, rompiendo el guion entero. Sin dato, sin tipo.
+if not defined MEDIA_NUM exit /b 0
 set "MEDIA_NUM=%MEDIA_NUM: =%"
 if "%MEDIA_NUM%"=="3" set "MEDIA_TIPO=HDD"
 if "%MEDIA_NUM%"=="4" set "MEDIA_TIPO=SSD"
@@ -3670,18 +3725,14 @@ set "T_BIEN_06=1. Identifica SIEMPRE el disco correcto antes de borrar nada."
 set "T_BIEN_07=Las opciones 1 y 2 listan los discos antes de preguntar."
 set "T_BIEN_08=2. Las opciones 1 y 2 son DESTRUCTIVAS: borran la tabla de"
 set "T_BIEN_09=particiones (y en la opción 2, todo el contenido del disco)."
-set "T_BIEN_10=Ninguna actúa sin que tú teclees una palabra de confirmación."
+set "T_BIEN_10=Ninguna actúa sin que tú confirmes la operación con una sola tecla."
 set "T_BIEN_11=3. Ante la duda, consulta primero la opción 5 (Ayuda) y no"
 set "T_BIEN_12=improvises con comandos que no conoces."
 set "T_BIEN_13=Forma de uso: teclea el número de la opción que aparece en el"
 set "T_BIEN_14=menú. Según el entorno bastará con la tecla o con pulsar ENTER."
 set "T_BIEN_15=Pulsa cualquier tecla para entrar en el menú principal..."
 set "T_CFM_01=[i] Confirmación no reconocida: NO se ha ejecutado nada."
-set "T_CFM_02=Para continuar, teclea"
-set "T_CFM_03=y pulsa ENTER (ENTER vacío cancela):"
-set "T_CFM_04=Repite el NÚMERO del disco afectado"
-set "T_CFM_05=CONFIRMAR"
-set "T_CFM_06=RIESGO"
+set "T_CFM_02=   ¿Confirmar operación? [S/N]:  "
 set "T_COM_01=[!] Entrada no válida. Usa solo una de las opciones indicadas."
 set "T_COM_02=[!] Entrada no válida: introduce SOLO el número de disco (por"
 set "T_COM_03=ejemplo: 0, 1, 2, 10), sin ceros a la izquierda, o la letra"
@@ -3745,7 +3796,7 @@ set "T_D1_03=a) Lista los discos físicos y sus tamaños (diskpart, solo lectura
 set "T_D1_04=b) Te pide el NÚMERO del disco a preparar (entrada validada)."
 set "T_D1_05=c) Genera el guion de diskpart con los comandos exactos y te lo"
 set "T_D1_06=muestra para que lo leas ANTES de ejecutar nada."
-set "T_D1_07=d) Exige que teclees la palabra"
+set "T_D1_07=d) Te pide UNA sola confirmación (S) antes de ejecutar."
 set "T_D1_08=e) Ejecuta y vuelve a listar el equipo para verificar."
 set "T_D1_09=Orden de comandos:"
 set "T_D1_10=  1) clean"
@@ -3764,7 +3815,6 @@ set "T_D1_22=Operación cancelada: no se ha tocado ningún disco."
 set "T_D1_23=- Maquetación (opción 1): el Disco"
 set "T_D1_24=[!] Estás en Windows COMPLETO, no en WinPE: hay un sistema en"
 set "T_D1_25=debe mostrar Gpt y,"
-set "T_D1_26=y repites el número de disco para continuar."
 set "T_D1_27=  3) create partition primary"
 set "T_D1_28=  4) format fs=ntfs quick label=SISTEMA"
 set "T_D1_29=  5) assign (letra libre que Windows elija)"
@@ -3796,7 +3846,7 @@ set "T_D2_28=puedes maquetarlo con la opción [1]."
 set "T_D2_29=[!] Estás en Windows COMPLETO, no en WinPE: hay un sistema en"
 set "T_D2_30=cuando consigue identificarlo; si arriba no aparece como protegido,"
 set "T_D2_31=el riesgo es tuyo: ante la mínima duda, cancela (letra C:)."
-set "T_D2_32=Para el borrado seguro se piden DOS confirmaciones escritas."
+set "T_D2_32=Antes de ejecutar se te pedirá una sola confirmación (S/N)."
 set "T_D2_33=- Borrado seguro (opción 2): el Disco"
 set "T_D2_34=ejecución. La protección de arranque bloquea el disco del sistema"
 set "T_D2_35=aparecerá EN BRUTO"
@@ -3943,8 +3993,8 @@ set "T_MENU_04=[3]  Diagnóstico / Inventario           consulta sin modificar n
 set "T_MENU_05=[4]  Consola Avanzada                   salir a CMD interactivo"
 set "T_MENU_06=[5]  Ayuda del sistema                  guía rápida del técnico"
 set "T_MENU_15=[6]  Salir / Apagar equipo"
-set "T_MENU_07=Aviso: [1] y [2] modifican DISCOS de verdad y piden confirmación"
-set "T_MENU_08=escrita. Las opciones [3] a [6] no tocan el hardware por sí solas."
+set "T_MENU_07=Aviso: [1] y [2] modifican DISCOS de verdad y piden una sola tecla"
+set "T_MENU_08=de confirmación (S/N). Las opciones [3] a [6] no tocan el hardware por sí solas."
 set "T_MENU_09=(Si la consola no reacciona a una sola tecla, teclea el número"
 set "T_MENU_10=y termina con ENTER.)"
 set "T_MENU_11=   Su opción [1-6]:  "
@@ -3983,7 +4033,7 @@ set "T_SEG_11=La herramienta no puede saber ahora mismo cuál de los discos"
 set "T_SEG_12=es el de arranque (WinPE recortado, sin PowerShell o diskpart en otro idioma)."
 set "T_SEG_13=Es tu RESPONSABILIDAD no elegir el disco del sistema en ejecución"
 set "T_SEG_14=ni el medio desde el que se ha arrancado. Ante la mínima duda: CANCELA."
-set "T_SEG_15=Para seguir tendrás que teclear una palabra de RIESGO y luego CONFIRMAR."
+set "T_SEG_15=Para seguir tendrás que confirmar con la tecla S (en inglés Y): N cancela."
 set "T_SEG_16=Protección de arranque: ACTIVA (este disco NO es el de arranque)."
 set "T_SEG_17=Protección de arranque: SIN VERIFICAR (podría ser el de arranque)."
 set "T_SEG_18=Protección de arranque: no aplica (WinPE en memoria RAM)."
@@ -3991,7 +4041,7 @@ set "T_SEG_19=[!] El disco número"
 set "T_SEG_20=no aparece en el listado de discos."
 set "T_SEG_21=Puede ser que el número esté mal, o que tu Windows"
 set "T_SEG_22=traduzca la salida de diskpart con otras palabras."
-set "T_SEG_23=Si eliges 'Continuar' tendrás que confirmarlo con una palabra extra."
+set "T_SEG_23=Si eliges 'Continuar' tendrás que confirmarlo con la tecla S."
 exit /b 0
 
 REM ---------------------------------------------------------------------
@@ -4088,18 +4138,14 @@ set "T_BIEN_06=1. ALWAYS identify the right disk before erasing anything."
 set "T_BIEN_07=Options 1 and 2 list the disks before asking."
 set "T_BIEN_08=2. Options 1 and 2 are DESTRUCTIVE: they erase the partition"
 set "T_BIEN_09=table (and in option 2, all the data on the disk)."
-set "T_BIEN_10=None of them acts unless you type a confirmation word."
+set "T_BIEN_10=None of them acts unless you confirm it with a single key."
 set "T_BIEN_11=3. When in doubt, read option 5 (Help) first and do not"
 set "T_BIEN_12=improvise with commands you do not know."
 set "T_BIEN_13=How to use it: type the number of the option shown in the"
 set "T_BIEN_14=menu. Depending on the environment the key alone or ENTER will do."
 set "T_BIEN_15=Press any key to enter the main menu..."
 set "T_CFM_01=[i] Confirmation not recognised: NOTHING has been executed."
-set "T_CFM_02=To continue, type"
-set "T_CFM_03=and press ENTER (empty ENTER cancels):"
-set "T_CFM_04=Type the NUMBER of the affected disk again"
-set "T_CFM_05=CONFIRM"
-set "T_CFM_06=RISK"
+set "T_CFM_02=   Confirm operation? [Y/N]:  "
 set "T_COM_01=[!] Invalid input. Use only one of the options shown."
 set "T_COM_02=[!] Invalid input: enter ONLY the disk number (for"
 set "T_COM_03=example: 0, 1, 2, 10), with no leading zeros, or the letter"
@@ -4163,7 +4209,7 @@ set "T_D1_03=a) Lists the physical disks and sizes (diskpart, read only)."
 set "T_D1_04=b) Asks you for the NUMBER of the disk (validated input)."
 set "T_D1_05=c) Builds the diskpart script with the exact commands and"
 set "T_D1_06=shows it so that you read it BEFORE running anything."
-set "T_D1_07=d) Requires you to type the word"
+set "T_D1_07=d) Asks for a single confirmation (Y) before running."
 set "T_D1_08=e) Runs it and lists the machine again to verify."
 set "T_D1_09=Command order:"
 set "T_D1_10=  1) clean"
@@ -4182,7 +4228,6 @@ set "T_D1_22=Operation cancelled: no disk has been touched."
 set "T_D1_23=- Layout (option 1): Disk"
 set "T_D1_24=[!] You are in FULL Windows, not in WinPE: a system is running"
 set "T_D1_25=must show Gpt and,"
-set "T_D1_26=and retype the disk NUMBER to continue."
 set "T_D1_27=  3) create partition primary"
 set "T_D1_28=  4) format fs=ntfs quick label=SISTEMA"
 set "T_D1_29=  5) assign (free letter chosen by Windows)"
@@ -4214,7 +4259,7 @@ set "T_D2_28=lay it out with option [1]."
 set "T_D2_29=[!] You are in FULL Windows, not in WinPE: a system is running"
 set "T_D2_30=can identify it; if it does not appear as protected above,"
 set "T_D2_31=the risk is yours: at the slightest doubt, cancel (drive C:)."
-set "T_D2_32=For the secure erase TWO written confirmations are required."
+set "T_D2_32=Before running it asks for a single confirmation (Y/N)."
 set "T_D2_33=- Secure erase (option 2): Disk"
 set "T_D2_34=here. The boot protection blocks the system disk when it"
 set "T_D2_35=will appear RAW"
@@ -4361,8 +4406,8 @@ set "T_MENU_04=[3]  Diagnostics / Inventory            read-only machine info"
 set "T_MENU_05=[4]  Advanced console                   drop to interactive CMD"
 set "T_MENU_06=[5]  System help                        technician quick guide"
 set "T_MENU_15=[6]  Exit / Shut down the computer"
-set "T_MENU_07=Warning: [1] and [2] really modify DISKS and ask for a written"
-set "T_MENU_08=confirmation. Options [3] to [6] do not touch hardware on their own."
+set "T_MENU_07=Warning: [1] and [2] really modify DISKS and ask for a single key"
+set "T_MENU_08=of confirmation (Y/N). Options [3] to [6] do not touch hardware on their own."
 set "T_MENU_09=(If the console does not react to a single key, type the number"
 set "T_MENU_10=and finish with ENTER.)"
 set "T_MENU_11=   Your option [1-6]:  "
@@ -4401,7 +4446,7 @@ set "T_SEG_11=The tool cannot tell right now which of the disks"
 set "T_SEG_12=is the boot one (trimmed WinPE, no PowerShell or diskpart in another language)."
 set "T_SEG_13=It is YOUR RESPONSIBILITY not to pick the running system disk"
 set "T_SEG_14=nor the media WinPE was booted from. At the slightest doubt: CANCEL."
-set "T_SEG_15=To continue you will have to type a RISK word and then CONFIRM."
+set "T_SEG_15=To continue you will have to confirm with the Y key: N cancels."
 set "T_SEG_16=Boot protection: ACTIVE (this disk is NOT the boot disk)."
 set "T_SEG_17=Boot protection: UNVERIFIED (it might be the boot disk)."
 set "T_SEG_18=Boot protection: not applicable (WinPE in RAM memory)."
@@ -4409,5 +4454,5 @@ set "T_SEG_19=[!] Disk number"
 set "T_SEG_20=does not appear in the disk listing."
 set "T_SEG_21=The number may be wrong, or your Windows"
 set "T_SEG_22=translates the diskpart output with different words."
-set "T_SEG_23=If you pick 'Continue' you will have to confirm with an extra word."
+set "T_SEG_23=If you pick 'Continue' you will have to confirm with the Y key."
 exit /b 0
