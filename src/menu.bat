@@ -1146,18 +1146,28 @@ REM  Uso:      call :LEER_NUMERO "texto del prompt" NOMBRE_VARIABLE
 REM  Devuelve: la variable indicada (solo si NUM_OK vale SI) y NUM_OK:
 REM              SI       -^> numero valido (0, 1, 2, 12...)
 REM              NO       -^> entrada invalida (ya se ha avisado)
-REM              CANCELAR -^> el tecnico tecleo la letra M (menu)
+REM              CANCELAR -^> el tecnico tecleo la letra M (menu principal)
+REM              ATRAS    -^> el tecnico tecleo A, o solo ENTER: vuelve al
+REM                       paso ANTERIOR sin tocar nada (sin ciclar aqui)
+REM
+REM  PUNTO DE ESCAPE: no hay forma de quedarse atrapado en este prompt.
+REM    M       -^> menu principal (salida inmediata, sin pausa).
+REM    A       -^> paso anterior del modulo que llama.
+REM    ENTER   -^> idem a A, con un aviso previo (nunca un error de
+REM              sintaxis: la entrada vacia se trata como dato).
+REM  Ninguna entrada se usa sin pasar por esta validacion.
 REM
 REM  DOS VIA segun lo que ofrezca la imagen (ver MODO_ENTRADA):
 REM    - Modo choice: cada digito se captura SOLO (sin ENTER) y se imprime
 REM      en pantalla EN EL INSTANTE en que se pulsa: entrada visible,
-REM      jamas a ciegas. La tecla M vuelve al menu de un solo toque. Si el
-REM      numero tecleado ya existe se confirma al momento; la tecla 'S'
+REM      jamas a ciegas. Las teclas M, A y S son directas (sin ENTER). Si
+REM      el numero tecleado ya existe se confirma al momento; la tecla 'S'
 REM      fuerza la confirmacion cuando tambien podria ser prefijo (1 y 10).
 REM    - Modo set /p (WinPE sin choice.exe): el eco del propio tecleo lo
 REM      pinta la consola (tambien visible), se acepta con ENTER y se
-REM      vuelve al menu con M + ENTER. En cmd puro sin choice no hay forma
-REM      de leer una sola tecla: limitacion documentada del entorno.
+REM      vuelve al menu con M + ENTER (o al paso anterior con A + ENTER).
+REM      En cmd puro sin choice no hay forma de leer una sola tecla:
+REM      limitacion documentada del entorno.
 REM  Ninguna entrada se usa sin pasar por esta validacion.
 REM ---------------------------------------------------------------------
 :LEER_NUMERO
@@ -1173,16 +1183,18 @@ REM "entrada vacia" y no un valor viejo de una vuelta anterior. En un
 REM menu de borrado, ese detalle es la diferencia entre no hacer nada
 REM y borrar el disco equivocado.
 set /p "NUM_TXT=%C_VERDE%%~1%C_FIN%"
-if not defined NUM_TXT goto LEER_NUMERO_ERROR
+if not defined NUM_TXT goto LEER_NUMERO_ATRAS_VACIO
 REM --- Limpieza de comillas y espacios (defensa en profundidad) -------
 REM Mismo razonamiento que en LEER_OPCION: el valor se va a insertar en
 REM lineas 'if "..."=="..."'; si contuviera comillas, podria romper la
 REM sintaxis de la linea y abortar el guion.
 set "NUM_TXT=%NUM_TXT:"=%"
 set "NUM_TXT=%NUM_TXT: =%"
-if not defined NUM_TXT goto LEER_NUMERO_ERROR
+if not defined NUM_TXT goto LEER_NUMERO_ATRAS_VACIO
 REM --- Salida voluntaria: la letra M vuelve al menu principal ---------
 if /i "%NUM_TXT%"=="M" goto LEER_NUMERO_CANCELAR
+REM --- Retroceso: la letra A vuelve al paso anterior del modulo -------
+if /i "%NUM_TXT%"=="A" goto LEER_NUMERO_ATRAS
 REM --- Un numero de disco no lleva ceros a la izquierda --------------
 if "%NUM_TXT:~0,1%"=="0" if not "%NUM_TXT%"=="0" goto LEER_NUMERO_ERROR
 REM --- Recorrido caracter a caracter ---------------------------------
@@ -1211,11 +1223,13 @@ REM tecleo. Esta es la garantia de entrada VISIBLE en modo choice.
 set /p "NUM_ECO=%C_VERDE%%~1%C_FIN%" <nul
 :LEER_NUMERO_CHOICE_BUCLE
 REM choice captura UNA sola tecla de la lista y devuelve su posicion:
-REM tecla 0 -^> 1, tecla 1 -^> 2, ..., tecla 9 -^> 10, M -^> 11, S -^> 12.
-REM Las demas teclas hacen 'beep' sin consumirse: jamas entra basura.
+REM tecla 0 -^> 1, tecla 1 -^> 2, ..., tecla 9 -^> 10, M -^> 11, S -^> 12,
+REM A -^> 13. Las demas teclas hacen 'beep' sin consumirse: jamas entra
+REM basura.
 REM (choice solo admite a-z, A-Z, 0-9 y ASCII 128-254: por eso la
 REM tecla de confirmacion es S y no un simbolo como '*').
-choice /c 0123456789MS /n
+choice /c 0123456789MSA /n
+if errorlevel 13 goto LEER_NUMERO_ATRAS
 if errorlevel 12 goto LEER_NUMERO_CHOICE_CONFIRMAR
 if errorlevel 11 goto LEER_NUMERO_CANCELAR
 REM La posicion N corresponde al digito N-1 (la tecla 0 esta en la 1).
@@ -1267,6 +1281,18 @@ set "NUM_OK=CANCELAR"
 REM El tecnico pidio volver al menu con M: el llamante debe abandonar el
 REM modulo SIN ninguna pausa intermedia (vuelta inmediata al menu).
 set "SALIDA_M=SI"
+exit /b 0
+:LEER_NUMERO_ATRAS_VACIO
+REM ENTER sin escribir nada: no es un ERROR, es una forma honesta de
+REM decir "no quiero seguir". Se avisa y se vuelve al paso anterior.
+REM (Antes este caso devolvia 'entrada invalida' y el prompt volvia a
+REM  aparecer sin salida: ahora siempre hay un camino de vuelta.)
+echo(
+echo   %T_COM_57%
+:LEER_NUMERO_ATRAS
+echo(
+set "NUM_OK=ATRAS"
+set "SALIDA_M=NO"
 exit /b 0
 :LEER_NUMERO_ERROR
 echo(
@@ -1574,13 +1600,17 @@ exit /b 0
 REM ---------------------------------------------------------------------
 REM  PEDIR_DISCO - pide, valida y confirma el numero de disco a usar.
 REM  -------------------------------------------------------------------
-REM  Devuelve DISCO (numero) y DISCO_OK = SI / NO.
-REM  Bucle de seguridad: no se sale de aqui hasta tener un numero valido
-REM  o hasta que el tecnico vuelva al menu con la letra M (tecla directa
-REM  en modo choice; M + ENTER en modo set /p).
+REM  Devuelve DISCO (numero), DISCO_OK = SI / NO y DISCO_ATRAS = SI / NO.
+REM  Bucle de seguridad: no se sale de aqui hasta tener un numero valido o
+REM  hasta que el tecnico vuelva al menu con la letra M (tecla directa en
+REM  modo choice; M + ENTER en modo set /p).
+REM  PUNTO DE ESCAPE: ademas de M, la tecla A o un ENTER vacio devuelven
+REM  al paso ANTERIOR del modulo (DISCO_ATRAS=SI) sin tocar nada. El pie
+REM  de pantalla lo recuerda siempre con la linea estandar T_COM_56.
 REM ---------------------------------------------------------------------
 :PEDIR_DISCO
 set "DISCO_OK=NO"
+set "DISCO_ATRAS=NO"
 set "DISCO="
 if not "%LISTADO_OK%"=="SI" exit /b 0
 :PEDIR_DISCO_BUCLE
@@ -1594,9 +1624,11 @@ REM choice basta pulsar M (una tecla, sin ENTER); en modo set /p hace
 REM falta M + ENTER, porque ahi no existe lectura de una sola tecla.
 if "%MODO_ENTRADA%"=="CHOICE" echo   %T_COM_53%
 if not "%MODO_ENTRADA%"=="CHOICE" echo   %T_COM_18%
+echo   %T_COM_56%
 echo   %C_VERDE%------------------------------------------------------------------%C_FIN%
 call :LEER_NUMERO "%T_COM_19%" DISCO
 if "%NUM_OK%"=="CANCELAR" exit /b 0
+if "%NUM_OK%"=="ATRAS" goto PEDIR_DISCO_ATRAS
 if not "%NUM_OK%"=="SI" goto PEDIR_DISCO_BUCLE
 REM --- Contraste con el listado ya capturado --------------------------
 call :DISCO_EXISTE
@@ -1614,33 +1646,49 @@ if "%OPCION%"=="1" goto PEDIR_DISCO_BUCLE
 if "%OPCION%"=="2" goto PEDIR_DISCO_RIESGO
 exit /b 0
 :PEDIR_DISCO_RIESGO
-REM El tecnico elige 'Continuar' pese a la duda: una sola pregunta S/N.
+REM El tecnico elige 'Continuar' pese a la duda: pregunta S/N del PASO 1.
 call :CONFIRMAR_DESTRUCTIVO "riesgo"
 if not "%CONFIRMADO%"=="SI" exit /b 0
 goto PEDIR_DISCO_OK
+:PEDIR_DISCO_ATRAS
+REM El tecnico tecleo 'A' o solo ENTER en el prompt del numero de disco.
+REM No es un error: se devuelve el control al modulo llamante para que
+REM regrese al paso ANTERIOR (elegir nivel, en sanitizar) o al menu
+REM principal (en maquetar, que no tiene paso previo). SIN pausa.
+set "DISCO_ATRAS=SI"
+exit /b 0
 :PEDIR_DISCO_OK
 set "DISCO_OK=SI"
 exit /b 0
 
 REM ---------------------------------------------------------------------
-REM  CONFIRMAR_DESTRUCTIVO - autorizacion rapida antes de destruir datos.
+REM  CONFIRMAR_DESTRUCTIVO - autorizacion DIFERIDA en DOS pasos.
 REM  -------------------------------------------------------------------
 REM  USO:      call :CONFIRMAR_DESTRUCTIVO "etapa"
 REM    %~1 = etiqueta corta para el log de auditoria (maquetar, sanitizar,
-REM          riesgo...). NO se pide ninguna palabra escrita: la pregunta es
-REM          la de T_CFM_02 y basta UNA tecla (+ ENTER en modo set /p).
+REM          riesgo...). NO se pide ninguna palabra escrita: cada paso es
+REM          UNA sola tecla (+ ENTER en modo set /p). El tecleo de
+REM          'CONFIRMAR' o 'RIESGO' ha quedado ABOLIDO.
 REM
-REM      ES -^> 'S' (Si)       EN -^> 'Y' (Yes)      se ejecuta el guion.
-REM      'N' u cualquier otra respuesta (o ENTER vacio) -^> se CANCELA y no
-REM      se ejecuta nada: el modulo pintara su aviso de operacion cancelada.
+REM    PASO 1 - 'Confirmar operacion? [S/N]: '. Los datos del disco y el
+REM             resumen de la operacion siguen en pantalla: el tecnico
+REM             decide viendolo entero.
+REM    PASO 2 - resumen de los COMANDOS en AMARILLO y despues
+REM             'ATENCION! Esta completamente SEGURO...? [S/N]: '.
+REM             Se reimprime el guion temporal exacto que se va a lanzar
+REM             ('type "%F_SCRIPT%"), para que la segunda decision se tome
+REM             mirando los comandos y no de memoria.
+REM
+REM    Solo DOS 'S' (o 'Y' en ingles) seguidas ejecutan el guion. 'N', un
+REM    ENTER vacio o cualquier otra respuesta en CUALQUIER de los dos
+REM    pasos CANCELA y el modulo pinta su aviso de operacion cancelada.
 REM
 REM  COMO SE LEE (mismo patron que LEER_SN, dos modos de consola):
 REM    - Modo choice: 'choice /c SN' solo admite esas dos teclas; cualquier
 REM      otra tecla hace 'beep' y NO autoriza jamas (ni puede hacerlo).
 REM    - Modo set /p: se lee la linea completa y TODO lo que no sea
 REM      S/SI (o Y/YES) se trata como un 'no'; tambien un ENTER vacio.
-REM  El aviso con el resumen y los datos del disco permanece en pantalla
-REM  mientras se responde: el tecnico decide viendolo entero.
+REM  Cada paso queda en el log por separado (etapa=... paso=1/2).
 REM  Devuelve CONFIRMADO = SI / NO.
 REM ---------------------------------------------------------------------
 :CONFIRMAR_DESTRUCTIVO
@@ -1653,43 +1701,92 @@ set "CONF_NO=N"
 if /i "%LANG%"=="EN" set "CONF_CLAVES=YN"
 if /i "%LANG%"=="EN" set "CONF_SI=Y"
 if /i "%LANG%"=="EN" set "CONF_SI2=YES"
-if "%MODO_ENTRADA%"=="CHOICE" goto CONFIRMAR_DESTRUCTIVO_CHOICE
-goto CONFIRMAR_DESTRUCTIVO_SETP
-:CONFIRMAR_DESTRUCTIVO_CHOICE
-choice /c %CONF_CLAVES% /n /m "%C_VERDE%%T_CFM_02%%C_FIN%"
-if errorlevel 2 goto CONFIRMAR_DESTRUCTIVO_NO
-REM errorlevel 1 = la unica tecla admitida del juego: SI que se autoriza.
+if /i "%LANG%"=="EN" set "CONF_NO=N"
+REM --- PASO 1: los datos del disco estan arriba; una sola tecla --------
+call :CONFIRMAR_LEER "%T_CFM_02%"
+if not "%CONFIRMADO%"=="SI" goto CONFIRMAR_DESTRUCTIVO_NO1
+REM --- PASO 2: resumen de comandos en AMARILLO + autorizacion final ----
+call :CONFIRMAR_RESUMEN
+call :CONFIRMAR_LEER "%T_CFM_03%"
+if not "%CONFIRMADO%"=="SI" goto CONFIRMAR_DESTRUCTIVO_NO2
+goto CONFIRMAR_DESTRUCTIVO_OK
+
+REM ---------------------------------------------------------------------
+REM  CONFIRMAR_LEER - captura de UNA sola pregunta S/N (o Y/N).
+REM  -------------------------------------------------------------------
+REM  USO:      call :CONFIRMAR_LEER "texto de la pregunta"
+REM  Devuelve: CONFIRMADO = SI / NO.
+REM  Rutina compartida por los DOS pasos: asi la lectura, la sanitizacion
+REM  y la defensa contra la entrada vacia estan escritas UNA sola vez.
+REM  Ninguna entrada, por rara que sea, puede romper el guion.
+REM ---------------------------------------------------------------------
+:CONFIRMAR_LEER
+set "CONFIRMADO=NO"
+if "%MODO_ENTRADA%"=="CHOICE" goto CONFIRMAR_LEER_CHOICE
+goto CONFIRMAR_LEER_SETP
+:CONFIRMAR_LEER_CHOICE
+REM errorlevel 1 = tecla SI (S/Y); errorlevel 2 = tecla NO (N). 'choice'
+REM no devuelve ninguna otra cifra, asi que fuera de la lista NO existe
+REM autorizacion posible.
+choice /c %CONF_CLAVES% /n /m "%C_VERDE%%~1%C_FIN%"
+if errorlevel 2 exit /b 0
 if errorlevel 1 set "CONFIRMADO=SI"
-if "%CONFIRMADO%"=="SI" goto CONFIRMAR_DESTRUCTIVO_OK
-REM errorlevel 0 (fallo raro de choice): repetimos, sin autorizar nada.
-goto CONFIRMAR_DESTRUCTIVO_CHOICE
-:CONFIRMAR_DESTRUCTIVO_SETP
+exit /b 0
+:CONFIRMAR_LEER_SETP
 set "CONF_TXT="
-set /p "CONF_TXT=%C_VERDE%%T_CFM_02%%C_FIN%"
+set /p "CONF_TXT=%C_VERDE%%~1%C_FIN%"
 REM ENTER vacio -^> se CANCELA. La guardia es OBLIGATORIA antes de cada
 REM sustitucion: 'set /p' no toca la variable si la linea viene vacia, y
 REM aplicar '%VAR:"=%' a una variable indefinida hace que cmd deje el
 REM patron LITERAL con las comillas sin balancear, de modo que el 'if'
 REM siguiente provoca un error de sintaxis que TERMINA todo menu.bat.
-if not defined CONF_TXT goto CONFIRMAR_DESTRUCTIVO_NO
+if not defined CONF_TXT exit /b 0
 set "CONF_TXT=%CONF_TXT:"=%"
-if not defined CONF_TXT goto CONFIRMAR_DESTRUCTIVO_NO
+if not defined CONF_TXT exit /b 0
 set "CONF_TXT=%CONF_TXT: =%"
 if /i "%CONF_TXT%"=="%CONF_SI%" set "CONFIRMADO=SI"
 if /i "%CONF_TXT%"=="%CONF_SI2%" set "CONFIRMADO=SI"
-if /i "%CONF_TXT%"=="%CONF_NO%" goto CONFIRMAR_DESTRUCTIVO_NO
-if "%CONFIRMADO%"=="SI" goto CONFIRMAR_DESTRUCTIVO_OK
+if /i "%CONF_TXT%"=="%CONF_NO%" exit /b 0
+if "%CONFIRMADO%"=="SI" exit /b 0
 REM Cualquier otra cosa tecleada (o un ENTER vacio) CANCELA: jamas un
-REM tecleo raro autoriza una operacion destructiva.
-goto CONFIRMAR_DESTRUCTIVO_MAL
-:CONFIRMAR_DESTRUCTIVO_OK
-call :REGISTRAR CONFIRMACION "etapa=%CONF_ETAPA%" "ACEPTADA"
-exit /b 0
-:CONFIRMAR_DESTRUCTIVO_MAL
+REM tecleo raro autoriza una operacion destructiva. Se avisa una vez.
 echo(
 echo   %T_CFM_01%
-:CONFIRMAR_DESTRUCTIVO_NO
-call :REGISTRAR CONFIRMACION "etapa=%CONF_ETAPA%" "RECHAZADA"
+exit /b 0
+
+REM ---------------------------------------------------------------------
+REM  CONFIRMAR_RESUMEN - el bloque AMARILLO del PASO 2.
+REM  -------------------------------------------------------------------
+REM  Reimprime el guion temporal EXACTO que se va a lanzar. Si el fichero
+REM  todavia no existe (paso de riesgo, que se pregunta antes de generar
+REM  el guion) se lo explica al tecnico con T_CFM_06 en vez de imprimir
+REM  un recuadro vacio. Se pinta en amarillo (C_AMARILLO) y se vuelve a
+REM  C_FIN al terminar.
+REM ---------------------------------------------------------------------
+:CONFIRMAR_RESUMEN
+<nul set /p "=%C_AMARILLO%"
+echo(
+echo   ==================================================================
+echo   %T_CFM_04%
+echo   ==================================================================
+echo(
+if exist "%F_SCRIPT%" type "%F_SCRIPT%"
+if not exist "%F_SCRIPT%" echo   %T_CFM_06%
+echo(
+echo   %T_CFM_05%
+echo(
+<nul set /p "=%C_FIN%"
+exit /b 0
+
+:CONFIRMAR_DESTRUCTIVO_OK
+call :REGISTRAR CONFIRMACION "etapa=%CONF_ETAPA% paso=1" "ACEPTADA"
+call :REGISTRAR CONFIRMACION "etapa=%CONF_ETAPA% paso=2" "ACEPTADA"
+exit /b 0
+:CONFIRMAR_DESTRUCTIVO_NO1
+call :REGISTRAR CONFIRMACION "etapa=%CONF_ETAPA% paso=1" "RECHAZADA"
+exit /b 0
+:CONFIRMAR_DESTRUCTIVO_NO2
+call :REGISTRAR CONFIRMACION "etapa=%CONF_ETAPA% paso=2" "RECHAZADA"
 exit /b 0
 
 REM ---------------------------------------------------------------------
@@ -1843,6 +1940,21 @@ REM  unidad recupere rendimiento de escritura SIN sobrescribir ceros
 REM  celda a celda (cero desgaste de por vida, TBW). Es el paso que
 REM  diferencia el nivel [2] de un simple 'clean'.
 REM
+REM  COMANDO: cmdlet NATIVO de PowerShell, sin ningun programa de terceros
+REM      Optimize-Volume -DriveLetter L -ReTrim -Defrag -Verbose
+REM  (No existe ninguna herramienta 'PowerChg': el TRIM se pide SIEMPRE
+REM  con el cmdlet anterior. -Defrag reorganiza lo poco que queda util y
+REM  -Verbose deja rastro de lo que hizo cada volumen.)
+REM
+REM  COMPATIBILIDAD HONESTA:
+REM    - SSD/NVMe fisico con soporte de TRIM  -^> se aplica de verdad.
+REM    - Disco virtual (VM) sin soporte del hipervisor, o controlador que
+REM      no acepta deallocate -^> Optimize-Volume lanza excepcion; se
+REM      CAPTURA volumen a volumen, se informa en AMARILLO y el script
+REM      SIGUE con la fase 3 sin romperse ni fingir un exito.
+REM    - Volumen sin letra asignada -^> no admite -DriveLetter; se avisa
+REM      con T_NIV_45 y se omite SOLO ese volumen.
+REM
 REM  El comando PowerShell se arma en TROZOS (variable PS_CMD) porque en
 REM  una sola linea pasaria de 94 columnas. Las 'pipe' van DENTRO de las
 REM  comillas del 'set': dentro de comillas cmd no las interpreta como
@@ -1850,23 +1962,42 @@ REM  operadores y se guardan literales; luego la invocacion tambien las
 REM  mantiene entre comillas ("%PS_CMD%").
 REM
 REM  NUNCA se inventa un resultado: se mira el marcador que solo puede
-REM  escribir el propio PowerShell ('TRIM_OK' / 'SIN_VOLUMENES') y el
-REM  codigo de salida. Si algo falla, se muestra el error tal cual.
-REM  Requiere PowerShell (PS_OK); si no existe se lo dice al tecnico y
-REM  se registra en el log, jamas se finge que el TRIM se aplico.
+REM  escribir el propio PowerShell ('TRIM_OK' / 'TRIM_PARCIAL' /
+REM  'TRIM_NADA' / 'SIN_VOLUMENES') y el codigo de salida. Si algo falla,
+REM  se muestra el error tal cual. Requiere PowerShell (PS_OK); si no
+REM  existe se lo dice al tecnico y se registra en el log, jamas se finge
+REM  que el TRIM se aplico.
 REM ---------------------------------------------------------------------
 :EJECUTAR_TRIM
 if not "%PS_OK%"=="SI" goto EJECUTAR_TRIM_SIN_PS
 echo   %T_NIV_36% %DISCO%
-set "PS_CMD=$p=Get-Partition -DiskNumber %DISCO% -ErrorAction SilentlyContinue"
-set "PS_CMD=%PS_CMD%; $v=$p | Get-Volume -ErrorAction SilentlyContinue"
-set "PS_CMD=%PS_CMD%; if(-not $v){ 'SIN_VOLUMENES' } else {"
-set "PS_CMD=%PS_CMD% $v | ForEach-Object { Optimize-Volume -InputObject $_ -ReTrim"
-set "PS_CMD=%PS_CMD% -ErrorAction Stop | Out-Null }; 'TRIM_OK' }"
+set "PS_CMD=$a=@(Get-Partition -DiskNumber %DISCO% -ErrorAction SilentlyContinue)"
+set "PS_CMD=%PS_CMD%; $p=@($a | Where-Object {$_.DriveLetter})"
+set "PS_CMD=%PS_CMD%; if($a.Count -eq 0){ 'SIN_VOLUMENES' } else {"
+set "PS_CMD=%PS_CMD% $s=$a.Count-$p.Count; if($s -gt 0){ 'SINLETRA|'+$s }"
+set "PS_CMD=%PS_CMD%; $ok=0; $ko=0"
+set "PS_CMD=%PS_CMD%; foreach($x in $p){ try{ Optimize-Volume -DriveLetter $x.DriveLetter"
+set "PS_CMD=%PS_CMD% -ReTrim -Defrag -Verbose -ErrorAction Stop | Out-Null"
+set "PS_CMD=%PS_CMD% $ok++ } catch { $ko++; 'FALLO|'+$x.DriveLetter+'|'+$_.Exception.Message } }"
+set "PS_CMD=%PS_CMD%; if($ok -eq 0){ 'TRIM_NADA' } elseif($ko -gt 0){ 'TRIM_PARCIAL' } else { 'TRIM_OK' } }"
 "%PS_EXE%" -NoProfile -Command "%PS_CMD%" > "%F_SEG_SAL%" 2>&1
 set "TRIM_RC=%errorlevel%"
+REM Aviso informativo: volumenes del disco sin letra (no admiten
+REM -DriveLetter). Se pinta en amarillo y no corta el proceso. El salto
+REM es OBLIGATORIO: cada 'if errorlevel' consume el codigo de salida, asi
+REM que no pueden encadenarse dos comprobaciones sobre la misma cifra.
+findstr /c:"SINLETRA|" "%F_SEG_SAL%" >nul 2>&1
+if errorlevel 1 goto EJECUTAR_TRIM_SINLETRA_FIN
+<nul set /p "=%C_AMARILLO%"
+echo   %T_NIV_45%
+<nul set /p "=%C_FIN%"
+:EJECUTAR_TRIM_SINLETRA_FIN
 findstr /c:"TRIM_OK" "%F_SEG_SAL%" >nul 2>&1
 if not errorlevel 1 goto EJECUTAR_TRIM_OK
+findstr /c:"TRIM_PARCIAL" "%F_SEG_SAL%" >nul 2>&1
+if not errorlevel 1 goto EJECUTAR_TRIM_PARCIAL
+findstr /c:"TRIM_NADA" "%F_SEG_SAL%" >nul 2>&1
+if not errorlevel 1 goto EJECUTAR_TRIM_NADA
 findstr /c:"SIN_VOLUMENES" "%F_SEG_SAL%" >nul 2>&1
 if not errorlevel 1 goto EJECUTAR_TRIM_VACIO
 goto EJECUTAR_TRIM_ERROR
@@ -1876,6 +2007,27 @@ REM Buenas noticias: el TRIM se aplico. Mensaje en VERDE (C_VERDE).
 echo   %T_NIV_31%
 <nul set /p "=%C_FIN%"
 call :REGISTRAR TRIM "disco=%DISCO% codigo=%TRIM_RC%" "OK"
+exit /b 0
+:EJECUTAR_TRIM_PARCIAL
+REM Algun volumen ha sido desasignado y otro ha fallado. AMARILLO y se
+REM muestra la salida cruda de PowerShell con el detalle por volumen.
+<nul set /p "=%C_AMARILLO%"
+echo   %T_NIV_42%
+if exist "%F_SEG_SAL%" findstr /c:"FALLO|" "%F_SEG_SAL%"
+<nul set /p "=%C_FIN%"
+call :REGISTRAR TRIM "disco=%DISCO% codigo=%TRIM_RC%" "PARCIAL"
+exit /b 0
+:EJECUTAR_TRIM_NADA
+REM Ningun volumen ha podido recibir el TRIM: disco virtual (VM) cuyo
+REM hipervisor no implementa deallocate, controlador que lo rechaza o
+REM volumenes sin letra. Se INFORMA limpiamente en AMARILLO y el modulo
+REM sigue con la fase 3: no se finge exito y no se rompe el script.
+<nul set /p "=%C_AMARILLO%"
+echo   %T_NIV_43%
+echo   %T_NIV_44%
+if exist "%F_SEG_SAL%" findstr /c:"FALLO|" "%F_SEG_SAL%"
+<nul set /p "=%C_FIN%"
+call :REGISTRAR TRIM "disco=%DISCO% codigo=%TRIM_RC%" "NO_APLICABLE"
 exit /b 0
 :EJECUTAR_TRIM_VACIO
 echo   %T_NIV_32%
@@ -2008,6 +2160,7 @@ if not "%ENTORNO_OK%"=="SI" goto MODULO_PREPARAR_CANCELADO
 call :LISTAR_DISCOS
 call :DETECTAR_DISCO_ARRANQUE
 call :PEDIR_DISCO
+if "%DISCO_ATRAS%"=="SI" exit /b 0
 if not "%DISCO_OK%"=="SI" goto MODULO_PREPARAR_CANCELADO
 call :REGISTRAR DISCO "modulo=maquetar disco=%DISCO%" "SELECCIONADO"
 call :COMPROBAR_DISCO_SEGURO
@@ -2044,7 +2197,9 @@ if not "%RIESGO_NECESARIO%"=="SI" goto MODULO_PREPARAR_CONFIRMAR
 call :MOSTRAR_AVISO_RIESGO
 <nul set /p "=%C_FIN%"
 :MODULO_PREPARAR_CONFIRMAR
-REM Autorizacion con UNA sola tecla (S/N) ya visible el resumen completo.
+REM Autorizacion en DOS pasos S/N: [1] ya visible el resumen completo y
+REM [2] con el guion exacto impreso en amarillo. Ninguna palabra que
+REM teclear: basta 'S' (o 'Y' en ingles) en cada paso.
 call :CONFIRMAR_DESTRUCTIVO "maquetar"
 if not "%CONFIRMADO%"=="SI" goto MODULO_PREPARAR_CANCELADO
 call :EJECUTAR_DISKPART
@@ -2089,6 +2244,7 @@ if not "%ENTORNO_OK%"=="SI" goto MODULO_SANITIZAR_CANCELADO
 call :LISTAR_DISCOS
 call :DETECTAR_DISCO_ARRANQUE
 call :PEDIR_DISCO
+if "%DISCO_ATRAS%"=="SI" goto MODULO_SANITIZAR_ATRAS
 if not "%DISCO_OK%"=="SI" goto MODULO_SANITIZAR_CANCELADO
 call :REGISTRAR DISCO "modulo=sanitizar disco=%DISCO% nivel=%NIVEL_BORRADO%" "SELECCIONADO"
 call :COMPROBAR_DISCO_SEGURO
@@ -2172,7 +2328,9 @@ if not "%RIESGO_NECESARIO%"=="SI" goto MODULO_SANITIZAR_CONFIRMAR
 call :MOSTRAR_AVISO_RIESGO
 <nul set /p "=%C_FIN%"
 :MODULO_SANITIZAR_CONFIRMAR
-REM Autorizacion con UNA sola tecla (S/N) ya visible el resumen completo.
+REM Autorizacion en DOS pasos S/N: [1] con el resumen de la operacion en
+REM pantalla y [2] con el guion exacto impreso en amarillo. Ninguna
+REM palabra que teclear: basta 'S' (o 'Y' en ingles) en cada paso.
 call :CONFIRMAR_DESTRUCTIVO "sanitizar"
 if not "%CONFIRMADO%"=="SI" goto MODULO_SANITIZAR_CANCELADO
 if "%NIVEL_BORRADO%"=="2" goto MODULO_SANITIZAR_NIVEL2
@@ -2202,6 +2360,14 @@ exit /b 0
 call :REGISTRAR BLOQUEO "modulo=sanitizar disco=%DISCO%" "DENEGADO"
 call :MOSTRAR_BLOQUEO
 goto MODULO_BLOQUEADO
+
+:MODULO_SANITIZAR_ATRAS
+REM El tecnico pidio volver al paso ANTERIOR (tecla A o solo ENTER en el
+REM prompt del numero de disco). Aqui el paso anterior es la ELECCION DE
+REM NIVEL, asi que se vuelve a pintar esa pantalla: jamas se queda en un
+REM callejon sin salida. Sin pausa intermedia y sin tocar nada.
+call :BORRAR_TEMPORALES
+goto MODULO_SANITIZAR
 
 :MODULO_SANITIZAR_CANCELADO
 call :REGISTRAR CANCELADO "modulo=sanitizar disco=%DISCO%" "CANCELADO"
@@ -2271,6 +2437,8 @@ echo     %T_D2_08%
 echo       %T_D2_09%
 echo     %T_D2_36%
 echo       %T_D2_37%
+echo(
+echo   %T_COM_56%
 echo(
 call :LEER_OPCION "%T_NIV_12%" "1 2 3 0" M
 if /i "%OPCION%"=="M" exit /b 0
@@ -2811,6 +2979,7 @@ echo     %T_DIAG_04%
 echo     %T_DIAG_05%
 echo(
 echo   %T_DIAG_06%
+echo   %T_COM_56%
 echo(
 call :LEER_OPCION "%T_DIAG_07%" "1 2 3 0" M
 if /i "%OPCION%"=="M" exit /b 0
@@ -2868,6 +3037,36 @@ REM ---------------------------------------------------------------------
 :DIAG_CHKDSK
 if not exist "%SystemRoot%\System32\chkdsk.exe" goto DIAG_CHKDSK_SIN_EXE
 cls
+call :DIAG_CHKDSK_CABECERA
+:DIAG_CHKDSK_PEDIR
+set "CHK_LETRA="
+set /p "CHK_LETRA=%C_VERDE%%T_DIAG_14%%C_FIN%"
+REM ENTER vacio -^> se vuelve al paso anterior. No es un ERROR, es la
+REM forma mas natural de decir "no quiero seguir". La guardia es
+REM OBLIGATORIA antes de cualquier sustitucion: 'set /p' no toca la
+REM variable con la linea vacia y aplicarle '%VAR:"=%' a una indefinida
+REM deja el patron con comillas sin balancear, lo que abortaria todo
+REM menu.bat con un error de sintaxis.
+if not defined CHK_LETRA goto DIAG_CHKDSK_ATRAS
+set "CHK_LETRA=%CHK_LETRA:"=%"
+set "CHK_LETRA=%CHK_LETRA: =%"
+if not defined CHK_LETRA goto DIAG_CHKDSK_ATRAS
+REM --- Puntos de escape: A (o ENTER) al paso anterior, M al menu -------
+if /i "%CHK_LETRA%"=="A" goto DIAG_CHKDSK_ATRAS
+if /i "%CHK_LETRA%"=="M" goto DIAG_CHKDSK_MENU
+if "%CHK_LETRA%"=="0" goto DIAG_CHKDSK_MENU
+if not "%CHK_LETRA:~1%"=="" goto DIAG_CHKDSK_INVALIDA
+set "CHK_LETRA_OK=NO"
+for %%L in (A B C D E F G H I J K L M N O P Q R S T U V W X Y Z) do if /i "%CHK_LETRA%"=="%%L" set "CHK_LETRA_OK=SI"
+if not "%CHK_LETRA_OK%"=="SI" goto DIAG_CHKDSK_INVALIDA
+if /i "%CHK_LETRA%"=="X" goto DIAG_CHKDSK_X
+if not exist "%CHK_LETRA%:\" goto DIAG_CHKDSK_NO_EXISTE
+goto DIAG_CHKDSK_MODO
+
+:DIAG_CHKDSK_CABECERA
+REM Cabecera COMUN de la opcion [2]: titulo, avisos y LISTADO AUTOMATICO
+REM de las unidades montadas (paso previo obligatorio: el tecnico elige
+REM sobre letras REALES que acaba de ver, nunca de memoria).
 call :MOSTRAR_CABECERA
 echo(
 echo   %T_DIAG_10%
@@ -2879,22 +3078,20 @@ echo   %T_DIAG_13%
 echo(
 call :DIAG_LISTAR_UNIDADES
 echo(
-:DIAG_CHKDSK_PEDIR
-set "CHK_LETRA="
-set /p "CHK_LETRA=%C_VERDE%%T_DIAG_14%%C_FIN%"
-if not defined CHK_LETRA goto DIAG_CHKDSK_PEDIR
-set "CHK_LETRA=%CHK_LETRA:"=%"
-set "CHK_LETRA=%CHK_LETRA: =%"
-if not defined CHK_LETRA goto DIAG_CHKDSK_PEDIR
-if /i "%CHK_LETRA%"=="M" goto DIAG_CHKDSK_MENU
-if "%CHK_LETRA%"=="0" exit /b 0
-if not "%CHK_LETRA:~1%"=="" goto DIAG_CHKDSK_INVALIDA
-set "CHK_LETRA_OK=NO"
-for %%L in (A B C D E F G H I J K L M N O P Q R S T U V W X Y Z) do if /i "%CHK_LETRA%"=="%%L" set "CHK_LETRA_OK=SI"
-if not "%CHK_LETRA_OK%"=="SI" goto DIAG_CHKDSK_INVALIDA
-if /i "%CHK_LETRA%"=="X" goto DIAG_CHKDSK_X
-if not exist "%CHK_LETRA%:\" goto DIAG_CHKDSK_NO_EXISTE
-goto DIAG_CHKDSK_MODO
+echo   %T_COM_56%
+exit /b 0
+:DIAG_CHKDSK_VOLVER
+REM Vuelta desde el submenu de modo al prompt de letra: se repinta la
+REM pantalla COMPLETA para que el listado de unidades siga visible.
+cls
+call :DIAG_CHKDSK_CABECERA
+goto DIAG_CHKDSK_PEDIR
+:DIAG_CHKDSK_ATRAS
+REM El tecnico pidio volver al paso anterior (A o solo ENTER): se regresa
+REM al menu de diagnostico SIN pausa y SIN ejecutar chkdsk.
+echo(
+echo   %T_COM_57%
+goto DIAG_CHKDSK_MENU
 
 :DIAG_CHKDSK_MODO
 cls
@@ -2908,11 +3105,14 @@ echo     %T_DIAG_17%
 echo     %T_DIAG_18%
 echo(
 echo   %T_DIAG_19%
+echo   %T_COM_56%
 echo(
 call :LEER_OPCION "%T_DIAG_20%" "1 2 3 0" M
 if /i "%OPCION%"=="M" goto DIAG_CHKDSK_MENU
 if "%OPCION%"=="4" set "OPCION=0"
-if "%OPCION%"=="0" exit /b 0
+REM [0] es el PUNTO DE ESCAPE de esta pantalla: vuelve al paso anterior
+REM (elegir otra letra) en vez de expulsar del modulo.
+if "%OPCION%"=="0" goto DIAG_CHKDSK_VOLVER
 set "CHK_ARGS="
 if "%OPCION%"=="1" set "CHK_ARGS=/scan"
 if "%OPCION%"=="2" set "CHK_ARGS=/f"
@@ -2986,10 +3186,14 @@ if "%VUELTA_MENU%"=="SI" set "DIAG_MENU=SI"
 exit /b 0
 
 REM ---------------------------------------------------------------------
-REM  DIAG_LISTAR_UNIDADES - lista de unidades logicas con letra
+REM  DIAG_LISTAR_UNIDADES - lista de unidades LOGICAS con letra
 REM ---------------------------------------------------------------------
-REM  Preferimos PowerShell (Win32_LogicalDisk) porque da letra, etiqueta,
-REM  sistema de archivos y tamanos en una linea; si no esta, caemos a wmic.
+REM  Escaneo AUTOMATICO previo a cualquier pregunta. Se prefiere
+REM  PowerShell con Get-Volume + Get-Partition porque, ademas de la letra,
+REM  la etiqueta y los tamanos, indica el DISCO FISICO sobre el que vive
+REM  cada letra: asi el tecnico sabe de un vistazo que C: esta en el disco
+REM  0 antes de teclear nada. Si esos cmdlets no estan montados (WinPE
+REM  recortado), se cae a Win32_LogicalDisk y despues a wmic.
 REM  La salida se imprime con 'type' para que una etiqueta con caracteres
 REM  raros nunca se interprete como un comando.
 REM ---------------------------------------------------------------------
@@ -3000,8 +3204,16 @@ if exist "%SystemRoot%\System32\wbem\wmic.exe" goto DIAG_LISTAR_UNIDADES_WMIC
 echo       %T_INV_10%
 goto DIAG_LISTAR_UNIDADES_FIN
 :DIAG_LISTAR_UNIDADES_PS
-set "PS_CMD=$v=@(Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3' -ErrorAction SilentlyContinue)"
-set "PS_CMD=%PS_CMD%; if($v.Count -gt 0){$v|ForEach-Object{'  '+$_.DeviceID+'  '+$_.VolumeName+'  '+$_.FileSystem+'  '+[math]::Round($_.Size/1GB)+' GB  '+[math]::Round($_.FreeSpace/1GB)+' GB'}}else{'SIN_DATOS'}"
+set "PS_CMD=try{ if(-not (Get-Command Get-Volume -ErrorAction SilentlyContinue)){ throw 'a' }"
+set "PS_CMD=%PS_CMD%; $v=@(Get-Volume -DriveType Fixed -ErrorAction SilentlyContinue | Where-Object {$_.DriveLetter})"
+set "PS_CMD=%PS_CMD%; if($v.Count -eq 0){ throw 'b' }; $v|ForEach-Object{"
+set "PS_CMD=%PS_CMD% $d='-'; $p=Get-Partition -DriveLetter $_.DriveLetter -ErrorAction SilentlyContinue"
+set "PS_CMD=%PS_CMD%; if($p){ $d=$p.DiskNumber }; '  '+$_.DriveLetter+':  '+$_.FileSystemLabel"
+set "PS_CMD=%PS_CMD% +'  '+$_.FileSystem+'  '+[math]::Round($_.Size/1GB)+' GB  '+[math]::Round($_.SizeRemaining/1GB)"
+set "PS_CMD=%PS_CMD% +' GB  disco '+$d } } catch { $v=@(Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3' -ErrorAction SilentlyContinue)"
+set "PS_CMD=%PS_CMD%; if($v.Count -gt 0){ $v|ForEach-Object{ '  '+$_.DeviceID+'  '+$_.VolumeName"
+set "PS_CMD=%PS_CMD% +'  '+$_.FileSystem+'  '+[math]::Round($_.Size/1GB)+' GB  '+[math]::Round($_.FreeSpace/1GB)+' GB' } }"
+set "PS_CMD=%PS_CMD%; else { 'SIN_DATOS' } }"
 call :ARCHIVO_TEMP_INV
 "%PS_EXE%" -NoProfile -Command "%PS_CMD%" > "%F_INV%" 2>&1
 call :MOSTRAR_TEMP_O_NA
@@ -3033,8 +3245,14 @@ echo   %T_DIAG_40%
 echo   %C_VERDE%------------------------------------------------------------------%C_FIN%
 echo(
 echo   %T_DIAG_41%
-echo   %T_DIAG_46%
 echo(
+REM Escaneo AUTOMATICO previo: ANTES de nada se listan las unidades
+REM montadas con su disco fisico y solo despues se consulta la salud.
+REM Asi el tecnico relaciona cada letra con su disco y decide sobre
+REM datos REALES acaba de ver en pantalla, no de memoria.
+call :DIAG_LISTAR_UNIDADES
+echo(
+echo   %T_DIAG_46%
 if "%PS_OK%"=="SI" goto DIAG_SMART_PS
 if exist "%SystemRoot%\System32\wbem\wmic.exe" goto DIAG_SMART_WMIC
 echo       %T_INV_10%
@@ -3097,6 +3315,7 @@ echo   %T_DIAG_43%
 call :REGISTRAR DIAGNOSTICO "consulta=smart estado=%SMART_VERDICT%" "OK"
 :DIAG_SMART_FIN
 echo(
+echo   %T_COM_56%
 call :PULSA_TECLA_MENU "%T_DIAG_45%"
 if "%VUELTA_MENU%"=="SI" set "DIAG_MENU=SI"
 exit /b 0
@@ -3165,15 +3384,24 @@ exit /b 0
 REM ---------------------------------------------------------------------
 REM  INV_RAM - memoria RAM instalada, disponible y modulos
 REM ---------------------------------------------------------------------
-REM  Metodo preferido: PowerShell. Win32_PhysicalMemory da la capacidad de
-REM  CADA modulo (Capacity, en bytes), su velocidad (Speed) y la ranura
-REM  fisica (DeviceLocator); sumando Capacity se obtiene la RAM instalada
-REM  REAL, aunque la BIOS reserve parte (que es lo que hacia fallar al
-REM  metodo anterior basado solo en wmic OS). Win32_OperatingSystem aporta
-REM  la RAM libre actual.
+REM  Consulta NATIVA con PowerShell embebido, encadenada por CAPAS para que
+REM  funcione tanto en WinPE recortado como en maquinas fisicas y
+REM  virtuales (era el famoso "dato no disponible" de la seccion 3):
 REM
-REM  RESPALDO SIN PowerShell: wmic OS (total visible y libre) mas
-REM  'wmic memorychip' para las ranuras. Ultimo recurso: aviso T_INV_10.
+REM    1) Get-CimInstance Win32_PhysicalMemory  suma Capacity de TODOS los
+REM       modulos: da la RAM INSTALADA real, aunque la BIOS reserve parte.
+REM       (En WinPE necesita el paquete WinPE-WMI.)
+REM    2) Get-WmiObject Win32_PhysicalMemory    misma clase por el canal
+REM       COM, util cuando los cmdlets CIM no estan montados.
+REM    3) Win32_ComputerSystem.TotalPhysicalMemory  por si no hay ni una
+REM       ni otra: dato global del sistema, menos fino pero SIEMPRE util.
+REM    4) wmic OS / memorychip                   ultimo respaldo, sin PS.
+REM    5) T_INV_10 + T_INV_17                   solo si falla TODO.
+REM
+REM  Cada capa va envuelta en try/catch con -ErrorAction Stop: una capa
+REM  caida no aborta la siguiente (el error atrapado no llega jamas a
+REM  cmd). Win32_OperatingSystem aporta la RAM libre ACTUAL, y como
+REM  FreePhysicalMemory viene en KB se divide por 1KB para salir en GB.
 REM ---------------------------------------------------------------------
 :INV_RAM
 if "%PS_OK%"=="SI" goto INV_RAM_PS
@@ -3182,30 +3410,40 @@ echo       %T_INV_10%
 echo       %T_INV_17%
 exit /b 0
 :INV_RAM_PS
-set "PS_CMD=$m=@(Get-CimInstance Win32_PhysicalMemory -ErrorAction SilentlyContinue)"
-set "PS_CMD=%PS_CMD%; $o=Get-CimInstance Win32_OperatingSystem -ErrorAction SilentlyContinue"
-set "PS_CMD=%PS_CMD%; if($m.Count -gt 0){"
-set "PS_CMD=%PS_CMD% $t=($m|Measure-Object -Property Capacity -Sum).Sum"
-set "PS_CMD=%PS_CMD%; $f=0; if($o){$f=[math]::Round($o.FreePhysicalMemory/1MB)}"
-set "PS_CMD=%PS_CMD%; 'RAM|'+[math]::Round($t/1GB)+'|'+$m.Count+'|'+$f"
-set "PS_CMD=%PS_CMD%; $m|ForEach-Object{'RAMSLOT|'+$_.DeviceLocator+'|'+[math]::Round($_.Capacity/1GB)+'|'+$_.Speed}"
-set "PS_CMD=%PS_CMD%; } else { 'SIN_DATOS' }"
+set "PS_CMD=$t=0; $n=0; $f=0; $m=@()"
+set "PS_CMD=%PS_CMD%; try{ $m=@(Get-CimInstance Win32_PhysicalMemory -EA Stop) }catch{ $m=@() }"
+set "PS_CMD=%PS_CMD%; if($m.Count -eq 0){ try{ $m=@(Get-WmiObject Win32_PhysicalMemory -EA Stop) }catch{ $m=@() } }"
+set "PS_CMD=%PS_CMD%; if($m.Count -gt 0){ $t=($m|Measure-Object -Property Capacity -Sum).Sum; $n=$m.Count;"
+set "PS_CMD=%PS_CMD% $m|ForEach-Object{'RAMSLOT|'+$_.DeviceLocator+'|'+[math]::Round($_.Capacity/1GB)+'|'+$_.Speed} }"
+set "PS_CMD=%PS_CMD%; if($t -eq 0){ try{ $t=(Get-CimInstance Win32_ComputerSystem -EA Stop).TotalPhysicalMemory }catch{ $t=0 } }"
+set "PS_CMD=%PS_CMD%; if($t -eq 0){ try{ $t=(Get-WmiObject Win32_ComputerSystem -EA Stop).TotalPhysicalMemory }catch{ $t=0 } }"
+set "PS_CMD=%PS_CMD%; $o=$null; try{ $o=Get-CimInstance Win32_OperatingSystem -EA Stop }catch{ }"
+set "PS_CMD=%PS_CMD%; if(-not $o){ try{ $o=Get-WmiObject Win32_OperatingSystem -EA Stop }catch{ } }"
+set "PS_CMD=%PS_CMD%; if($o){ $f=[math]::Round($o.FreePhysicalMemory/1KB) }"
+set "PS_CMD=%PS_CMD%; $sl=''; if($n -gt 0){ $sl=$n }"
+set "PS_CMD=%PS_CMD%; if($t -gt 0){ 'RAM|'+[math]::Round($t/1GB)+'|'+$sl+'|'+$f } else { 'SIN_DATOS' }"
 call :ARCHIVO_TEMP_INV
 "%PS_EXE%" -NoProfile -Command "%PS_CMD%" > "%F_INV%" 2>&1
-if not exist "%F_INV%" goto INV_RAM_NA
+if not exist "%F_INV%" goto INV_RAM_WMIC
 set "RAM_HECHO=NO"
 set "RAM_SLOTS="
 for /f "usebackq tokens=1-4 delims=|" %%A in ("%F_INV%") do if "%%A"=="RAM" call :INV_RAM_TOTAL "%%B" "%%C" "%%D"
 if defined RAM_SLOTS echo       %T_INV_19%
 for /f "usebackq tokens=1-4 delims=|" %%A in ("%F_INV%") do if "%%A"=="RAMSLOT" call :INV_RAM_SLOT "%%B" "%%C" "%%D"
 if exist "%F_INV%" del /f /q "%F_INV%" >nul 2>&1
+REM  PowerShell ha intentado las capas 1, 2 y 3. Si NINGUNA ha dado dato,
+REM  no nos rendimos: se cae al respaldo con wmic (capa 4). Antes se saltaba
+REM  directamente al aviso T_INV_10 y por eso el tecnico veia siempre
+REM  "dato no disponible".
+if not "%RAM_HECHO%"=="SI" if exist "%SystemRoot%\System32\wbem\wmic.exe" goto INV_RAM_WMIC
 if not "%RAM_HECHO%"=="SI" goto INV_RAM_NA
 exit /b 0
 :INV_RAM_TOTAL
 set "RAM_HECHO=SI"
 set "RAM_SLOTS=%~2"
 <nul set /p "=%C_BLANCO%"
-echo       %T_INV_11% %~1 %T_INV_16%   %T_INV_18% %~2
+echo       %T_INV_11% %~1 %T_INV_16%
+if defined RAM_SLOTS echo       %T_INV_18% %RAM_SLOTS%
 if not "%~3"=="" echo       %T_INV_12% %~3 %T_INV_16%
 <nul set /p "=%C_FIN%"
 exit /b 0
@@ -3725,7 +3963,7 @@ set "T_BIEN_06=1. Identifica SIEMPRE el disco correcto antes de borrar nada."
 set "T_BIEN_07=Las opciones 1 y 2 listan los discos antes de preguntar."
 set "T_BIEN_08=2. Las opciones 1 y 2 son DESTRUCTIVAS: borran la tabla de"
 set "T_BIEN_09=particiones (y en la opción 2, todo el contenido del disco)."
-set "T_BIEN_10=Ninguna actúa sin que tú confirmes la operación con una sola tecla."
+set "T_BIEN_10=Ninguna actúa sin que tú confirmes DOS veces seguidas (S/N)."
 set "T_BIEN_11=3. Ante la duda, consulta primero la opción 5 (Ayuda) y no"
 set "T_BIEN_12=improvises con comandos que no conoces."
 set "T_BIEN_13=Forma de uso: teclea el número de la opción que aparece en el"
@@ -3733,10 +3971,14 @@ set "T_BIEN_14=menú. Según el entorno bastará con la tecla o con pulsar ENTER
 set "T_BIEN_15=Pulsa cualquier tecla para entrar en el menú principal..."
 set "T_CFM_01=[i] Confirmación no reconocida: NO se ha ejecutado nada."
 set "T_CFM_02=   ¿Confirmar operación? [S/N]:  "
+set "T_CFM_03=   ¡ATENCIóN! ¿Está completamente SEGURO de ejecutar esta acción? [S/N]:  "
+set "T_CFM_04=RESUMEN DE LOS COMANDOS QUE SE VAN A EJECUTAR"
+set "T_CFM_05=PASO 2 de 2 - 'S' (EN: 'Y') ejecuta; 'N' u otra tecla CANCELA."
+set "T_CFM_06=Aún no hay guion generado: los comandos salen en el resumen de arriba."
 set "T_COM_01=[!] Entrada no válida. Usa solo una de las opciones indicadas."
 set "T_COM_02=[!] Entrada no válida: introduce SOLO el número de disco (por"
-set "T_COM_03=ejemplo: 0, 1, 2, 10), sin ceros a la izquierda, o la letra"
-set "T_COM_04=M para volver al menú principal."
+set "T_COM_03=ejemplo: 0, 1, 2, 10), sin ceros a la izquierda; A vuelve al paso"
+set "T_COM_04=anterior y M al menú principal."
 set "T_COM_05=[!] Esta consola NO parece tener permisos de administrador."
 set "T_COM_06=diskpart podrá listar los discos, pero NO podrá modificarlos"
 set "T_COM_07=(devolverá acceso denegado en 'clean')."
@@ -3750,8 +3992,8 @@ set "T_COM_14=¿Es un WinPE muy recortado? Este módulo no puede continuar."
 set "T_COM_15=Teclea el NUMERO de disco sobre el que quieres trabajar."
 set "T_COM_16=Ese numero es la PRIMERA columna del listado de arriba"
 set "T_COM_17=(Disk 0 / Disco 0, Disk 1 / Disco 1...). Nunca es una letra."
-set "T_COM_18=Para volver al menu principal: teclea  M  y pulsa ENTER."
-set "T_COM_19=   Número de disco:  "
+set "T_COM_18=Vuelve al menú principal con M; al paso anterior con A (o ENTER)."
+set "T_COM_19=   Número de disco (A = anterior, M = menú):  "
 set "T_COM_24=   ¿Qué hacemos? [1=Corregir / 2=Continuar / 3=Cancelar]:  "
 set "T_COM_25=VERIFICACIÓN FINAL: este es el estado ACTUAL del equipo."
 set "T_COM_26=[Ayuda] Cómo comprobar el resultado:"
@@ -3783,6 +4025,8 @@ set "T_COM_52=   Recibido: "
 set "T_COM_53=Teclas directas: M = menú principal, S = confirmar si el número es correcto (sin ENTER)."
 set "T_COM_54=      [C] Continuar      [M] Menú principal"
 set "T_COM_55=   Teclea tu opción:  "
+set "T_COM_56= [M] Menú principal   |   [A] Paso anterior (o Enter para cancelar)"
+set "T_COM_57=[i] Entrada vacía: volviendo al paso anterior."
 set "T_CONS_01=[4] CONSOLA AVANZADA"
 set "T_CONS_02=Abriendo una consola CMD interactiva en la MISMA ventana."
 set "T_CONS_03=- Escribe 'exit' para volver al menú principal."
@@ -3796,7 +4040,7 @@ set "T_D1_03=a) Lista los discos físicos y sus tamaños (diskpart, solo lectura
 set "T_D1_04=b) Te pide el NÚMERO del disco a preparar (entrada validada)."
 set "T_D1_05=c) Genera el guion de diskpart con los comandos exactos y te lo"
 set "T_D1_06=muestra para que lo leas ANTES de ejecutar nada."
-set "T_D1_07=d) Te pide UNA sola confirmación (S) antes de ejecutar."
+set "T_D1_07=d) Te pide DOS confirmaciones seguidas (S/N) antes de ejecutar."
 set "T_D1_08=e) Ejecuta y vuelve a listar el equipo para verificar."
 set "T_D1_09=Orden de comandos:"
 set "T_D1_10=  1) clean"
@@ -3846,7 +4090,7 @@ set "T_D2_28=puedes maquetarlo con la opción [1]."
 set "T_D2_29=[!] Estás en Windows COMPLETO, no en WinPE: hay un sistema en"
 set "T_D2_30=cuando consigue identificarlo; si arriba no aparece como protegido,"
 set "T_D2_31=el riesgo es tuyo: ante la mínima duda, cancela (letra C:)."
-set "T_D2_32=Antes de ejecutar se te pedirá una sola confirmación (S/N)."
+set "T_D2_32=Antes de ejecutar se te pedirán DOS confirmaciones (S/N) seguidas."
 set "T_D2_33=- Borrado seguro (opción 2): el Disco"
 set "T_D2_34=ejecución. La protección de arranque bloquea el disco del sistema"
 set "T_D2_35=aparecerá EN BRUTO"
@@ -3860,7 +4104,7 @@ set "T_NIV_07=      controlador limpia los bloques (GC), rápido y sin ceros."
 set "T_NIV_08=  [3] Limpieza profunda / Sobrescritura de ceros (Solo HDDs)"
 set "T_NIV_09=      'clean all': sobrescribe TODOS los sectores con ceros."
 set "T_NIV_10=      Lento. NO recomendado en SSD o NVMe (desgaste NAND)."
-set "T_NIV_11=  [0] Salir / Cancelar      [M] Menú principal (M + ENTER)"
+set "T_NIV_11=  [0] Salir / Cancelar"
 set "T_NIV_12=   Su nivel [0-3]:  "
 set "T_NIV_13=Acción:         clean     (solo estructura, sin sobrescritura)"
 set "T_NIV_14=Acción:         TRIM + clean  (reset SSD/NVMe, sin ceros)"
@@ -3873,6 +4117,10 @@ set "T_NIV_20=- El TRIM a nivel de controlador SÍ destruye la recuperación"
 set "T_NIV_21=  de datos a nivel de bloques: el controlador recicla las"
 set "T_NIV_40=  celdas liberadas (Garbage Collection) y no escribe ceros,"
 set "T_NIV_41=  así que es rápido, seguro y sin desgaste de celdas (TBW)."
+set "T_NIV_42=TRIM aplicado solo en parte de los volúmenes. Detalle de los fallos:"
+set "T_NIV_43=[i] TRIM no aplicable en este entorno (disco virtual o sin soporte"
+set "T_NIV_44=del hipervisor): el paso se OMITE y se continúa con la limpieza."
+set "T_NIV_45=[i] Volumen sin letra asignada: no admite -DriveLetter, se omite."
 set "T_NIV_22=[!] PowerShell no disponible: el paso TRIM se omitirá y solo"
 set "T_NIV_23=se aplicará la limpieza de estructura (como el nivel [1])."
 set "T_NIV_24=- Este disco es HDD: el TRIM no aplicará; solo limpieza de"
@@ -3933,19 +4181,19 @@ set "T_DIAG_02=Consulta el equipo y permite comprobar sus unidades (chkdsk, SMAR
 set "T_DIAG_03=  [1] Hardware completo       CPU, RAM, placa base y discos"
 set "T_DIAG_04=  [2] Comprobar unidad        chkdsk: /scan, /f o /f /r"
 set "T_DIAG_05=  [3] Salud SMART             estado OK / Pre-fail de los discos"
-set "T_DIAG_06=  [0] Volver al menú principal     [M] Menú principal (M + ENTER)"
+set "T_DIAG_06=  [0] Volver al menú principal"
 set "T_DIAG_07=   Su opción [0-3] (M = menú):  "
 set "T_DIAG_08=Fin del inventario de hardware."
 set "T_DIAG_10=[2] CHKDSK - COMPROBACIÓN DE UNA UNIDAD"
 set "T_DIAG_11=Comprueba la unidad que elijas; no borra archivos."
 set "T_DIAG_12=No uses X: (unidad RAM de WinPE)."
 set "T_DIAG_13=La letra debe ser una unidad montada (C:, D:, E:...)."
-set "T_DIAG_14=   Letra de unidad (ej. C, 0 = volver, M = menú):  "
+set "T_DIAG_14=   Letra de unidad (ej. C):  "
 set "T_DIAG_15=Unidad seleccionada:"
 set "T_DIAG_16=  [1] Análisis rápido (/scan)      no desmonta la unidad"
 set "T_DIAG_17=  [2] Reparar errores (/f)         puede pedir reinicio"
 set "T_DIAG_18=  [3] Reparar + sectores (/f /r)   muy lento, para HDD"
-set "T_DIAG_19=  [0] Volver al diagnóstico      [M] Menú principal"
+set "T_DIAG_19=  [0] Paso anterior: elegir OTRA letra"
 set "T_DIAG_20=   Modo [0-3] (M = menú):  "
 set "T_DIAG_21=   ¿Ejecutar chkdsk con estas opciones? [S/N]:  "
 set "T_DIAG_22=Comando:"
@@ -3955,13 +4203,13 @@ set "T_DIAG_25=[OK] chkdsk encontró y corrigió errores (código 1)."
 set "T_DIAG_26=[!] chkdsk pide una limpieza adicional (código 2)."
 set "T_DIAG_27=[!] chkdsk no pudo comprobar la unidad (código 3)."
 set "T_DIAG_28=[i] Código de salida de chkdsk:"
-set "T_DIAG_29=Pulsa [C] para volver al diagnóstico o [M] para el menú."
+set "T_DIAG_29=Fin de la comprobación."
 set "T_DIAG_30=[!] Letra no válida: escribe UNA letra de unidad (A-Z)."
 set "T_DIAG_31=[!] X: es la unidad RAM de WinPE: no se comprueba con chkdsk."
 set "T_DIAG_32=[!] La unidad no existe o no está montada:"
 set "T_DIAG_33=Comprobación cancelada: no se ha ejecutado chkdsk."
-set "T_DIAG_34=Pulsa [C] para volver al diagnóstico o [M] para el menú."
-set "T_DIAG_35=Unidades lógicas detectadas (letra, etiqueta, FS, total, libre):"
+set "T_DIAG_34=Fin de la comprobación."
+set "T_DIAG_35=Unidades fijas detectadas (letra, etiqueta, FS, total, libre, disco):"
 set "T_DIAG_36=Nota: X: es la unidad RAM de WinPE; no ejecutes chkdsk sobre ella."
 set "T_DIAG_37=[!] No encuentro chkdsk.exe en esta imagen."
 set "T_DIAG_40=[3] SALUD SMART DE LOS DISCOS"
@@ -3993,8 +4241,8 @@ set "T_MENU_04=[3]  Diagnóstico / Inventario           consulta sin modificar n
 set "T_MENU_05=[4]  Consola Avanzada                   salir a CMD interactivo"
 set "T_MENU_06=[5]  Ayuda del sistema                  guía rápida del técnico"
 set "T_MENU_15=[6]  Salir / Apagar equipo"
-set "T_MENU_07=Aviso: [1] y [2] modifican DISCOS de verdad y piden una sola tecla"
-set "T_MENU_08=de confirmación (S/N). Las opciones [3] a [6] no tocan el hardware por sí solas."
+set "T_MENU_07=Aviso: [1] y [2] modifican DISCOS de verdad y piden DOS confirmaciones"
+set "T_MENU_08=seguidas con una tecla S/N. Las opciones [3] a [6] no tocan el hardware solas."
 set "T_MENU_09=(Si la consola no reacciona a una sola tecla, teclea el número"
 set "T_MENU_10=y termina con ENTER.)"
 set "T_MENU_11=   Su opción [1-6]:  "
@@ -4033,7 +4281,7 @@ set "T_SEG_11=La herramienta no puede saber ahora mismo cuál de los discos"
 set "T_SEG_12=es el de arranque (WinPE recortado, sin PowerShell o diskpart en otro idioma)."
 set "T_SEG_13=Es tu RESPONSABILIDAD no elegir el disco del sistema en ejecución"
 set "T_SEG_14=ni el medio desde el que se ha arrancado. Ante la mínima duda: CANCELA."
-set "T_SEG_15=Para seguir tendrás que confirmar con la tecla S (en inglés Y): N cancela."
+set "T_SEG_15=Para seguir tendrás que confirmar DOS veces con S (en inglés Y): N cancela."
 set "T_SEG_16=Protección de arranque: ACTIVA (este disco NO es el de arranque)."
 set "T_SEG_17=Protección de arranque: SIN VERIFICAR (podría ser el de arranque)."
 set "T_SEG_18=Protección de arranque: no aplica (WinPE en memoria RAM)."
@@ -4138,7 +4386,7 @@ set "T_BIEN_06=1. ALWAYS identify the right disk before erasing anything."
 set "T_BIEN_07=Options 1 and 2 list the disks before asking."
 set "T_BIEN_08=2. Options 1 and 2 are DESTRUCTIVE: they erase the partition"
 set "T_BIEN_09=table (and in option 2, all the data on the disk)."
-set "T_BIEN_10=None of them acts unless you confirm it with a single key."
+set "T_BIEN_10=None of them acts unless you confirm TWICE in a row (Y/N)."
 set "T_BIEN_11=3. When in doubt, read option 5 (Help) first and do not"
 set "T_BIEN_12=improvise with commands you do not know."
 set "T_BIEN_13=How to use it: type the number of the option shown in the"
@@ -4146,10 +4394,14 @@ set "T_BIEN_14=menu. Depending on the environment the key alone or ENTER will do
 set "T_BIEN_15=Press any key to enter the main menu..."
 set "T_CFM_01=[i] Confirmation not recognised: NOTHING has been executed."
 set "T_CFM_02=   Confirm operation? [Y/N]:  "
+set "T_CFM_03=   ATTENTION! Are you completely SURE of running this action? [Y/N]:  "
+set "T_CFM_04=SUMMARY OF THE COMMANDS ABOUT TO BE RUN"
+set "T_CFM_05=STEP 2 of 2 - Y runs it; N or any other key CANCELS."
+set "T_CFM_06=No script generated yet: the commands are in the summary above."
 set "T_COM_01=[!] Invalid input. Use only one of the options shown."
 set "T_COM_02=[!] Invalid input: enter ONLY the disk number (for"
-set "T_COM_03=example: 0, 1, 2, 10), with no leading zeros, or the letter"
-set "T_COM_04=M to return to the main menu."
+set "T_COM_03=example: 0, 1, 2, 10), no leading zeros; A goes one step"
+set "T_COM_04=back and M to the main menu."
 set "T_COM_05=[!] This console does NOT seem to have administrator rights."
 set "T_COM_06=diskpart will be able to list the disks, but NOT to modify them"
 set "T_COM_07=(it will return access denied on 'clean')."
@@ -4163,8 +4415,8 @@ set "T_COM_14=Is it a very trimmed WinPE? This module cannot continue."
 set "T_COM_15=Type the disk NUMBER you want to work on."
 set "T_COM_16=That number is the FIRST column of the listing above"
 set "T_COM_17=(Disk 0, Disk 1...). It is never a drive letter."
-set "T_COM_18=To return to the main menu: type  M  and press ENTER."
-set "T_COM_19=   Disk number:  "
+set "T_COM_18=Back to the main menu with M; one step back with A (or ENTER)."
+set "T_COM_19=   Disk number (A = back, M = menu):  "
 set "T_COM_24=   What do we do? [1=Fix / 2=Continue / 3=Cancel]:  "
 set "T_COM_25=FINAL CHECK: this is the CURRENT state of the machine."
 set "T_COM_26=[Help] How to check the result:"
@@ -4196,6 +4448,8 @@ set "T_COM_52=   Received: "
 set "T_COM_53=Direct keys: M = main menu, S = confirm if the number is already correct (no ENTER)."
 set "T_COM_54=      [C] Continue       [M] Main menu"
 set "T_COM_55=   Type your choice:  "
+set "T_COM_56= [M] Main menu   |   [A] Previous step (or Enter to cancel)"
+set "T_COM_57=[i] Empty input: going back to the previous step."
 set "T_CONS_01=[4] ADVANCED CONSOLE"
 set "T_CONS_02=Opening an interactive CMD console in the SAME window."
 set "T_CONS_03=- Type 'exit' to return to the main menu."
@@ -4209,7 +4463,7 @@ set "T_D1_03=a) Lists the physical disks and sizes (diskpart, read only)."
 set "T_D1_04=b) Asks you for the NUMBER of the disk (validated input)."
 set "T_D1_05=c) Builds the diskpart script with the exact commands and"
 set "T_D1_06=shows it so that you read it BEFORE running anything."
-set "T_D1_07=d) Asks for a single confirmation (Y) before running."
+set "T_D1_07=d) Asks for TWO confirmations (Y/N) before running."
 set "T_D1_08=e) Runs it and lists the machine again to verify."
 set "T_D1_09=Command order:"
 set "T_D1_10=  1) clean"
@@ -4259,7 +4513,7 @@ set "T_D2_28=lay it out with option [1]."
 set "T_D2_29=[!] You are in FULL Windows, not in WinPE: a system is running"
 set "T_D2_30=can identify it; if it does not appear as protected above,"
 set "T_D2_31=the risk is yours: at the slightest doubt, cancel (drive C:)."
-set "T_D2_32=Before running it asks for a single confirmation (Y/N)."
+set "T_D2_32=Before running it asks for TWO confirmations (Y/N) in a row."
 set "T_D2_33=- Secure erase (option 2): Disk"
 set "T_D2_34=here. The boot protection blocks the system disk when it"
 set "T_D2_35=will appear RAW"
@@ -4273,7 +4527,7 @@ set "T_NIV_07=      the controller wipes the blocks (GC), fast and no zeros."
 set "T_NIV_08=  [3] Deep clean / Zero overwrite (HDDs only)"
 set "T_NIV_09=      'clean all': overwrites EVERY sector with zeros."
 set "T_NIV_10=      Slow. NOT recommended on SSD or NVMe (NAND wear)."
-set "T_NIV_11=  [0] Exit / Cancel        [M] Main menu (M + ENTER)"
+set "T_NIV_11=  [0] Exit / Cancel"
 set "T_NIV_12=   Your level [0-3]:  "
 set "T_NIV_13=Action:         clean     (structure only, no overwrite)"
 set "T_NIV_14=Action:         TRIM + clean  (SSD/NVMe reset, no zeros)"
@@ -4286,6 +4540,10 @@ set "T_NIV_20=- Controller-level TRIM DOES destroy block-level data"
 set "T_NIV_21=  recovery: the controller recycles the freed cells"
 set "T_NIV_40=  (Garbage Collection) without writing zeros, so it is"
 set "T_NIV_41=  fast, safe and causes no cell wear (TBW)."
+set "T_NIV_42=TRIM applied only to part of the volumes. Failure detail:"
+set "T_NIV_43=[i] TRIM not applicable here (virtual disk or no support from"
+set "T_NIV_44=the hypervisor): the step is SKIPPED and the clean continues."
+set "T_NIV_45=[i] Volume without a drive letter: -DriveLetter not possible, skipped."
 set "T_NIV_22=[!] PowerShell not available: the TRIM step will be skipped"
 set "T_NIV_23=and only the structure clean will run (like level [1])."
 set "T_NIV_24=- This disk is an HDD: TRIM will not apply; structure clean"
@@ -4346,19 +4604,19 @@ set "T_DIAG_02=Inspects the machine and lets you check its drives (chkdsk, SMART
 set "T_DIAG_03=  [1] Full hardware           CPU, RAM, motherboard and disks"
 set "T_DIAG_04=  [2] Check a drive           chkdsk: /scan, /f or /f /r"
 set "T_DIAG_05=  [3] SMART health            OK / Pre-fail status of the disks"
-set "T_DIAG_06=  [0] Back to the main menu     [M] Main menu (M + ENTER)"
+set "T_DIAG_06=  [0] Back to the main menu"
 set "T_DIAG_07=   Your option [0-3] (M = menu):  "
 set "T_DIAG_08=End of the hardware inventory."
 set "T_DIAG_10=[2] CHKDSK - CHECK A DRIVE"
 set "T_DIAG_11=Checks the drive you choose; it does not delete files."
 set "T_DIAG_12=Do not use X: (WinPE RAM drive)."
 set "T_DIAG_13=The letter must be a mounted drive (C:, D:, E:...)."
-set "T_DIAG_14=   Drive letter (e.g. C, 0 = back, M = menu):  "
+set "T_DIAG_14=   Drive letter (e.g. C):  "
 set "T_DIAG_15=Selected drive:"
 set "T_DIAG_16=  [1] Quick scan (/scan)          does not dismount the drive"
 set "T_DIAG_17=  [2] Repair errors (/f)          may ask for a restart"
 set "T_DIAG_18=  [3] Repair + sectors (/f /r)    very slow, for HDD"
-set "T_DIAG_19=  [0] Back to diagnostics       [M] Main menu"
+set "T_DIAG_19=  [0] Previous step: pick ANOTHER letter"
 set "T_DIAG_20=   Mode [0-3] (M = menu):  "
 set "T_DIAG_21=   Run chkdsk with these options? [Y/N]:  "
 set "T_DIAG_22=Command:"
@@ -4368,13 +4626,13 @@ set "T_DIAG_25=[OK] chkdsk found and fixed errors (code 1)."
 set "T_DIAG_26=[!] chkdsk asks for extra cleanup (code 2)."
 set "T_DIAG_27=[!] chkdsk could not check the drive (code 3)."
 set "T_DIAG_28=[i] chkdsk exit code:"
-set "T_DIAG_29=Press [C] to return to diagnostics or [M] for the menu."
+set "T_DIAG_29=End of the check."
 set "T_DIAG_30=[!] Invalid letter: type ONE drive letter (A-Z)."
 set "T_DIAG_31=[!] X: is the WinPE RAM drive: chkdsk is not run on it."
 set "T_DIAG_32=[!] The drive does not exist or is not mounted:"
 set "T_DIAG_33=Check cancelled: chkdsk was not run."
-set "T_DIAG_34=Press [C] to return to diagnostics or [M] for the menu."
-set "T_DIAG_35=Logical drives found (letter, label, FS, total, free):"
+set "T_DIAG_34=End of the check."
+set "T_DIAG_35=Fixed drives found (letter, label, FS, total, free, disk):"
 set "T_DIAG_36=Note: X: is the WinPE RAM drive; do not run chkdsk on it."
 set "T_DIAG_37=[!] I cannot find chkdsk.exe in this image."
 set "T_DIAG_40=[3] SMART HEALTH OF THE DISKS"
@@ -4406,8 +4664,8 @@ set "T_MENU_04=[3]  Diagnostics / Inventory            read-only machine info"
 set "T_MENU_05=[4]  Advanced console                   drop to interactive CMD"
 set "T_MENU_06=[5]  System help                        technician quick guide"
 set "T_MENU_15=[6]  Exit / Shut down the computer"
-set "T_MENU_07=Warning: [1] and [2] really modify DISKS and ask for a single key"
-set "T_MENU_08=of confirmation (Y/N). Options [3] to [6] do not touch hardware on their own."
+set "T_MENU_07=Warning: [1] and [2] really modify DISKS and ask for TWO"
+set "T_MENU_08=confirmations in a row with a single key (Y/N). Options [3] to [6] touch no hardware alone."
 set "T_MENU_09=(If the console does not react to a single key, type the number"
 set "T_MENU_10=and finish with ENTER.)"
 set "T_MENU_11=   Your option [1-6]:  "
@@ -4446,7 +4704,7 @@ set "T_SEG_11=The tool cannot tell right now which of the disks"
 set "T_SEG_12=is the boot one (trimmed WinPE, no PowerShell or diskpart in another language)."
 set "T_SEG_13=It is YOUR RESPONSIBILITY not to pick the running system disk"
 set "T_SEG_14=nor the media WinPE was booted from. At the slightest doubt: CANCEL."
-set "T_SEG_15=To continue you will have to confirm with the Y key: N cancels."
+set "T_SEG_15=To continue you will have to confirm TWICE with the Y key: N cancels."
 set "T_SEG_16=Boot protection: ACTIVE (this disk is NOT the boot disk)."
 set "T_SEG_17=Boot protection: UNVERIFIED (it might be the boot disk)."
 set "T_SEG_18=Boot protection: not applicable (WinPE in RAM memory)."
