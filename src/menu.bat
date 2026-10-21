@@ -1825,17 +1825,9 @@ set "DISCO="
 if not "%LISTADO_OK%"=="SI" exit /b 0
 :PEDIR_DISCO_BUCLE
 echo(
-echo   %C_VERDE%------------------------------------------------------------------%C_FIN%
-echo   %T_COM_15%
-echo   %T_COM_16%
-echo   %T_COM_17%
-REM El aviso de vuelta al menu cambia con el modo de entrada: en modo
-REM choice basta pulsar M (una tecla, sin ENTER); en modo set /p hace
-REM falta M + ENTER, porque ahi no existe lectura de una sola tecla.
-if "%MODO_ENTRADA%"=="CHOICE" echo   %C_VERDE%%T_COM_53%%C_RESET%
-if not "%MODO_ENTRADA%"=="CHOICE" echo   %C_VERDE%%T_COM_18%%C_RESET%
+REM Pie de pagina minimo: una sola linea de navegacion y el prompt. Nada
+REM de explicaciones largas debajo del listado (el listado ya se lee solo).
 echo   %C_VERDE%%T_COM_56%%C_RESET%
-echo   %C_VERDE%------------------------------------------------------------------%C_FIN%
 call :LEER_NUMERO "%T_COM_19%" DISCO
 if "%NUM_OK%"=="CANCELAR" exit /b 0
 if "%NUM_OK%"=="ATRAS" goto PEDIR_DISCO_ATRAS
@@ -2160,6 +2152,9 @@ echo(
 echo   %T_DP_03%
 echo   %T_DP_04%
 echo(
+REM Pausa CONTROLADA opcional para la opcion [2]: deja el historial de
+REM diskpart en pantalla y permite subir con la rueda antes de seguir.
+if /i "%~1"=="pausa" call :PULSA_TECLA "%T_D2_36%"
 exit /b 0
 
 REM ---------------------------------------------------------------------
@@ -2289,15 +2284,22 @@ REM  a listar y se COMPRUEBA con los ojos. Reutilizamos LISTAR_DISCOS
 REM  (misma pieza de codigo, cero duplicacion) y anadimos la lectura.
 REM ---------------------------------------------------------------------
 :MOSTRAR_RESULTADO
+REM %~1 indica el modulo que verifica: "maquetar" o "sanitizar". Antes se
+REM imprimian SIEMPRE las dos ayudas (opcion 1 y opcion 2), aunque el
+REM tecnico estuviera en una sola: eso confundia y parecia texto copiado.
 echo   %T_COM_25%
 call :LISTAR_DISCOS
 REM Mensaje de exito/verificacion en VERDE (C_VERDE); luego vuelve C_FIN.
 <nul set /p "=%C_VERDE%"
 echo   %T_COM_26%
+if /i "%~1"=="sanitizar" goto MOSTRAR_RESULTADO_SANITIZAR
 echo     %T_D1_23% %DISCO% %T_D1_25%
 echo       %T_COM_27%
+goto MOSTRAR_RESULTADO_CONSEJO
+:MOSTRAR_RESULTADO_SANITIZAR
 echo     %T_D2_33% %DISCO% %T_D2_35%
 echo       %T_COM_28%
+:MOSTRAR_RESULTADO_CONSEJO
 echo     %T_COM_29%
 echo       %T_COM_30%
 <nul set /p "=%C_FIN%"
@@ -2363,8 +2365,12 @@ echo     %T_D1_27%
 echo     %T_D1_28%
 echo     %T_D1_29%
 echo(
+REM Aviso de seguridad CRITICO: 'clean' destruye la tabla de particiones.
+REM Se imprime obligatoriamente en AMARILLO para que no pase desapercibido.
+<nul set /p "=%C_AMARILLO%"
 echo   %T_D1_12%
 echo   %T_D1_13%
+<nul set /p "=%C_FIN%"
 echo(
 call :PULSA_TECLA_MENU "%T_D1_14%"
 if "%VUELTA_MENU%"=="SI" exit /b 0
@@ -2416,7 +2422,7 @@ REM teclear: basta 'S' (o 'Y' en ingles) en cada paso.
 call :CONFIRMAR_DESTRUCTIVO "maquetar"
 if not "%CONFIRMADO%"=="SI" goto MODULO_PREPARAR_CANCELADO
 call :EJECUTAR_DISKPART
-call :MOSTRAR_RESULTADO
+call :MOSTRAR_RESULTADO "maquetar"
 call :BORRAR_TEMPORALES
 call :PULSA_TECLA "%T_D1_21%"
 exit /b 0
@@ -2547,7 +2553,7 @@ REM palabra que teclear: basta 'S' (o 'Y' en ingles) en cada paso.
 call :CONFIRMAR_DESTRUCTIVO "sanitizar"
 if not "%CONFIRMADO%"=="SI" goto MODULO_SANITIZAR_CANCELADO
 if "%NIVEL_BORRADO%"=="2" goto MODULO_SANITIZAR_NIVEL2
-call :EJECUTAR_DISKPART
+call :EJECUTAR_DISKPART "pausa"
 goto MODULO_SANITIZAR_FIN_EJEC
 :MODULO_SANITIZAR_NIVEL2
 REM  Nivel [2] en TRES FASES: (1) diskpart deja un volumen temporal,
@@ -2556,16 +2562,19 @@ REM  (3) diskpart vuelve a dejar el disco EN BRUTO con 'clean'.
 REM  La fase [3] solo se lanza si la fase [1] salio bien (RESULTADO=0).
 echo(
 echo   %T_NIV_37%
-call :EJECUTAR_DISKPART
+call :EJECUTAR_DISKPART "pausa"
 if not "%RESULTADO%"=="0" call :REGISTRAR SANITIZAR "nivel=2 fase=1" "ERROR"
 if not "%RESULTADO%"=="0" goto MODULO_SANITIZAR_FIN_EJEC
 echo   %T_NIV_38%
 call :EJECUTAR_TRIM
+REM Pausa controlada: la salida del TRIM se queda en pantalla para poder
+REM revisarla (o subir con la rueda) antes de la fase final.
+call :PULSA_TECLA "%T_D2_37%"
 call :GENERAR_SCRIPT_LIMPIO
 echo   %T_NIV_39%
-call :EJECUTAR_DISKPART
+call :EJECUTAR_DISKPART "pausa"
 :MODULO_SANITIZAR_FIN_EJEC
-call :MOSTRAR_RESULTADO
+call :MOSTRAR_RESULTADO "sanitizar"
 call :BORRAR_TEMPORALES
 call :PULSA_TECLA "%T_D1_21%"
 exit /b 0
@@ -3340,9 +3349,11 @@ set "CHK_RC=%errorlevel%"
 call :DIAG_CHKDSK_RESULTADO
 call :REGISTRAR DIAGNOSTICO "chkdsk=%CHK_LETRA% modo=%CHK_MODO% codigo=%CHK_RC%" "OK"
 echo(
-call :PULSA_TECLA_MENU "%T_DIAG_29%"
-if "%VUELTA_MENU%"=="SI" set "DIAG_MENU=SI"
-exit /b 0
+REM Tras ejecutar chkdsk NO se abandona el modulo ni se queda fijada la
+REM letra: se pausa para leer el resultado y se vuelve a listar/pedir otra
+REM unidad. Asi se pueden comprobar C:, D:... sin reiniciar la herramienta.
+call :PULSA_TECLA "%T_DIAG_47%"
+goto DIAG_CHKDSK_VOLVER
 
 :DIAG_CHKDSK_RESULTADO
 if "%CHK_RC%"=="0" goto DIAG_CHKDSK_RC_OK
@@ -3379,11 +3390,12 @@ echo(
 echo   %T_DIAG_32% %CHK_LETRA%:
 goto DIAG_CHKDSK_PEDIR
 :DIAG_CHKDSK_CANCELADO
+REM Cancelar una comprobacion no expulsa del submenu: se informa, se pausa
+REM y se vuelve al listado para elegir otra unidad (o A/M para salir).
 echo(
 echo   %T_DIAG_33%
-call :PULSA_TECLA_MENU "%T_DIAG_34%"
-if "%VUELTA_MENU%"=="SI" set "DIAG_MENU=SI"
-exit /b 0
+call :PULSA_TECLA "%T_DIAG_48%"
+goto DIAG_CHKDSK_VOLVER
 :DIAG_CHKDSK_MENU
 set "DIAG_MENU=SI"
 exit /b 0
@@ -4131,8 +4143,8 @@ set "T_AYU_02=Selecciona un apartado del manual:"
 set "T_AYU_03=  [1] Comandos útiles y herramientas disponibles en WinPE"
 set "T_AYU_04=  [2] Guía paso a paso: Opción 1 (discos y particiones) y Opción 2 (sanitizar)"
 set "T_AYU_05=  [3] Códigos de navegación y atajos rápidos"
-set "T_AYU_06=   Tu opción [1-3] (A = atrás, M = menú):  "
-set "T_AYU_07=   [Enter] Continuar   [A] Atrás   [M] Menú:  "
+set "T_AYU_06=   Tu opción [1-3]:  "
+set "T_AYU_07=   [Enter] Continuar:  "
 set "T_GUIA_01=[5] GUÍA PASO A PASO - Página 1 de 2: Opción 1 (discos y particiones)"
 set "T_GUIA_02=OPCIÓN 1 - OPERACIONES SOBRE DISCOS Y PARTICIONES"
 set "T_GUIA_03=1) Elige la opción [1] en el menú principal."
@@ -4287,11 +4299,7 @@ set "T_COM_11=diskpart, y sin guion no se ejecuta nada. ABORTAMOS sin"
 set "T_COM_12=tocar ningún disco (la seguridad primero)."
 set "T_COM_13=[!] No encuentro diskpart.exe en esta imagen."
 set "T_COM_14=¿Es un WinPE muy recortado? Este módulo no puede continuar."
-set "T_COM_15=Teclea el NUMERO de disco sobre el que quieres trabajar."
-set "T_COM_16=Ese numero es la PRIMERA columna del listado de arriba"
-set "T_COM_17=(Disk 0 / Disco 0, Disk 1 / Disco 1...). Nunca es una letra."
-set "T_COM_18=Vuelve al menú principal con M; al paso anterior con A (o ENTER)."
-set "T_COM_19=   Número de disco (A = anterior, M = menú):  "
+set "T_COM_19=   Indique el número de disco:  "
 set "T_COM_24=   ¿Qué hacemos? [1=Corregir / 2=Continuar / 3=Cancelar]:  "
 set "T_COM_25=VERIFICACIÓN FINAL: este es el estado ACTUAL del equipo."
 set "T_COM_26=[Ayuda] Cómo comprobar el resultado:"
@@ -4312,7 +4320,6 @@ set "T_COM_49=[!] diskpart devolvió el código de error"
 set "T_COM_50=[!] diskpart no ha podido completar el listado. Código de error:"
 set "T_COM_51=Disco elegido:"
 set "T_COM_52=   Recibido: "
-set "T_COM_53=Teclas directas: M = menú principal, S = confirmar si el número es correcto (sin ENTER)."
 set "T_COM_54=      [C] Continuar      [M] Menú principal"
 set "T_COM_55=   Teclea tu opción:  "
 set "T_COM_56= [A] Paso anterior   ^|   [M] Menú principal (Pulsar Enter)"
@@ -4370,6 +4377,8 @@ set "T_D2_32=Antes de ejecutar se te pedirán DOS confirmaciones (S/N) seguidas.
 set "T_D2_33=- Borrado seguro (opción 2): el Disco"
 set "T_D2_34=ejecución. La protección de arranque bloquea el disco del sistema"
 set "T_D2_35=aparecerá EN BRUTO"
+set "T_D2_36=Diskpart ha terminado. Revisa la salida; pulsa una tecla para continuar..."
+set "T_D2_37=TRIM terminado. Revisa la salida; pulsa una tecla para continuar..."
 set "T_NIV_01=Elige el nivel de borrado ([0] o M para volver al menú):"
 set "T_NIV_02=  [1] Limpieza rápida (Solo Estructura)"
 set "T_NIV_03=      Borra solo la tabla de particiones (MBR/GPT) y la firma del"
@@ -4457,19 +4466,19 @@ set "T_DIAG_02=Consulta el equipo y permite comprobar sus unidades (chkdsk, SMAR
 set "T_DIAG_03=  [1] Hardware completo       CPU, RAM, placa base y discos"
 set "T_DIAG_04=  [2] Comprobar unidad        chkdsk: /scan, /f o /f /r"
 set "T_DIAG_05=  [3] Salud SMART             estado OK / Pre-fail de los discos"
-set "T_DIAG_07=   Su opción [1-3] (A = atrás, M = menú):  "
+set "T_DIAG_07=   Su opción [1-3]:  "
 set "T_DIAG_08=Fin del inventario de hardware."
 set "T_DIAG_10=[2] CHKDSK - COMPROBACIÓN DE UNA UNIDAD"
 set "T_DIAG_11=Comprueba la unidad que elijas; no borra archivos."
 set "T_DIAG_12=No uses X: (unidad RAM de WinPE)."
 set "T_DIAG_13=La letra debe ser una unidad montada (C:, D:, E:...)."
-set "T_DIAG_14=   Letra de unidad (ej. C) (A = atrás, M = menú):  "
+set "T_DIAG_14=   Letra de unidad (ej. C):  "
 set "T_DIAG_15=Unidad seleccionada:"
 set "T_DIAG_16=  [1] Análisis rápido (/scan)      no desmonta la unidad"
 set "T_DIAG_17=  [2] Reparar errores (/f)         puede pedir reinicio"
 set "T_DIAG_18=  [3] Reparar + sectores (/f /r)   muy lento, para HDD"
 set "T_DIAG_19=  [0] Paso anterior: elegir OTRA letra"
-set "T_DIAG_20=   Modo [0-3] (A = atrás, M = menú):  "
+set "T_DIAG_20=   Modo [0-3]:  "
 set "T_DIAG_21=   ¿Ejecutar chkdsk con estas opciones? [S/N]:  "
 set "T_DIAG_22=Comando:"
 set "T_DIAG_23=Ejecutando chkdsk. No cierres la ventana ni apagues el equipo..."
@@ -4483,7 +4492,6 @@ set "T_DIAG_30=[!] Letra no válida: escribe UNA letra de unidad (A-Z)."
 set "T_DIAG_31=[!] X: es la unidad RAM de WinPE: no se comprueba con chkdsk."
 set "T_DIAG_32=[!] La unidad no existe o no está montada:"
 set "T_DIAG_33=Comprobación cancelada: no se ha ejecutado chkdsk."
-set "T_DIAG_34=Fin de la comprobación."
 set "T_DIAG_35=Unidades lógicas detectadas (letra, etiqueta, FS, total, libre, disco):"
 set "T_DIAG_36=Nota: X: es la unidad RAM de WinPE; no ejecutes chkdsk sobre ella."
 set "T_DIAG_37=[!] No encuentro chkdsk.exe en esta imagen."
@@ -4494,6 +4502,8 @@ set "T_DIAG_43=[!] ALERTA: hay un disco con aviso SMART (Pre-fail/Warning). Copi
 set "T_DIAG_44=[i] El estado SMART no se puede leer en esta imagen."
 set "T_DIAG_45=Fin de la consulta SMART."
 set "T_DIAG_46=Formato: [índice] modelo (tipo) salud / estado tamaño"
+set "T_DIAG_47=Comprobación terminada. Pulsa una tecla para elegir otra unidad..."
+set "T_DIAG_48=Pulsa una tecla para elegir otra unidad..."
 set "T_MED_01=TIPO DE DISCO NO DETECTADO"
 set "T_MED_02=No he podido saber si el Disco"
 set "T_MED_03=es un HDD (mecánico) o un SSD (sólido):"
@@ -4585,8 +4595,8 @@ set "T_AYU_02=Choose one section of the manual:"
 set "T_AYU_03=  [1] Useful commands and tools available in WinPE"
 set "T_AYU_04=  [2] Step-by-step guide: Option 1 (disks and partitions) and Option 2 (wipe)"
 set "T_AYU_05=  [3] Navigation codes and quick shortcuts"
-set "T_AYU_06=   Your option [1-3] (A = back, M = menu):  "
-set "T_AYU_07=   [Enter] Continue   [A] Back   [M] Menu:  "
+set "T_AYU_06=   Your option [1-3]:  "
+set "T_AYU_07=   [Enter] Continue:  "
 set "T_GUIA_01=[5] STEP-BY-STEP GUIDE - Page 1 of 2: Option 1 (disks and partitions)"
 set "T_GUIA_02=OPTION 1 - DISK AND PARTITION OPERATIONS"
 set "T_GUIA_03=1) Choose option [1] in the main menu."
@@ -4741,11 +4751,7 @@ set "T_COM_11=script, and without a script nothing runs. WE ABORT without"
 set "T_COM_12=touching any disk (safety first)."
 set "T_COM_13=[!] I cannot find diskpart.exe in this image."
 set "T_COM_14=Is it a very trimmed WinPE? This module cannot continue."
-set "T_COM_15=Type the disk NUMBER you want to work on."
-set "T_COM_16=That number is the FIRST column of the listing above"
-set "T_COM_17=(Disk 0, Disk 1...). It is never a drive letter."
-set "T_COM_18=Back to the main menu with M; one step back with A (or ENTER)."
-set "T_COM_19=   Disk number (A = back, M = menu):  "
+set "T_COM_19=   Enter the disk number:  "
 set "T_COM_24=   What do we do? [1=Fix / 2=Continue / 3=Cancel]:  "
 set "T_COM_25=FINAL CHECK: this is the CURRENT state of the machine."
 set "T_COM_26=[Help] How to check the result:"
@@ -4766,7 +4772,6 @@ set "T_COM_49=[!] diskpart returned the error code"
 set "T_COM_50=[!] diskpart could not complete the listing. Error code:"
 set "T_COM_51=Selected disk:"
 set "T_COM_52=   Received: "
-set "T_COM_53=Direct keys: M = main menu, S = confirm if the number is already correct (no ENTER)."
 set "T_COM_54=      [C] Continue       [M] Main menu"
 set "T_COM_55=   Type your choice:  "
 set "T_COM_56= [A] Previous step   ^|   [M] Main menu (Press Enter)"
@@ -4824,6 +4829,8 @@ set "T_D2_32=Before running it asks for TWO confirmations (Y/N) in a row."
 set "T_D2_33=- Secure erase (option 2): Disk"
 set "T_D2_34=here. The boot protection blocks the system disk when it"
 set "T_D2_35=will appear RAW"
+set "T_D2_36=Diskpart finished. Review the output; press any key to continue..."
+set "T_D2_37=TRIM finished. Review the output; press any key to continue..."
 set "T_NIV_01=Choose the erase level ([0] or M to return to the menu):"
 set "T_NIV_02=  [1] Quick clean (Structure only)"
 set "T_NIV_03=      Deletes only the partition table (MBR/GPT) and the disk"
@@ -4911,19 +4918,19 @@ set "T_DIAG_02=Inspects the machine and lets you check its drives (chkdsk, SMART
 set "T_DIAG_03=  [1] Full hardware           CPU, RAM, motherboard and disks"
 set "T_DIAG_04=  [2] Check a drive           chkdsk: /scan, /f or /f /r"
 set "T_DIAG_05=  [3] SMART health            OK / Pre-fail status of the disks"
-set "T_DIAG_07=   Your option [1-3] (A = back, M = menu):  "
+set "T_DIAG_07=   Your option [1-3]:  "
 set "T_DIAG_08=End of the hardware inventory."
 set "T_DIAG_10=[2] CHKDSK - CHECK A DRIVE"
 set "T_DIAG_11=Checks the drive you choose; it does not delete files."
 set "T_DIAG_12=Do not use X: (WinPE RAM drive)."
 set "T_DIAG_13=The letter must be a mounted drive (C:, D:, E:...)."
-set "T_DIAG_14=   Drive letter (e.g. C) (A = back, M = menu):  "
+set "T_DIAG_14=   Drive letter (e.g. C):  "
 set "T_DIAG_15=Selected drive:"
 set "T_DIAG_16=  [1] Quick scan (/scan)          does not dismount the drive"
 set "T_DIAG_17=  [2] Repair errors (/f)          may ask for a restart"
 set "T_DIAG_18=  [3] Repair + sectors (/f /r)    very slow, for HDD"
 set "T_DIAG_19=  [0] Previous step: pick ANOTHER letter"
-set "T_DIAG_20=   Mode [0-3] (A = back, M = menu):  "
+set "T_DIAG_20=   Mode [0-3]:  "
 set "T_DIAG_21=   Run chkdsk with these options? [Y/N]:  "
 set "T_DIAG_22=Command:"
 set "T_DIAG_23=Running chkdsk. Do not close the window or power off the machine..."
@@ -4937,7 +4944,6 @@ set "T_DIAG_30=[!] Invalid letter: type ONE drive letter (A-Z)."
 set "T_DIAG_31=[!] X: is the WinPE RAM drive: chkdsk is not run on it."
 set "T_DIAG_32=[!] The drive does not exist or is not mounted:"
 set "T_DIAG_33=Check cancelled: chkdsk was not run."
-set "T_DIAG_34=End of the check."
 set "T_DIAG_35=Logical drives found (letter, label, FS, total, free, disk):"
 set "T_DIAG_36=Note: X: is the WinPE RAM drive; do not run chkdsk on it."
 set "T_DIAG_37=[!] I cannot find chkdsk.exe in this image."
@@ -4948,6 +4954,8 @@ set "T_DIAG_43=[!] WARNING: a disk has a SMART alert (Pre-fail/Warning). Back up
 set "T_DIAG_44=[i] SMART status cannot be read in this image."
 set "T_DIAG_45=End of the SMART check."
 set "T_DIAG_46=Format: [index] model (type) health / status size"
+set "T_DIAG_47=Check finished. Press any key to choose another drive..."
+set "T_DIAG_48=Press any key to choose another drive..."
 set "T_MED_01=DISK TYPE NOT DETECTED"
 set "T_MED_02=I could not tell whether Disk"
 set "T_MED_03=is an HDD (mechanical) or an SSD (solid):"
