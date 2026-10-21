@@ -452,6 +452,28 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "DISM /Mount-Wim fallo con el codigo $LASTEXITCODE." }
     $montado = $true
 
+    #  3.0) Componentes opcionales de WinPE que necesita el diagnostico.
+    #       Sin WinPE-WMI no funcionan wmic ni las clases Win32_*; sin
+    #       WinPE-PowerShell no se puede ejecutar la RAM/SMART embebidas,
+    #       y sin WinPE-StorageWMI no existen Get-Volume/Get-PhysicalDisk.
+    #       Se instalan SIEMPRE, en este orden de dependencias, para que
+    #       menu.bat encuentre las mismas herramientas en cualquier equipo.
+    $dirOcs = Join-Path $DirWinPEAdk "$Arch\WinPE_OCs"
+    $paquetes = @('WinPE-WMI','WinPE-Scripting','WinPE-NetFx','WinPE-PowerShell','WinPE-StorageWMI')
+    foreach ($paq in $paquetes) {
+        $cab = Join-Path $dirOcs ($paq + '.cab')
+        if (-not (Test-Path -LiteralPath $cab)) {
+            throw ("Falta el componente opcional $paq.cab en: $dirOcs. " +
+                   'Instala el complemento WinPE completo del ADK.')
+        }
+        Escribir-Info "Anadiendo componente WinPE: $paq..."
+        & $RutaDism /Image:$DirMount /Add-Package /PackagePath:$cab
+        if ($LASTEXITCODE -ne 0) {
+            throw "DISM /Add-Package $paq fallo con el codigo $LASTEXITCODE."
+        }
+    }
+    Escribir-Ok 'Componentes WinPE-WMI/PowerShell/StorageWMI anadidos.'
+
     #  3.a) startnet.cmd: sustituye al de serie. winpeshl.exe lo ejecuta
     #       al arrancar, y es lo que lanza menu.bat automaticamente.
     $destinoStart = Join-Path $DirMount 'Windows\System32\startnet.cmd'

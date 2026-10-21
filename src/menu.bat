@@ -653,7 +653,7 @@ REM Vuelta inmediata y segura al MENU. Nunca sale a X:\Windows\System32.
 goto MENU
 
 REM =====================================================================
-REM  PASO 9 - OPCION [5] AYUDA DEL SISTEMA (2 paginas + comandos reales)
+REM  PASO 9 - OPCION [5] AYUDA DEL SISTEMA (3 apartados + comandos reales)
 REM  El 'help' nativo NO existe en WinPE: en su lugar se imprime con
 REM  'echo' una lista de comandos que SI estan en la imagen.
 REM =====================================================================
@@ -670,7 +670,7 @@ echo     %T_AYU_03%
 echo     %T_AYU_04%
 echo     %T_AYU_05%
 echo(
-echo   %T_COM_56%
+echo   %C_VERDE%%T_COM_56%%C_RESET%
 echo(
 call :LEER_OPCION "%T_AYU_06%" "1 2 3" M A
 if /i "%OPCION%"=="M" goto MENU
@@ -724,13 +724,12 @@ echo     %T_AYU1_32%
 echo(
 echo   %T_AYU1_33%
 echo(
-echo   %T_COM_56%
+echo   %C_VERDE%%T_COM_56%%C_RESET%
 echo(
-call :LEER_OPCION "%T_AYU_07%" "1" M A
-if /i "%OPCION%"=="M" goto MENU
-if /i "%OPCION%"=="A" goto OP_AYUDA
-if "%OPCION%"=="1" goto OP_AYUDA_P2
-goto OP_AYUDA_P1
+call :AYUDA_PAGINA
+if "%AYU_DESTINO%"=="MENU" goto MENU
+if "%AYU_DESTINO%"=="ATRAS" goto OP_AYUDA
+goto OP_AYUDA_P2
 
 :OP_AYUDA_P2
 cls
@@ -798,13 +797,12 @@ echo(
 :OP_AYUDA_P2_FIN
 echo   %T_AYU3_01%
 echo(
-echo   %T_COM_56%
+echo   %C_VERDE%%T_COM_56%%C_RESET%
 echo(
-call :LEER_OPCION "%T_AYU_07%" "1" M A
-if /i "%OPCION%"=="M" goto MENU
-if /i "%OPCION%"=="A" goto OP_AYUDA_P1
-if "%OPCION%"=="1" goto OP_AYUDA
-goto OP_AYUDA_P2_FIN
+call :AYUDA_PAGINA
+if "%AYU_DESTINO%"=="MENU" goto MENU
+if "%AYU_DESTINO%"=="ATRAS" goto OP_AYUDA_P1
+goto OP_AYUDA
 
 REM --- Apartado 2: guia paso a paso de la Opcion 1 y de la Opcion 2 -----
 :OP_AYUDA_GUIA
@@ -828,13 +826,12 @@ echo(
 echo   %T_GUIA_11%
 echo   %T_GUIA_12%
 echo(
-echo   %T_COM_56%
+echo   %C_VERDE%%T_COM_56%%C_RESET%
 echo(
-call :LEER_OPCION "%T_AYU_07%" "1" M A
-if /i "%OPCION%"=="M" goto MENU
-if /i "%OPCION%"=="A" goto OP_AYUDA
-if "%OPCION%"=="1" goto OP_AYUDA_GUIA_P2
-goto OP_AYUDA_GUIA
+call :AYUDA_PAGINA
+if "%AYU_DESTINO%"=="MENU" goto MENU
+if "%AYU_DESTINO%"=="ATRAS" goto OP_AYUDA
+goto OP_AYUDA_GUIA_P2
 
 :OP_AYUDA_GUIA_P2
 cls
@@ -858,13 +855,12 @@ echo     %T_GUIA_24%
 echo     %T_GUIA_25%
 echo     %T_GUIA_26%
 echo(
-echo   %T_COM_56%
+echo   %C_VERDE%%T_COM_56%%C_RESET%
 echo(
-call :LEER_OPCION "%T_AYU_07%" "1" M A
-if /i "%OPCION%"=="M" goto MENU
-if /i "%OPCION%"=="A" goto OP_AYUDA_GUIA
-if "%OPCION%"=="1" goto OP_AYUDA
-goto OP_AYUDA_GUIA_P2
+call :AYUDA_PAGINA
+if "%AYU_DESTINO%"=="MENU" goto MENU
+if "%AYU_DESTINO%"=="ATRAS" goto OP_AYUDA_GUIA
+goto OP_AYUDA
 
 REM --- Apartado 3: codigos de navegacion y atajos ------------------------
 :OP_AYUDA_NAV
@@ -891,13 +887,11 @@ echo   %T_NAV_12%
 echo   %T_NAV_13%
 echo   %T_NAV_14%
 echo(
-echo   %T_COM_56%
+echo   %C_VERDE%%T_COM_56%%C_RESET%
 echo(
-call :LEER_OPCION "%T_AYU_07%" "1" M A
-if /i "%OPCION%"=="M" goto MENU
-if /i "%OPCION%"=="A" goto OP_AYUDA
-if "%OPCION%"=="1" goto OP_AYUDA
-goto OP_AYUDA_NAV
+call :AYUDA_PAGINA
+if "%AYU_DESTINO%"=="MENU" goto MENU
+goto OP_AYUDA
 
 REM =====================================================================
 REM  PASO 10 - OPCION [6] SALIR / APAGAR EQUIPO
@@ -1082,6 +1076,28 @@ if /i "%TECLA_MENU%"=="C" exit /b 0
 if /i "%TECLA_MENU%"=="M" set "VUELTA_MENU=SI"
 if "%VUELTA_MENU%"=="SI" exit /b 0
 goto PULSA_TECLA_MENU_BUCLE
+
+REM ---------------------------------------------------------------------
+REM  AYUDA_PAGINA - avance fluido entre las paginas de la Ayuda.
+REM -------------------------------------------------------------------
+REM  ENTER (o cualquier texto + ENTER) pasa a la pagina siguiente sin
+REM  teclear '1'. Se conservan los dos escapes de siempre:
+REM    A -^> AYU_DESTINO=ATRAS   (vuelve a la pagina anterior)
+REM    M -^> AYU_DESTINO=MENU    (vuelve al menu principal)
+REM  Con set /p, ENTER deja la variable sin definir: eso significa
+REM  "SIGUIENTE" y es el camino normal, no un error.
+REM ---------------------------------------------------------------------
+:AYUDA_PAGINA
+set "AYU_DESTINO=SIGUIENTE"
+set "AYU_PAG="
+set /p "AYU_PAG=%C_VERDE%%T_AYU_07%%C_RESET%"
+if not defined AYU_PAG exit /b 0
+set "AYU_PAG=%AYU_PAG:"=%"
+if not defined AYU_PAG exit /b 0
+set "AYU_PAG=%AYU_PAG: =%"
+if /i "%AYU_PAG%"=="M" set "AYU_DESTINO=MENU"
+if /i "%AYU_PAG%"=="A" set "AYU_DESTINO=ATRAS"
+exit /b 0
 
 REM ---------------------------------------------------------------------
 REM  LEER_OPCION - captura SEGURA de una opcion numerica.
@@ -1783,9 +1799,9 @@ echo   %T_COM_17%
 REM El aviso de vuelta al menu cambia con el modo de entrada: en modo
 REM choice basta pulsar M (una tecla, sin ENTER); en modo set /p hace
 REM falta M + ENTER, porque ahi no existe lectura de una sola tecla.
-if "%MODO_ENTRADA%"=="CHOICE" echo   %T_COM_53%
-if not "%MODO_ENTRADA%"=="CHOICE" echo   %T_COM_18%
-echo   %T_COM_56%
+if "%MODO_ENTRADA%"=="CHOICE" echo   %C_VERDE%%T_COM_53%%C_RESET%
+if not "%MODO_ENTRADA%"=="CHOICE" echo   %C_VERDE%%T_COM_18%%C_RESET%
+echo   %C_VERDE%%T_COM_56%%C_RESET%
 echo   %C_VERDE%------------------------------------------------------------------%C_FIN%
 call :LEER_NUMERO "%T_COM_19%" DISCO
 if "%NUM_OK%"=="CANCELAR" exit /b 0
@@ -1828,28 +1844,27 @@ REM  CONFIRMAR_DESTRUCTIVO - autorizacion DIFERIDA en DOS pasos.
 REM  -------------------------------------------------------------------
 REM  USO:      call :CONFIRMAR_DESTRUCTIVO "etapa"
 REM    %~1 = etiqueta corta para el log de auditoria (maquetar, sanitizar,
-REM          riesgo...). NO se pide ninguna palabra escrita: cada paso es
-REM          UNA sola tecla (+ ENTER en modo set /p). El tecleo de
-REM          'CONFIRMAR' o 'RIESGO' ha quedado ABOLIDO.
+REM          riesgo...). NO se pide ninguna palabra escrita: el PASO 1 es
+REM          una tecla (o linea + ENTER en modo set /p) y el PASO 2 es
+REM          SIEMPRE linea + ENTER. El tecleo de 'CONFIRMAR' o 'RIESGO'
+REM          ha quedado ABOLIDO.
 REM
 REM    PASO 1 - 'Confirmar operacion? [S/N]: '. Los datos del disco y el
 REM             resumen de la operacion siguen en pantalla: el tecnico
 REM             decide viendolo entero.
 REM    PASO 2 - resumen de los COMANDOS en AMARILLO y despues
-REM             'ATENCION! Esta completamente SEGURO...? [S/N]: '.
-REM             Se reimprime el guion temporal exacto que se va a lanzar
-REM             ('type "%F_SCRIPT%"), para que la segunda decision se tome
-REM             mirando los comandos y no de memoria.
+REM             'Atencion: Esta completamente seguro de ejecutar esta
+REM             accion? [S/N]: '. Se reimprime el guion temporal exacto
+REM             que se va a lanzar ('type "%F_SCRIPT%"), para que la
+REM             segunda decision se tome mirando los comandos y no de
+REM             memoria.
 REM
 REM    Solo DOS 'S' (o 'Y' en ingles) seguidas ejecutan el guion. 'N', un
 REM    ENTER vacio o cualquier otra respuesta en CUALQUIER de los dos
 REM    pasos CANCELA y el modulo pinta su aviso de operacion cancelada.
-REM
-REM  COMO SE LEE (mismo patron que LEER_SN, dos modos de consola):
-REM    - Modo choice: 'choice /c SN' solo admite esas dos teclas; cualquier
-REM      otra tecla hace 'beep' y NO autoriza jamas (ni puede hacerlo).
-REM    - Modo set /p: se lee la linea completa y TODO lo que no sea
-REM      S/SI (o Y/YES) se trata como un 'no'; tambien un ENTER vacio.
+REM    El PASO 2 es deliberadamente ESTRICTO: 'SI'/'YES' ya NO valen,
+REM    solo la letra S/s (o Y/y) exacta. Se lee siempre con set /p para
+REM    que cualquier otra tecla cancele sin quedarse esperando.
 REM  Cada paso queda en el log por separado (etapa=... paso=1/2).
 REM  Devuelve CONFIRMADO = SI / NO.
 REM ---------------------------------------------------------------------
@@ -1869,7 +1884,7 @@ call :CONFIRMAR_LEER "%T_CFM_02%"
 if not "%CONFIRMADO%"=="SI" goto CONFIRMAR_DESTRUCTIVO_NO1
 REM --- PASO 2: resumen de comandos en AMARILLO + autorizacion final ----
 call :CONFIRMAR_RESUMEN
-call :CONFIRMAR_LEER "%T_CFM_03%"
+call :CONFIRMAR_LEER_SEGURO "%T_CFM_03%"
 if not "%CONFIRMADO%"=="SI" goto CONFIRMAR_DESTRUCTIVO_NO2
 goto CONFIRMAR_DESTRUCTIVO_OK
 
@@ -1878,8 +1893,8 @@ REM  CONFIRMAR_LEER - captura de UNA sola pregunta S/N (o Y/N).
 REM  -------------------------------------------------------------------
 REM  USO:      call :CONFIRMAR_LEER "texto de la pregunta"
 REM  Devuelve: CONFIRMADO = SI / NO.
-REM  Rutina compartida por los DOS pasos: asi la lectura, la sanitizacion
-REM  y la defensa contra la entrada vacia estan escritas UNA sola vez.
+REM  Es la rutina del PASO 1. El PASO 2 usa CONFIRMAR_LEER_SEGURO, que
+REM  reutiliza la misma sanitizacion pero solo admite S/s (o Y/y).
 REM  Ninguna entrada, por rara que sea, puede romper el guion.
 REM ---------------------------------------------------------------------
 :CONFIRMAR_LEER
@@ -1914,6 +1929,27 @@ REM Cualquier otra cosa tecleada (o un ENTER vacio) CANCELA: jamas un
 REM tecleo raro autoriza una operacion destructiva. Se avisa una vez.
 echo(
 echo   %T_CFM_01%
+exit /b 0
+
+REM ---------------------------------------------------------------------
+REM  CONFIRMAR_LEER_SEGURO - SEGUNDA confirmacion, ESTRICTA.
+REM -------------------------------------------------------------------
+REM  Solo una letra afirma: S/s (o Y/y si la interfaz esta en ingles).
+REM  'SI'/'YES', ENTER vacio, N y CUALQUIER otra cosa CANCELAN. Es la
+REM  ultima puerta antes de un borrado: aqui no se admite ambiguedad.
+REM  Se usa SIEMPRE set /p (tambien en modo choice) para que una tecla
+REM  distinta de S no quede ignorada esperando: se lee la linea completa
+REM  y, si no es exactamente S/s, se cancela al instante.
+REM ---------------------------------------------------------------------
+:CONFIRMAR_LEER_SEGURO
+set "CONFIRMADO=NO"
+set "CONF_TXT="
+set /p "CONF_TXT=%C_VERDE%%~1%C_FIN%"
+if not defined CONF_TXT exit /b 0
+set "CONF_TXT=%CONF_TXT:"=%"
+if not defined CONF_TXT exit /b 0
+set "CONF_TXT=%CONF_TXT: =%"
+if /i "%CONF_TXT%"=="%CONF_SI%" set "CONFIRMADO=SI"
 exit /b 0
 
 REM ---------------------------------------------------------------------
@@ -2574,7 +2610,7 @@ echo     %T_NIV_10%
 echo(
 echo   %T_NIV_11%
 echo(
-echo   %T_COM_56%
+echo   %C_VERDE%%T_COM_56%%C_RESET%
 echo(
 call :LEER_OPCION "%T_NIV_12%" "1 2 3 0" M A
 if /i "%OPCION%"=="M" exit /b 0
@@ -3115,7 +3151,7 @@ echo     %T_DIAG_03%
 echo     %T_DIAG_04%
 echo     %T_DIAG_05%
 echo(
-echo   %T_COM_56%
+echo   %C_VERDE%%T_COM_56%%C_RESET%
 echo(
 call :LEER_OPCION "%T_DIAG_07%" "1 2 3 0" M A
 if /i "%OPCION%"=="M" exit /b 0
@@ -3215,7 +3251,7 @@ echo   %T_DIAG_13%
 echo(
 call :DIAG_LISTAR_UNIDADES
 echo(
-echo   %T_COM_56%
+echo   %C_VERDE%%T_COM_56%%C_RESET%
 exit /b 0
 :DIAG_CHKDSK_VOLVER
 REM Vuelta desde el submenu de modo al prompt de letra: se repinta la
@@ -3225,10 +3261,12 @@ call :DIAG_CHKDSK_CABECERA
 goto DIAG_CHKDSK_PEDIR
 :DIAG_CHKDSK_ATRAS
 REM El tecnico pidio volver al paso anterior (A o solo ENTER): se regresa
-REM al menu de diagnostico SIN pausa y SIN ejecutar chkdsk.
+REM al submenu de la Seccion [3] SIN pausa y SIN ejecutar chkdsk.
+REM OJO: NO se toca DIAG_MENU. Si se pusiera a SI, MODULO_INVENTARIO se
+REM desenrollaria hasta el menu principal; A debe volver solo UN nivel.
 echo(
 echo   %T_COM_57%
-goto DIAG_CHKDSK_MENU
+exit /b 0
 
 :DIAG_CHKDSK_MODO
 cls
@@ -3242,7 +3280,7 @@ echo     %T_DIAG_17%
 echo     %T_DIAG_18%
 echo(
 echo   %T_DIAG_19%
-echo   %T_COM_56%
+echo   %C_VERDE%%T_COM_56%%C_RESET%
 echo(
 call :LEER_OPCION "%T_DIAG_20%" "1 2 3 0" M A
 if /i "%OPCION%"=="M" goto DIAG_CHKDSK_MENU
@@ -3339,25 +3377,50 @@ REM ---------------------------------------------------------------------
 echo   %T_DIAG_35%
 if "%PS_OK%"=="SI" goto DIAG_LISTAR_UNIDADES_PS
 if exist "%SystemRoot%\System32\wbem\wmic.exe" goto DIAG_LISTAR_UNIDADES_WMIC
-echo       %T_INV_10%
-goto DIAG_LISTAR_UNIDADES_FIN
+goto DIAG_LISTAR_UNIDADES_DISKPART
 :DIAG_LISTAR_UNIDADES_PS
-set "PS_CMD=try{ if(-not (Get-Command Get-Volume -ErrorAction SilentlyContinue)){ throw 'a' }"
-set "PS_CMD=%PS_CMD%; $v=@(Get-Volume -DriveType Fixed -ErrorAction SilentlyContinue | Where-Object {$_.DriveLetter})"
-set "PS_CMD=%PS_CMD%; if($v.Count -eq 0){ throw 'b' }; $v|ForEach-Object{"
-set "PS_CMD=%PS_CMD% $d='-'; $p=Get-Partition -DriveLetter $_.DriveLetter -ErrorAction SilentlyContinue"
-set "PS_CMD=%PS_CMD%; if($p){ $d=$p.DiskNumber }; '  '+$_.DriveLetter+':  '+$_.FileSystemLabel"
-set "PS_CMD=%PS_CMD% +'  '+$_.FileSystem+'  '+[math]::Round($_.Size/1GB)+' GB  '+[math]::Round($_.SizeRemaining/1GB)"
-set "PS_CMD=%PS_CMD% +' GB  disco '+$d } } catch { $v=@(Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3' -ErrorAction SilentlyContinue)"
-set "PS_CMD=%PS_CMD%; if($v.Count -gt 0){ $v|ForEach-Object{ '  '+$_.DeviceID+'  '+$_.VolumeName"
-set "PS_CMD=%PS_CMD% +'  '+$_.FileSystem+'  '+[math]::Round($_.Size/1GB)+' GB  '+[math]::Round($_.FreeSpace/1GB)+' GB' } }"
-set "PS_CMD=%PS_CMD%; else { 'SIN_DATOS' } }"
 call :ARCHIVO_TEMP_INV
-"%PS_EXE%" -NoProfile -Command "%PS_CMD%" > "%F_INV%" 2>&1
+REM  Sin tuberias en el texto de PowerShell: todo con foreach. La salida se
+REM  escribe desde el propio PowerShell en ASCII, asi que cmd no tiene que
+REM  interpretar ni convertir nada. Se listan TODAS las letras (fijas,
+REM  extraibles y USB); solo se excluye el CD-ROM.
+set "PS_CMD=$out=@(); try { $v=@();"
+set "PS_CMD=%PS_CMD% try { if(Get-Command Get-Volume -EA SilentlyContinue){ $v=@(Get-Volume -EA Stop) } } catch { $v=@() };"
+set "PS_CMD=%PS_CMD% foreach($x in $v){ if($x.DriveLetter -and $x.DriveType -ne 'CD-ROM'){"
+set "PS_CMD=%PS_CMD% $d='-'; try { $p=Get-Partition -DriveLetter $x.DriveLetter -EA Stop; if($p){ $d=[string]$p.DiskNumber } } catch { $d='-' };"
+set "PS_CMD=%PS_CMD% $out += '  '+$x.DriveLetter+':  '+$x.FileSystemLabel+'  '+$x.FileSystem+'  '+[math]::Round(([double]$x.Size)/1GB)+' GB  '+[math]::Round(([double]$x.SizeRemaining)/1GB)+' GB  disco '+$d } };"
+set "PS_CMD=%PS_CMD% if($out.Count -eq 0){ $v=@();"
+set "PS_CMD=%PS_CMD% try { $v=@(Get-CimInstance Win32_LogicalDisk -EA Stop) } catch { try { $v=@(Get-WmiObject Win32_LogicalDisk -EA Stop) } catch { $v=@() } };"
+set "PS_CMD=%PS_CMD% foreach($x in $v){ if($x.DeviceID -match '^[A-Za-z]:$' -and $x.DriveType -ne 5){"
+set "PS_CMD=%PS_CMD% $out += '  '+$x.DeviceID+'  '+$x.VolumeName+'  '+$x.FileSystem+'  '+[math]::Round(([double]$x.Size)/1GB)+' GB  '+[math]::Round(([double]$x.FreeSpace)/1GB)+' GB' } } };"
+set "PS_CMD=%PS_CMD% if($out.Count -eq 0){ $out=@('SIN_DATOS') } } catch { $out=@('SIN_DATOS') };"
+set "PS_CMD=%PS_CMD% [IO.File]::WriteAllLines('%F_INV%',$out,[Text.Encoding]::ASCII)"
+"%PS_EXE%" -NoProfile -ExecutionPolicy Bypass -Command "%PS_CMD%" >nul 2>&1
+if not exist "%F_INV%" goto DIAG_LISTAR_UNIDADES_WMIC
+findstr /c:"SIN_DATOS" "%F_INV%" >nul 2>&1
+if not errorlevel 1 goto DIAG_LISTAR_UNIDADES_LIMPIAR
 call :MOSTRAR_TEMP_O_NA
 goto DIAG_LISTAR_UNIDADES_FIN
+:DIAG_LISTAR_UNIDADES_LIMPIAR
+if exist "%F_INV%" del /f /q "%F_INV%" >nul 2>&1
 :DIAG_LISTAR_UNIDADES_WMIC
-wmic logicaldisk where drivetype=3 get deviceid,volumename,filesystem,size,freespace
+if not exist "%SystemRoot%\System32\wbem\wmic.exe" goto DIAG_LISTAR_UNIDADES_DISKPART
+wmic logicaldisk get deviceid,drivetype,volumename,filesystem,size,freespace
+goto DIAG_LISTAR_UNIDADES_FIN
+:DIAG_LISTAR_UNIDADES_DISKPART
+REM  Ultimo recurso SIN PowerShell ni WMI: diskpart SI esta en cualquier
+REM  WinPE. 'list volume' muestra las letras reales montadas ahora mismo.
+call :ARCHIVO_TEMP_INV
+echo list volume> "%F_INV%"
+if exist "%SystemRoot%\System32\diskpart.exe" goto DIAG_LISTAR_UNIDADES_DP_EXE
+diskpart /s "%F_INV%" > "%F_INV%.out" 2>&1
+goto DIAG_LISTAR_UNIDADES_DP_VER
+:DIAG_LISTAR_UNIDADES_DP_EXE
+"%SystemRoot%\System32\diskpart.exe" /s "%F_INV%" > "%F_INV%.out" 2>&1
+:DIAG_LISTAR_UNIDADES_DP_VER
+if exist "%F_INV%.out" type "%F_INV%.out"
+if not exist "%F_INV%.out" echo       %T_INV_10%
+del /f /q "%F_INV%" "%F_INV%.out" >nul 2>&1
 :DIAG_LISTAR_UNIDADES_FIN
 <nul set /p "=%C_AMARILLO%"
 echo   %T_DIAG_36%
@@ -3396,26 +3459,36 @@ if exist "%SystemRoot%\System32\wbem\wmic.exe" goto DIAG_SMART_WMIC
 echo       %T_INV_10%
 goto DIAG_SMART_FIN
 :DIAG_SMART_PS
-set "PS_CMD=$d=@(); $w=@(); $bad=$false"
-set "PS_CMD=%PS_CMD%; if(Get-Command Get-PhysicalDisk -ErrorAction SilentlyContinue){$d=@(Get-PhysicalDisk -ErrorAction SilentlyContinue)}"
-set "PS_CMD=%PS_CMD%; if($d.Count -gt 0){$d|ForEach-Object{'['+$_.DeviceId+'] '+$_.FriendlyName+'  ('+$_.MediaType+')  '+$_.HealthStatus+' / '+$_.OperationalStatus+'  '+[math]::Round($_.Size/1GB)+' GB'}"
-set "PS_CMD=%PS_CMD%; if(@($d|Where-Object{$_.HealthStatus -ne 'Healthy'}).Count -gt 0){$bad=$true}}"
-set "PS_CMD=%PS_CMD%; if($d.Count -eq 0){$w=@(Get-CimInstance Win32_DiskDrive -ErrorAction SilentlyContinue)"
-set "PS_CMD=%PS_CMD%; if($w.Count -gt 0){$w|ForEach-Object{'['+$_.Index+'] '+$_.Model+'  ('+$_.InterfaceType+')  '+$_.Status+'  '+[math]::Round($_.Size/1GB)+' GB'}"
-set "PS_CMD=%PS_CMD%; if(@($w|Where-Object{$_.Status -ne 'OK'}).Count -gt 0){$bad=$true}}}"
-set "PS_CMD=%PS_CMD%; try{$f=@(Get-CimInstance -Namespace root\wmi -ClassName MSStorageDriver_FailurePredictStatus -ErrorAction Stop)}catch{$f=@()}"
-set "PS_CMD=%PS_CMD%; if($f.Count -gt 0){$f|ForEach-Object{'SMART-PREDICT: '+$_.InstanceName+' = '+$_.PredictFailure}"
-set "PS_CMD=%PS_CMD%; if(@($f|Where-Object{$_.PredictFailure}).Count -gt 0){$bad=$true}}"
-set "PS_CMD=%PS_CMD%; if($d.Count -eq 0 -and $w.Count -eq 0){'SIN_DATOS'; 'VERDICT|NA'}"
-set "PS_CMD=%PS_CMD%; elseif($bad){'VERDICT|BAD'} else {'VERDICT|OK'}"
 call :ARCHIVO_TEMP_INV
-"%PS_EXE%" -NoProfile -Command "%PS_CMD%" > "%F_INV%" 2>&1
+REM  Sin tuberias: tres fuentes recorridas con foreach y salida ASCII.
+REM  Get-PhysicalDisk da HealthStatus real; Win32_DiskDrive el Status
+REM  clasico; MSStorageDriver_FailurePredictStatus el PredictFailure.
+REM  Si una fuente no existe, la siguiente decide. Nunca se inventa OK.
+set "PS_CMD=$out=@(); $seen=$false; $bad=$false; try {"
+set "PS_CMD=%PS_CMD% $d=@(); try { if(Get-Command Get-PhysicalDisk -EA SilentlyContinue){ $d=@(Get-PhysicalDisk -EA Stop) } } catch { $d=@() };"
+set "PS_CMD=%PS_CMD% foreach($x in $d){ $seen=$true; $h=[string]$x.HealthStatus; $o=[string]$x.OperationalStatus;"
+set "PS_CMD=%PS_CMD% $out += '['+$x.DeviceId+'] '+$x.FriendlyName+'  ('+$x.MediaType+')  '+$h+' / '+$o+'  '+[math]::Round(([double]$x.Size)/1GB)+' GB';"
+set "PS_CMD=%PS_CMD% if($h -ne 'Healthy'){ $bad=$true } };"
+set "PS_CMD=%PS_CMD% if($d.Count -eq 0){ $w=@();"
+set "PS_CMD=%PS_CMD% try { $w=@(Get-CimInstance Win32_DiskDrive -EA Stop) } catch { try { $w=@(Get-WmiObject Win32_DiskDrive -EA Stop) } catch { $w=@() } };"
+set "PS_CMD=%PS_CMD% foreach($x in $w){ $seen=$true; $s=[string]$x.Status;"
+set "PS_CMD=%PS_CMD% $out += '['+$x.Index+'] '+$x.Model+'  ('+$x.InterfaceType+')  '+$s+'  '+[math]::Round(([double]$x.Size)/1GB)+' GB';"
+set "PS_CMD=%PS_CMD% if($s -ne 'OK'){ $bad=$true } } };"
+set "PS_CMD=%PS_CMD% $f=@(); try { $f=@(Get-CimInstance -Namespace root\wmi -ClassName MSStorageDriver_FailurePredictStatus -EA Stop) } catch { try { $f=@(Get-WmiObject -Namespace root\wmi -Class MSStorageDriver_FailurePredictStatus -EA Stop) } catch { $f=@() } };"
+set "PS_CMD=%PS_CMD% foreach($x in $f){ $seen=$true; $p=[bool]$x.PredictFailure;"
+set "PS_CMD=%PS_CMD% if($p){ $out += 'SMART '+$x.InstanceName+' = PREDICCION DE FALLO'; $bad=$true } else { $out += 'SMART '+$x.InstanceName+' = OK' } };"
+set "PS_CMD=%PS_CMD% if(-not $seen){ $out += 'SIN_DATOS'; $out += 'VERDICT|NA' } elseif($bad){ $out += 'VERDICT|BAD' } else { $out += 'VERDICT|OK' }"
+set "PS_CMD=%PS_CMD% } catch { $out=@('SIN_DATOS','VERDICT|NA') };"
+set "PS_CMD=%PS_CMD% [IO.File]::WriteAllLines('%F_INV%',$out,[Text.Encoding]::ASCII)"
+"%PS_EXE%" -NoProfile -ExecutionPolicy Bypass -Command "%PS_CMD%" >nul 2>&1
 if not exist "%F_INV%" goto DIAG_SMART_SIN_ARCHIVO
 set "SMART_VERDICT=NA"
 findstr /c:"VERDICT|OK" "%F_INV%" >nul 2>&1
 if not errorlevel 1 set "SMART_VERDICT=OK"
 findstr /c:"VERDICT|BAD" "%F_INV%" >nul 2>&1
 if not errorlevel 1 set "SMART_VERDICT=BAD"
+REM  Si PowerShell no ha podido leer nada, todavia queda wmic.
+if "%SMART_VERDICT%"=="NA" if exist "%SystemRoot%\System32\wbem\wmic.exe" goto DIAG_SMART_WMIC
 findstr /v /c:"VERDICT|" "%F_INV%" | findstr /v /c:"SIN_DATOS"
 if exist "%F_INV%" del /f /q "%F_INV%" >nul 2>&1
 goto DIAG_SMART_VEREDICTO
@@ -3425,7 +3498,9 @@ wmic diskdrive get index,model,status,size > "%F_INV%" 2>&1
 set "SMART_VERDICT=OK"
 findstr /i /c:"No Instance" /c:"No hay instancias" "%F_INV%" >nul 2>&1
 if not errorlevel 1 set "SMART_VERDICT=NA"
-findstr /i /c:"Pred Fail" "%F_INV%" >nul 2>&1
+REM  PredFailure es el aviso SMART de verdad; se anade a la misma salida.
+wmic /namespace:\\root\wmi path MSStorageDriver_FailurePredictStatus get InstanceName,PredictFailure >> "%F_INV%" 2>&1
+findstr /i /c:"Pred Fail" /c:"TRUE" "%F_INV%" >nul 2>&1
 if not errorlevel 1 set "SMART_VERDICT=BAD"
 type "%F_INV%"
 if exist "%F_INV%" del /f /q "%F_INV%" >nul 2>&1
@@ -3538,7 +3613,11 @@ REM
 REM  Cada capa va envuelta en try/catch con -ErrorAction Stop: una capa
 REM  caida no aborta la siguiente (el error atrapado no llega jamas a
 REM  cmd). Win32_OperatingSystem aporta la RAM libre ACTUAL, y como
-REM  FreePhysicalMemory viene en KB se divide por 1KB para salir en GB.
+REM  FreePhysicalMemory viene en KB se divide por 1024 para salir en MB.
+REM
+REM  SIN tuberias dentro del texto de PowerShell (todo con foreach) y la
+REM  salida la escribe el propio PowerShell en ASCII con WriteAllLines:
+REM  cmd no interpreta caracteres raros ni sufre BOM/UTF-16 al redirigir.
 REM ---------------------------------------------------------------------
 :INV_RAM
 if "%PS_OK%"=="SI" goto INV_RAM_PS
@@ -3547,20 +3626,23 @@ echo       %T_INV_10%
 echo       %T_INV_17%
 exit /b 0
 :INV_RAM_PS
-set "PS_CMD=$t=0; $n=0; $f=0; $m=@()"
-set "PS_CMD=%PS_CMD%; try{ $m=@(Get-CimInstance Win32_PhysicalMemory -EA Stop) }catch{ $m=@() }"
-set "PS_CMD=%PS_CMD%; if($m.Count -eq 0){ try{ $m=@(Get-WmiObject Win32_PhysicalMemory -EA Stop) }catch{ $m=@() } }"
-set "PS_CMD=%PS_CMD%; if($m.Count -gt 0){ $t=($m|Measure-Object -Property Capacity -Sum).Sum; $n=$m.Count;"
-set "PS_CMD=%PS_CMD% $m|ForEach-Object{'RAMSLOT|'+$_.DeviceLocator+'|'+[math]::Round($_.Capacity/1GB)+'|'+$_.Speed} }"
-set "PS_CMD=%PS_CMD%; if($t -eq 0){ try{ $t=(Get-CimInstance Win32_ComputerSystem -EA Stop).TotalPhysicalMemory }catch{ $t=0 } }"
-set "PS_CMD=%PS_CMD%; if($t -eq 0){ try{ $t=(Get-WmiObject Win32_ComputerSystem -EA Stop).TotalPhysicalMemory }catch{ $t=0 } }"
-set "PS_CMD=%PS_CMD%; $o=$null; try{ $o=Get-CimInstance Win32_OperatingSystem -EA Stop }catch{ }"
-set "PS_CMD=%PS_CMD%; if(-not $o){ try{ $o=Get-WmiObject Win32_OperatingSystem -EA Stop }catch{ } }"
-set "PS_CMD=%PS_CMD%; if($o){ $f=[math]::Round($o.FreePhysicalMemory/1KB) }"
-set "PS_CMD=%PS_CMD%; $sl=''; if($n -gt 0){ $sl=$n }"
-set "PS_CMD=%PS_CMD%; if($t -gt 0){ 'RAM|'+[math]::Round($t/1GB)+'|'+$sl+'|'+$f } else { 'SIN_DATOS' }"
 call :ARCHIVO_TEMP_INV
-"%PS_EXE%" -NoProfile -Command "%PS_CMD%" > "%F_INV%" 2>&1
+set "PS_CMD=$out=@(); try {"
+set "PS_CMD=%PS_CMD% $m=@();"
+set "PS_CMD=%PS_CMD% try { $m=@(Get-CimInstance Win32_PhysicalMemory -EA Stop) } catch { $m=@() };"
+set "PS_CMD=%PS_CMD% if($m.Count -eq 0){ try { $m=@(Get-WmiObject Win32_PhysicalMemory -EA Stop) } catch { $m=@() } };"
+set "PS_CMD=%PS_CMD% $t=0; $n=0; foreach($x in $m){ $n++; try { $t += [double]$x.Capacity } catch { };"
+set "PS_CMD=%PS_CMD% $loc=[string]$x.DeviceLocator; if($loc -eq ''){ $loc='?' }; $spd=[string]$x.Speed; if($spd -eq ''){ $spd='?' };"
+set "PS_CMD=%PS_CMD% $out += 'RAMSLOT|'+$loc+'|'+[math]::Round(([double]$x.Capacity)/1GB)+'|'+$spd };"
+set "PS_CMD=%PS_CMD% if($t -le 0){ try { $t=[double](Get-CimInstance Win32_ComputerSystem -EA Stop).TotalPhysicalMemory } catch { $t=0 } };"
+set "PS_CMD=%PS_CMD% if($t -le 0){ try { $t=[double](Get-WmiObject Win32_ComputerSystem -EA Stop).TotalPhysicalMemory } catch { $t=0 } };"
+set "PS_CMD=%PS_CMD% $o=$null; try { $o=Get-CimInstance Win32_OperatingSystem -EA Stop } catch { try { $o=Get-WmiObject Win32_OperatingSystem -EA Stop } catch { $o=$null } };"
+set "PS_CMD=%PS_CMD% $free=0; if($o){ if($t -le 0){ $t=[double]$o.TotalVisibleMemorySize*1024 }; $free=[math]::Round([double]$o.FreePhysicalMemory/1024) };"
+set "PS_CMD=%PS_CMD% $sl=''; if($n -gt 0){ $sl=[string]$n };"
+set "PS_CMD=%PS_CMD% if($t -gt 0){ $out += 'RAM|'+[math]::Round($t/1GB)+'|'+$sl+'|'+$free } else { $out=@('SIN_DATOS') }"
+set "PS_CMD=%PS_CMD% } catch { $out=@('SIN_DATOS') };"
+set "PS_CMD=%PS_CMD% [IO.File]::WriteAllLines('%F_INV%',$out,[Text.Encoding]::ASCII)"
+"%PS_EXE%" -NoProfile -ExecutionPolicy Bypass -Command "%PS_CMD%" >nul 2>&1
 if not exist "%F_INV%" goto INV_RAM_WMIC
 set "RAM_HECHO=NO"
 set "RAM_SLOTS="
@@ -4017,7 +4099,7 @@ set "T_AYU_03=  [1] Comandos útiles y herramientas disponibles en WinPE"
 set "T_AYU_04=  [2] Guía paso a paso: Opción 1 (maquetar) y Opción 2 (sanitizar)"
 set "T_AYU_05=  [3] Códigos de navegación y atajos rápidos"
 set "T_AYU_06=   Tu opción [1-3] (A = atrás, M = menú):  "
-set "T_AYU_07=   Pulsa 1 para continuar:  "
+set "T_AYU_07=   [Enter] Continuar   [A] Atrás   [M] Menú:  "
 set "T_GUIA_01=[5] GUÍA PASO A PASO - Página 1 de 2: Opción 1 (maquetar)"
 set "T_GUIA_02=OPCIÓN 1 - PREPARACIÓN RÁPIDA DE DISCO"
 set "T_GUIA_03=1) Elige la opción [1] en el menú principal."
@@ -4154,9 +4236,9 @@ set "T_BIEN_14=menú. Según el entorno bastará con la tecla o con pulsar ENTER
 set "T_BIEN_15=Pulsa cualquier tecla para entrar en el menú principal..."
 set "T_CFM_01=[i] Confirmación no reconocida: NO se ha ejecutado nada."
 set "T_CFM_02=   ¿Confirmar operación? [S/N]:  "
-set "T_CFM_03=   ¡ATENCIóN! ¿Está completamente SEGURO de ejecutar esta acción? [S/N]:  "
+set "T_CFM_03=Atención: ¿Está completamente seguro de ejecutar esta acción? [S/N]: "
 set "T_CFM_04=RESUMEN DE LOS COMANDOS QUE SE VAN A EJECUTAR"
-set "T_CFM_05=PASO 2 de 2 - 'S' (EN: 'Y') ejecuta; 'N' u otra tecla CANCELA."
+set "T_CFM_05=PASO 2 de 2 - escribe 'S' y pulsa ENTER para ejecutar; 'N' u otra tecla cancela."
 set "T_CFM_06=Aún no hay guion generado: los comandos salen en el resumen de arriba."
 set "T_COM_01=[!] Entrada no válida. Usa solo una de las opciones indicadas."
 set "T_COM_02=[!] Entrada no válida: introduce SOLO el número de disco (por"
@@ -4201,7 +4283,7 @@ set "T_COM_53=Teclas directas: M = menú principal, S = confirmar si el número 
 set "T_COM_54=      [C] Continuar      [M] Menú principal"
 set "T_COM_55=   Teclea tu opción:  "
 set "T_COM_56= [A] Paso anterior   ^|   [M] Menú principal (Pulsar Enter)"
-set "T_COM_57=[i] Entrada vacía: volviendo al paso anterior."
+set "T_COM_57=[i] Volviendo al paso anterior."
 set "T_CONS_01=[4] CONSOLA AVANZADA"
 set "T_CONS_02=Abriendo una consola CMD interactiva en la MISMA ventana."
 set "T_CONS_03=- Escribe 'exit' para volver al menú principal."
@@ -4348,13 +4430,13 @@ set "T_DIAG_10=[2] CHKDSK - COMPROBACIÓN DE UNA UNIDAD"
 set "T_DIAG_11=Comprueba la unidad que elijas; no borra archivos."
 set "T_DIAG_12=No uses X: (unidad RAM de WinPE)."
 set "T_DIAG_13=La letra debe ser una unidad montada (C:, D:, E:...)."
-set "T_DIAG_14=   Letra de unidad (ej. C):  "
+set "T_DIAG_14=   Letra de unidad (ej. C) (A = atrás, M = menú):  "
 set "T_DIAG_15=Unidad seleccionada:"
 set "T_DIAG_16=  [1] Análisis rápido (/scan)      no desmonta la unidad"
 set "T_DIAG_17=  [2] Reparar errores (/f)         puede pedir reinicio"
 set "T_DIAG_18=  [3] Reparar + sectores (/f /r)   muy lento, para HDD"
 set "T_DIAG_19=  [0] Paso anterior: elegir OTRA letra"
-set "T_DIAG_20=   Modo [0-3] (M = menú):  "
+set "T_DIAG_20=   Modo [0-3] (A = atrás, M = menú):  "
 set "T_DIAG_21=   ¿Ejecutar chkdsk con estas opciones? [S/N]:  "
 set "T_DIAG_22=Comando:"
 set "T_DIAG_23=Ejecutando chkdsk. No cierres la ventana ni apagues el equipo..."
@@ -4369,7 +4451,7 @@ set "T_DIAG_31=[!] X: es la unidad RAM de WinPE: no se comprueba con chkdsk."
 set "T_DIAG_32=[!] La unidad no existe o no está montada:"
 set "T_DIAG_33=Comprobación cancelada: no se ha ejecutado chkdsk."
 set "T_DIAG_34=Fin de la comprobación."
-set "T_DIAG_35=Unidades fijas detectadas (letra, etiqueta, FS, total, libre, disco):"
+set "T_DIAG_35=Unidades lógicas detectadas (letra, etiqueta, FS, total, libre, disco):"
 set "T_DIAG_36=Nota: X: es la unidad RAM de WinPE; no ejecutes chkdsk sobre ella."
 set "T_DIAG_37=[!] No encuentro chkdsk.exe en esta imagen."
 set "T_DIAG_40=[3] SALUD SMART DE LOS DISCOS"
@@ -4463,7 +4545,7 @@ set "T_AYU_03=  [1] Useful commands and tools available in WinPE"
 set "T_AYU_04=  [2] Step-by-step guide: Option 1 (layout) and Option 2 (wipe)"
 set "T_AYU_05=  [3] Navigation codes and quick shortcuts"
 set "T_AYU_06=   Your option [1-3] (A = back, M = menu):  "
-set "T_AYU_07=   Press 1 to continue:  "
+set "T_AYU_07=   [Enter] Continue   [A] Back   [M] Menu:  "
 set "T_GUIA_01=[5] STEP-BY-STEP GUIDE - Page 1 of 2: Option 1 (layout)"
 set "T_GUIA_02=OPTION 1 - QUICK DISK PREPARATION"
 set "T_GUIA_03=1) Choose option [1] in the main menu."
@@ -4600,9 +4682,9 @@ set "T_BIEN_14=menu. Depending on the environment the key alone or ENTER will do
 set "T_BIEN_15=Press any key to enter the main menu..."
 set "T_CFM_01=[i] Confirmation not recognised: NOTHING has been executed."
 set "T_CFM_02=   Confirm operation? [Y/N]:  "
-set "T_CFM_03=   ATTENTION! Are you completely SURE of running this action? [Y/N]:  "
+set "T_CFM_03=Attention: Are you completely sure you want to run this action? [Y/N]: "
 set "T_CFM_04=SUMMARY OF THE COMMANDS ABOUT TO BE RUN"
-set "T_CFM_05=STEP 2 of 2 - Y runs it; N or any other key CANCELS."
+set "T_CFM_05=STEP 2 of 2 - type 'Y' and press ENTER to run; 'N' or any other key cancels."
 set "T_CFM_06=No script generated yet: the commands are in the summary above."
 set "T_COM_01=[!] Invalid input. Use only one of the options shown."
 set "T_COM_02=[!] Invalid input: enter ONLY the disk number (for"
@@ -4647,7 +4729,7 @@ set "T_COM_53=Direct keys: M = main menu, S = confirm if the number is already c
 set "T_COM_54=      [C] Continue       [M] Main menu"
 set "T_COM_55=   Type your choice:  "
 set "T_COM_56= [A] Previous step   ^|   [M] Main menu (Press Enter)"
-set "T_COM_57=[i] Empty input: going back to the previous step."
+set "T_COM_57=[i] Going back to the previous step."
 set "T_CONS_01=[4] ADVANCED CONSOLE"
 set "T_CONS_02=Opening an interactive CMD console in the SAME window."
 set "T_CONS_03=- Type 'exit' to return to the main menu."
@@ -4794,13 +4876,13 @@ set "T_DIAG_10=[2] CHKDSK - CHECK A DRIVE"
 set "T_DIAG_11=Checks the drive you choose; it does not delete files."
 set "T_DIAG_12=Do not use X: (WinPE RAM drive)."
 set "T_DIAG_13=The letter must be a mounted drive (C:, D:, E:...)."
-set "T_DIAG_14=   Drive letter (e.g. C):  "
+set "T_DIAG_14=   Drive letter (e.g. C) (A = back, M = menu):  "
 set "T_DIAG_15=Selected drive:"
 set "T_DIAG_16=  [1] Quick scan (/scan)          does not dismount the drive"
 set "T_DIAG_17=  [2] Repair errors (/f)          may ask for a restart"
 set "T_DIAG_18=  [3] Repair + sectors (/f /r)    very slow, for HDD"
 set "T_DIAG_19=  [0] Previous step: pick ANOTHER letter"
-set "T_DIAG_20=   Mode [0-3] (M = menu):  "
+set "T_DIAG_20=   Mode [0-3] (A = back, M = menu):  "
 set "T_DIAG_21=   Run chkdsk with these options? [Y/N]:  "
 set "T_DIAG_22=Command:"
 set "T_DIAG_23=Running chkdsk. Do not close the window or power off the machine..."
@@ -4815,7 +4897,7 @@ set "T_DIAG_31=[!] X: is the WinPE RAM drive: chkdsk is not run on it."
 set "T_DIAG_32=[!] The drive does not exist or is not mounted:"
 set "T_DIAG_33=Check cancelled: chkdsk was not run."
 set "T_DIAG_34=End of the check."
-set "T_DIAG_35=Fixed drives found (letter, label, FS, total, free, disk):"
+set "T_DIAG_35=Logical drives found (letter, label, FS, total, free, disk):"
 set "T_DIAG_36=Note: X: is the WinPE RAM drive; do not run chkdsk on it."
 set "T_DIAG_37=[!] I cannot find chkdsk.exe in this image."
 set "T_DIAG_40=[3] SMART HEALTH OF THE DISKS"
