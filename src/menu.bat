@@ -661,6 +661,30 @@ REM =====================================================================
 cls
 call :MOSTRAR_CABECERA
 echo(
+echo   %T_AYU_01%
+echo   %C_VERDE%------------------------------------------------------------------%C_FIN%
+echo(
+echo   %T_AYU_02%
+echo(
+echo     %T_AYU_03%
+echo     %T_AYU_04%
+echo     %T_AYU_05%
+echo(
+echo   %T_COM_56%
+echo(
+call :LEER_OPCION "%T_AYU_06%" "1 2 3" M A
+if /i "%OPCION%"=="M" goto MENU
+if /i "%OPCION%"=="A" goto MENU
+if "%OPCION%"=="1" goto OP_AYUDA_P1
+if "%OPCION%"=="2" goto OP_AYUDA_GUIA
+if "%OPCION%"=="3" goto OP_AYUDA_NAV
+goto OP_AYUDA
+
+REM --- Apartado 1: comandos y herramientas de WinPE ---------------------
+:OP_AYUDA_P1
+cls
+call :MOSTRAR_CABECERA
+echo(
 echo   %T_AYU1_01%
 echo   %C_VERDE%------------------------------------------------------------------%C_FIN%
 echo(
@@ -698,8 +722,15 @@ echo(
 echo     %T_AYU1_31%
 echo     %T_AYU1_32%
 echo(
-call :PULSA_TECLA_MENU "%T_AYU1_33%"
-if "%VUELTA_MENU%"=="SI" goto MENU
+echo   %T_AYU1_33%
+echo(
+echo   %T_COM_56%
+echo(
+call :LEER_OPCION "%T_AYU_07%" "1" M A
+if /i "%OPCION%"=="M" goto MENU
+if /i "%OPCION%"=="A" goto OP_AYUDA
+if "%OPCION%"=="1" goto OP_AYUDA_P2
+goto OP_AYUDA_P1
 
 :OP_AYUDA_P2
 cls
@@ -744,7 +775,7 @@ echo      %T_AYU2_30%
 echo      %T_AYU2_31%
 echo(
 call :LEER_SN "%T_AYU2_32%"
-if not "%SN%"=="SI" goto OP_AYUDA_FIN
+if not "%SN%"=="SI" goto OP_AYUDA_P2_FIN
 echo(
 echo   %T_AYU2_33%
 echo(
@@ -764,9 +795,109 @@ echo(
 echo   %T_AYU3_13%
 echo   %T_AYU3_14%
 echo(
-:OP_AYUDA_FIN
-call :PULSA_TECLA "%T_AYU3_01%"
-goto MENU
+:OP_AYUDA_P2_FIN
+echo   %T_AYU3_01%
+echo(
+echo   %T_COM_56%
+echo(
+call :LEER_OPCION "%T_AYU_07%" "1" M A
+if /i "%OPCION%"=="M" goto MENU
+if /i "%OPCION%"=="A" goto OP_AYUDA_P1
+if "%OPCION%"=="1" goto OP_AYUDA
+goto OP_AYUDA_P2_FIN
+
+REM --- Apartado 2: guia paso a paso de la Opcion 1 y de la Opcion 2 -----
+:OP_AYUDA_GUIA
+cls
+call :MOSTRAR_CABECERA
+echo(
+echo   %T_GUIA_01%
+echo   %C_VERDE%------------------------------------------------------------------%C_FIN%
+echo(
+echo   %T_GUIA_02%
+echo(
+echo     %T_GUIA_03%
+echo     %T_GUIA_04%
+echo     %T_GUIA_05%
+echo     %T_GUIA_06%
+echo     %T_GUIA_07%
+echo     %T_GUIA_08%
+echo     %T_GUIA_09%
+echo     %T_GUIA_10%
+echo(
+echo   %T_GUIA_11%
+echo   %T_GUIA_12%
+echo(
+echo   %T_COM_56%
+echo(
+call :LEER_OPCION "%T_AYU_07%" "1" M A
+if /i "%OPCION%"=="M" goto MENU
+if /i "%OPCION%"=="A" goto OP_AYUDA
+if "%OPCION%"=="1" goto OP_AYUDA_GUIA_P2
+goto OP_AYUDA_GUIA
+
+:OP_AYUDA_GUIA_P2
+cls
+call :MOSTRAR_CABECERA
+echo(
+echo   %T_GUIA_14%
+echo   %C_VERDE%------------------------------------------------------------------%C_FIN%
+echo(
+echo   %T_GUIA_15%
+echo(
+echo     %T_GUIA_16%
+echo     %T_GUIA_17%
+echo     %T_GUIA_18%
+echo     %T_GUIA_19%
+echo     %T_GUIA_20%
+echo     %T_GUIA_21%
+echo     %T_GUIA_22%
+echo(
+echo   %T_GUIA_23%
+echo     %T_GUIA_24%
+echo     %T_GUIA_25%
+echo     %T_GUIA_26%
+echo(
+echo   %T_COM_56%
+echo(
+call :LEER_OPCION "%T_AYU_07%" "1" M A
+if /i "%OPCION%"=="M" goto MENU
+if /i "%OPCION%"=="A" goto OP_AYUDA_GUIA
+if "%OPCION%"=="1" goto OP_AYUDA
+goto OP_AYUDA_GUIA_P2
+
+REM --- Apartado 3: codigos de navegacion y atajos ------------------------
+:OP_AYUDA_NAV
+cls
+call :MOSTRAR_CABECERA
+echo(
+echo   %T_NAV_01%
+echo   %C_VERDE%------------------------------------------------------------------%C_FIN%
+echo(
+echo   %T_NAV_02%
+echo(
+echo   %T_NAV_03%
+echo   %T_NAV_04%
+echo   %T_NAV_05%
+echo   %T_NAV_06%
+echo   %T_NAV_07%
+echo(
+echo   %T_NAV_08%
+echo   %T_NAV_09%
+echo   %T_NAV_10%
+echo   %T_NAV_11%
+echo(
+echo   %T_NAV_12%
+echo   %T_NAV_13%
+echo   %T_NAV_14%
+echo(
+echo   %T_COM_56%
+echo(
+call :LEER_OPCION "%T_AYU_07%" "1" M A
+if /i "%OPCION%"=="M" goto MENU
+if /i "%OPCION%"=="A" goto OP_AYUDA
+if "%OPCION%"=="1" goto OP_AYUDA
+goto OP_AYUDA_NAV
 
 REM =====================================================================
 REM  PASO 10 - OPCION [6] SALIR / APAGAR EQUIPO
@@ -955,12 +1086,14 @@ goto PULSA_TECLA_MENU_BUCLE
 REM ---------------------------------------------------------------------
 REM  LEER_OPCION - captura SEGURA de una opcion numerica.
 REM  -------------------------------------------------------------------
-REM  USO:    call :LEER_OPCION "texto del prompt" "1 2 3 4 5" [M]
+REM  USO:    call :LEER_OPCION "texto del prompt" "1 2 3 4 5" [M] [A]
 REM            %~1 -^> mensaje que vera el tecnico (sin comillas)
 REM            %~2 -^> digitos permitidos, separados por espacios
 REM                    (es la LISTA BLANCA de entradas validas)
 REM            %~3 -^> opcional: 'M' para admitir tambien la letra M y
 REM                    volver al menu principal de forma inmediata
+REM            %~4 -^> opcional: 'A' para admitir tambien la letra A y
+REM                    volver al paso anterior (OPCION queda en A)
 REM  RESULTADO:
 REM            %OPCION% -^> el digito elegido (o vacio, si algo fallo)
 REM
@@ -974,6 +1107,10 @@ REM  Tercer argumento opcional: si vale M, la letra M se acepta como
 REM  salida al menu principal ademas de los digitos de la lista blanca.
 set "PERMITE_M=NO"
 if /i "%~3"=="M" set "PERMITE_M=SI"
+REM  Cuarto argumento opcional: si vale A, la letra A se acepta como
+REM  salida al paso anterior. El llamante decide a donde lleva esa A.
+set "PERMITE_A=NO"
+if /i "%~4"=="A" set "PERMITE_A=SI"
 if "%MODO_ENTRADA%"=="CHOICE" goto LEER_CON_CHOICE
 goto LEER_CON_SETP
 
@@ -988,43 +1125,43 @@ REM significa "en CLAVES, sustituye cada espacio por nada" (sintaxis
 REM general %VAR:busqueda=reemplazo% con reemplazo vacio = borrar).
 set "CLAVES=%~2"
 set "CLAVES=%CLAVES: =%"
-REM   /n oculta la lista automatica de teclas (nuestro prompt ya la dice)
-REM   /m muestra el mensaje que pasamos en %~1
-if "%PERMITE_M%"=="SI" goto LEER_CON_CHOICE_M
-choice /c %CLAVES% /n /m "%C_VERDE%%~1%C_FIN%"
-REM choice devuelve en ERRORLEVEL el INDICE de la tecla pulsada (la
-REM primera tecla de la lista = 1, la segunda = 2, y asi sucesivamente).
-REM Como todos nuestros conjuntos son digitos consecutivos (1..5), el
-REM indice coincide con el propio digito: la tecla "3" es la tercera de
-REM la lista, luego errorlevel 3 -^> OPCION=3.
-REM   Si el tecnico pulsa Ctrl+C y responde "no" a la pregunta de cmd,
-REM   choice devuelve 0 (o 255 si hay error): quedara fuera de la lista
-REM   blanca y el menu simplemente repintara e insistira.
-REM ADVERTENCIA classica: %ERRORLEVEL% es una variable mas y podria ser
-REM "sombreada" con 'set errorlevel=...'. No la usamos jamas para eso.
-set "OPCION=%errorlevel%"
-exit /b 0
-
-REM --- Ruta choice con la tecla M admitida -------------------------------
-REM Solo se llega aqui si el llamante puso 'M' como tercer argumento. La
-REM tecla M se anade AL FINAL de la lista, asi que su posicion es el
-REM numero de digitos mas uno; contamos los digitos con un bucle para no
-REM depender del tamano de la lista. Si el tecnico pulsa M, OPCION queda
-REM en M y el llamante decide que hacer (normalmente, volver al menu).
-:LEER_CON_CHOICE_M
+REM Sufijo de navegacion: A y/o M se anaden AL FINAL de los digitos.
+REM Su posicion real se calcula contando los digitos de la lista blanca.
+set "SUFIJO="
+if "%PERMITE_A%"=="SI" set "SUFIJO=A"
+if "%PERMITE_M%"=="SI" set "SUFIJO=%SUFIJO%M"
+if not defined SUFIJO goto LEER_CON_CHOICE_SIMPLE
 set "CLAVES_N=0"
 set "CLAVES_TMP=%CLAVES%"
-:LEER_CON_CHOICE_M_CONTAR
-if not defined CLAVES_TMP goto LEER_CON_CHOICE_M_LISTO
+:LEER_CON_CHOICE_CONTAR
+if not defined CLAVES_TMP goto LEER_CON_CHOICE_LISTO
 set "CLAVES_TMP=%CLAVES_TMP:~1%"
 set /a CLAVES_N+=1
-goto LEER_CON_CHOICE_M_CONTAR
-:LEER_CON_CHOICE_M_LISTO
-set /a CLAVES_M=CLAVES_N+1
-choice /c %CLAVES%M /n /m "%C_VERDE%%~1%C_FIN%"
-if "%errorlevel%"=="%CLAVES_M%" set "OPCION=M"
-if "%OPCION%"=="M" exit /b 0
-set "OPCION=%errorlevel%"
+goto LEER_CON_CHOICE_CONTAR
+:LEER_CON_CHOICE_LISTO
+REM   /n oculta la lista automatica de teclas (nuestro prompt ya la dice)
+REM   /m muestra el mensaje que pasamos en %~1
+choice /c %CLAVES%%SUFIJO% /n /m "%C_VERDE%%~1%C_FIN%"
+set "ELECT=%errorlevel%"
+REM choice devuelve 0 si el tecnico aborta con Ctrl+C: se sale sin opcion
+REM y el llamante vuelve a pintar el menu (nunca se interpreta como "0").
+if "%ELECT%"=="0" exit /b 0
+REM Indice dentro de los digitos: es la propia opcion.
+if %ELECT% LEQ %CLAVES_N% set "OPCION=%ELECT%"
+if defined OPCION exit /b 0
+REM Fuera de los digitos: la posicion del sufijo dice la tecla pulsada.
+set /a OFFSET=ELECT-CLAVES_N
+if "%OFFSET%"=="1" set "OPCION=%SUFIJO:~0,1%"
+if "%OFFSET%"=="2" set "OPCION=%SUFIJO:~1,1%"
+exit /b 0
+
+:LEER_CON_CHOICE_SIMPLE
+REM   /n oculta la lista automatica de teclas (nuestro prompt ya la dice)
+REM   /m muestra el mensaje que pasamos en %~1
+choice /c %CLAVES% /n /m "%C_VERDE%%~1%C_FIN%"
+set "ELECT=%errorlevel%"
+if "%ELECT%"=="0" exit /b 0
+set "OPCION=%ELECT%"
 exit /b 0
 
 REM --- Ruta ALTERNATIVA: set /p -----------------------------------------
@@ -1061,8 +1198,11 @@ set "OPCION=%OPCION: =%"
 REM --- Salida directa al menu: tecla M admitida -------------------------
 REM Solo si el llamante la pidio como tercer argumento: asi los menus que
 REM no ofrecen M (idioma, formato, tipo de medio) siguen siendo estrictos.
-if not "%PERMITE_M%"=="SI" goto LEER_CON_SETP_LISTA
+if not "%PERMITE_M%"=="SI" goto LEER_CON_SETP_VER_A
 if /i "%OPCION%"=="M" exit /b 0
+:LEER_CON_SETP_VER_A
+if not "%PERMITE_A%"=="SI" goto LEER_CON_SETP_LISTA
+if /i "%OPCION%"=="A" exit /b 0
 :LEER_CON_SETP_LISTA
 REM --- Lista blanca ---
 REM 'for' recorre cada digito de la lista (%~2) y compara con lo
@@ -1660,9 +1800,10 @@ echo       %T_SEG_21%
 echo       %T_SEG_22%
 echo       %T_SEG_23%
 echo(
-call :LEER_OPCION "%T_COM_24%" "1 2 3" M
+call :LEER_OPCION "%T_COM_24%" "1 2 3" M A
 if /i "%OPCION%"=="M" set "SALIDA_M=SI"
 if /i "%OPCION%"=="M" exit /b 0
+if /i "%OPCION%"=="A" goto PEDIR_DISCO_BUCLE
 if "%OPCION%"=="1" goto PEDIR_DISCO_BUCLE
 if "%OPCION%"=="2" goto PEDIR_DISCO_RIESGO
 exit /b 0
@@ -2123,15 +2264,6 @@ REM de pintar: luego DISCO_EXISTE solo tiene que comprobar pertenencia.
 call :PARSER_DISCOS
 type "%F_SALIDA%"
 echo(
-echo   %T_COM_32%
-echo     %T_COM_33%
-echo                      %T_COM_34%
-echo     %T_COM_35%
-echo     %T_COM_36%
-echo     %T_COM_37%
-echo     %T_COM_38%
-echo       %T_COM_39%
-echo(
 set "LISTADO_OK=SI"
 exit /b 0
 :LISTAR_DISCOS_FIN
@@ -2154,15 +2286,6 @@ call :MOSTRAR_CABECERA
 echo(
 echo   %T_D1_01%
 echo   %C_VERDE%------------------------------------------------------------------%C_FIN%
-echo(
-echo   %T_D1_02%
-echo(
-echo     %T_D1_03%
-echo     %T_D1_04%
-echo     %T_D1_05%
-echo        %T_D1_06%
-echo     %T_D1_07%
-echo     %T_D1_08%
 echo(
 echo   %T_D1_09%
 echo     %T_D1_10%
@@ -2451,18 +2574,11 @@ echo     %T_NIV_10%
 echo(
 echo   %T_NIV_11%
 echo(
-echo   %T_D2_05%
-echo     %T_D2_06%
-echo       %T_D2_07%
-echo     %T_D2_08%
-echo       %T_D2_09%
-echo     %T_D2_36%
-echo       %T_D2_37%
-echo(
 echo   %T_COM_56%
 echo(
-call :LEER_OPCION "%T_NIV_12%" "1 2 3 0" M
+call :LEER_OPCION "%T_NIV_12%" "1 2 3 0" M A
 if /i "%OPCION%"=="M" exit /b 0
+if /i "%OPCION%"=="A" exit /b 0
 if "%OPCION%"=="4" set "OPCION=0"
 set "NIVEL_BORRADO="
 if "%OPCION%"=="1" set "NIVEL_BORRADO=1"
@@ -2999,11 +3115,11 @@ echo     %T_DIAG_03%
 echo     %T_DIAG_04%
 echo     %T_DIAG_05%
 echo(
-echo   %T_DIAG_06%
 echo   %T_COM_56%
 echo(
-call :LEER_OPCION "%T_DIAG_07%" "1 2 3 0" M
+call :LEER_OPCION "%T_DIAG_07%" "1 2 3 0" M A
 if /i "%OPCION%"=="M" exit /b 0
+if /i "%OPCION%"=="A" exit /b 0
 REM  En modo choice la tecla "0" es la CUARTA de la lista: errorlevel=4.
 REM  Normalizamos 4 -^> 0 para que el resto del codigo compare siempre "0".
 if "%OPCION%"=="4" set "OPCION=0"
@@ -3128,8 +3244,9 @@ echo(
 echo   %T_DIAG_19%
 echo   %T_COM_56%
 echo(
-call :LEER_OPCION "%T_DIAG_20%" "1 2 3 0" M
+call :LEER_OPCION "%T_DIAG_20%" "1 2 3 0" M A
 if /i "%OPCION%"=="M" goto DIAG_CHKDSK_MENU
+if /i "%OPCION%"=="A" goto DIAG_CHKDSK_VOLVER
 if "%OPCION%"=="4" set "OPCION=0"
 REM [0] es el PUNTO DE ESCAPE de esta pantalla: vuelve al paso anterior
 REM (elegir otra letra) en vez de expulsar del modulo.
@@ -3336,7 +3453,6 @@ echo   %T_DIAG_43%
 call :REGISTRAR DIAGNOSTICO "consulta=smart estado=%SMART_VERDICT%" "OK"
 :DIAG_SMART_FIN
 echo(
-echo   %T_COM_56%
 call :PULSA_TECLA_MENU "%T_DIAG_45%"
 if "%VUELTA_MENU%"=="SI" set "DIAG_MENU=SI"
 exit /b 0
@@ -3895,6 +4011,52 @@ REM ---------------------------------------------------------------------
 REM  IDIOMA_ES - castellano (%LANG%=ES). Idioma por defecto.
 REM ---------------------------------------------------------------------
 :IDIOMA_ES
+set "T_AYU_01=[5] AYUDA DEL SISTEMA - MANUAL TÉCNICO"
+set "T_AYU_02=Selecciona un apartado del manual:"
+set "T_AYU_03=  [1] Comandos útiles y herramientas disponibles en WinPE"
+set "T_AYU_04=  [2] Guía paso a paso: Opción 1 (maquetar) y Opción 2 (sanitizar)"
+set "T_AYU_05=  [3] Códigos de navegación y atajos rápidos"
+set "T_AYU_06=   Tu opción [1-3] (A = atrás, M = menú):  "
+set "T_AYU_07=   Pulsa 1 para continuar:  "
+set "T_GUIA_01=[5] GUÍA PASO A PASO - Página 1 de 2: Opción 1 (maquetar)"
+set "T_GUIA_02=OPCIÓN 1 - PREPARACIÓN RÁPIDA DE DISCO"
+set "T_GUIA_03=1) Elige la opción [1] en el menú principal."
+set "T_GUIA_04=2) Se listan los discos físicos con diskpart (solo lectura)."
+set "T_GUIA_05=3) Escribe el NÚMERO del disco (columna Disk / Disco)."
+set "T_GUIA_06=4) Elige el esquema: GPT para UEFI, MBR para BIOS Legacy."
+set "T_GUIA_07=5) Revisa el guion de diskpart que se muestra en pantalla."
+set "T_GUIA_08=6) Confirma DOS veces con S (o Y en inglés)."
+set "T_GUIA_09=7) Se ejecutan clean, convert, create, format y assign."
+set "T_GUIA_10=8) Al final se vuelve a listar el equipo para verificar."
+set "T_GUIA_11=PROTECCIÓN: el disco del sistema y el de arranque de WinPE"
+set "T_GUIA_12=quedan bloqueados: la herramienta no permite tocarlos."
+set "T_GUIA_14=[5] GUÍA PASO A PASO - Página 2 de 2: Opción 2 y diagnóstico"
+set "T_GUIA_15=OPCIÓN 2 - BORRADO SEGURO / SANITIZACIÓN"
+set "T_GUIA_16=Nivel [1] clean: borra la tabla de particiones. Los datos"
+set "T_GUIA_17=siguen en el disco y son recuperables. Es el nivel más rápido."
+set "T_GUIA_18=Nivel [2] TRIM + clean: para SSD/NVMe. Libera los bloques"
+set "T_GUIA_19=libres y el controlador los limpia. Datos irrecuperables."
+set "T_GUIA_20=En una VM puede no haber soporte TRIM: se avisa y el proceso"
+set "T_GUIA_21=sigue sin romperse (nunca se finge un éxito)."
+set "T_GUIA_22=Nivel [3] clean all: ceros en todo el disco (horas); en HDD, irrecuperable."
+set "T_GUIA_23=DIAGNÓSTICO (Sección 3, solo lectura)"
+set "T_GUIA_24=[1] Inventario: CPU, RAM, placa base y discos."
+set "T_GUIA_25=[2] CHKDSK: comprueba una unidad con /scan, /f o /f /r."
+set "T_GUIA_26=[3] SMART: estado OK / Pre-fail de los discos físicos."
+set "T_NAV_01=[5] CÓDIGOS DE NAVEGACIÓN Y ATAJOS RÁPIDOS"
+set "T_NAV_02=NAVEGACIÓN"
+set "T_NAV_03=M      vuelve al menú principal (sin pausa)"
+set "T_NAV_04=A      vuelve al paso anterior (sin pausa)"
+set "T_NAV_05=ENTER  cancela la entrada o vuelve al paso anterior"
+set "T_NAV_06=0      salir / cancelar en los submenús que lo muestran"
+set "T_NAV_07=1-6    elegir una opción del menú principal"
+set "T_NAV_08=CONFIRMACIONES"
+set "T_NAV_09=Las operaciones destructivas piden DOS confirmaciones: la"
+set "T_NAV_10=primera pregunta S/N y después la pregunta de SEGURIDAD."
+set "T_NAV_11=Solo la tecla S (Y en inglés) confirma; cualquier otra cancela."
+set "T_NAV_12=SEGURIDAD"
+set "T_NAV_13=El disco del sistema en ejecución y el disco de arranque de"
+set "T_NAV_14=WinPE están protegidos: no se pueden preparar ni borrar."
 set "T_AYU1_01=[5] AYUDA DEL SISTEMA - Página 1 de 2: discos y almacenamiento"
 set "T_AYU1_02=DISKPART ........................ gestor de discos de Windows"
 set "T_AYU1_03=Formas de uso:"
@@ -3961,7 +4123,7 @@ set "T_AYU2_30=de arriba: un disco con 'Pred Fail' no merece una instalación"
 set "T_AYU2_31=nueva (el trabajo se perdería en semanas, no en años)."
 set "T_AYU2_32=   Mostrar la lista de comandos de esta imagen? [S/N]:  "
 set "T_AYU2_33=--- COMANDOS NATIVOS DE CMD Y DE WINPE (usa la rueda para scroll) ---"
-set "T_AYU3_01=Pulsa cualquier tecla para volver al menú principal..."
+set "T_AYU3_01=Fin de la lista de comandos de esta imagen."
 set "T_AYU3_02=DISCO Y ARRANQUE"
 set "T_AYU3_03=diskpart                  list / select / clean / convert"
 set "T_AYU3_04=wmic diskdrive get status . Estado SMART (OK o Pred Fail)"
@@ -4023,14 +4185,6 @@ set "T_COM_28=(sin particiones ni volúmenes). Eso es lo correcto."
 set "T_COM_29=- Si el disco no muestra el resultado esperado, revisa el aviso"
 set "T_COM_30=que dio diskpart antes de repetir cualquier operación."
 set "T_COM_31=Consultando los discos del equipo con diskpart (solo lectura)..."
-set "T_COM_32=[Ayuda] Cómo leer este listado:"
-set "T_COM_33=- 'list disk'    los discos físicos: mira la PRIMERA columna"
-set "T_COM_34=(Disk 0, Disk 1...) y compárala con el TAMAÑO."
-set "T_COM_35=- Estado 'Online' o 'En línea': el disco está operativo."
-set "T_COM_36=- La marca '*' en la columna 'Gpt' significa que ya es GPT."
-set "T_COM_37=- 'list volume'  qué volúmenes hay y con qué LETRA de unidad."
-set "T_COM_38=- Truco de seguridad: mira la ETIQUETA del disco en la caja del"
-set "T_COM_39=equipo. Un disco de 500 GB no puede ser el de 1 TB."
 set "T_COM_40=Sin listado no se puede elegir disco con seguridad: volvemos"
 set "T_COM_41=al menú sin tocar nada."
 set "T_COM_42=Herramienta de Soporte Técnico"
@@ -4046,7 +4200,7 @@ set "T_COM_52=   Recibido: "
 set "T_COM_53=Teclas directas: M = menú principal, S = confirmar si el número es correcto (sin ENTER)."
 set "T_COM_54=      [C] Continuar      [M] Menú principal"
 set "T_COM_55=   Teclea tu opción:  "
-set "T_COM_56= [M] Menú principal   |   [A] Paso anterior (o Enter para cancelar)"
+set "T_COM_56= [A] Paso anterior   ^|   [M] Menú principal (Pulsar Enter)"
 set "T_COM_57=[i] Entrada vacía: volviendo al paso anterior."
 set "T_CONS_01=[4] CONSOLA AVANZADA"
 set "T_CONS_02=Abriendo una consola CMD interactiva en la MISMA ventana."
@@ -4056,13 +4210,6 @@ set "T_CONS_05=- OJO: los cambios que hagas en variables NO afectan al menú."
 set "T_CONS_06=Recuerda: primero mira, después actúa. Para discos:"
 set "T_CONS_07=diskpart  -^>  list disk  -^>  detail disk  -^>  exit"
 set "T_D1_01=[1] PREPARACIÓN RÁPIDA DE DISCO (maquetación)"
-set "T_D1_02=Este módulo deja un disco listo para instalar Windows:"
-set "T_D1_03=a) Lista los discos físicos y sus tamaños (diskpart, solo lectura)."
-set "T_D1_04=b) Te pide el NÚMERO del disco a preparar (entrada validada)."
-set "T_D1_05=c) Genera el guion de diskpart con los comandos exactos y te lo"
-set "T_D1_06=muestra para que lo leas ANTES de ejecutar nada."
-set "T_D1_07=d) Te pide DOS confirmaciones seguidas (S/N) antes de ejecutar."
-set "T_D1_08=e) Ejecuta y vuelve a listar el equipo para verificar."
 set "T_D1_09=Orden de comandos:"
 set "T_D1_10=  1) clean"
 set "T_D1_11=  2) convert gpt / mbr (GPT en UEFI, MBR en Legacy)"
@@ -4084,13 +4231,6 @@ set "T_D1_27=  3) create partition primary"
 set "T_D1_28=  4) format fs=ntfs quick label=SISTEMA"
 set "T_D1_29=  5) assign (letra libre que Windows elija)"
 set "T_D2_01=[2] BORRADO SEGURO / SANITIZACIÓN"
-set "T_D2_05=Marco de referencia (NIST SP 800-88: Clear y Purge):"
-set "T_D2_06=[1] 'clean'      CLEAR : borra la tabla de particiones; los"
-set "T_D2_07=      datos siguen en el disco y son recuperables."
-set "T_D2_08=[2] 'TRIM'       PURGE : libera bloques en SSD/NVMe y el"
-set "T_D2_09=      controlador los limpia (GC): datos irrecuperables."
-set "T_D2_36=[3] 'clean all'  PURGE : sobrescribe TODO con ceros (horas);"
-set "T_D2_37=      en HDD la recuperación práctica es imposible."
 set "T_D2_12=[2] BORRADO SEGURO - RESUMEN Y CONFIRMACIÓN"
 set "T_D2_13=Acción:         clean all  (sobrescritura completa con ceros)"
 set "T_D2_14=TIEMPO ESTIMADO (orientativo; depende del disco y de su conexión):"
@@ -4202,8 +4342,7 @@ set "T_DIAG_02=Consulta el equipo y permite comprobar sus unidades (chkdsk, SMAR
 set "T_DIAG_03=  [1] Hardware completo       CPU, RAM, placa base y discos"
 set "T_DIAG_04=  [2] Comprobar unidad        chkdsk: /scan, /f o /f /r"
 set "T_DIAG_05=  [3] Salud SMART             estado OK / Pre-fail de los discos"
-set "T_DIAG_06=  [0] Volver al menú principal"
-set "T_DIAG_07=   Su opción [0-3] (M = menú):  "
+set "T_DIAG_07=   Su opción [1-3] (A = atrás, M = menú):  "
 set "T_DIAG_08=Fin del inventario de hardware."
 set "T_DIAG_10=[2] CHKDSK - COMPROBACIÓN DE UNA UNIDAD"
 set "T_DIAG_11=Comprueba la unidad que elijas; no borra archivos."
@@ -4318,6 +4457,52 @@ REM  IDIOMA_EN - ingles (%LANG%=EN).
 REM  Mismos nombres de variable que el bloque anterior, uno a uno.
 REM ---------------------------------------------------------------------
 :IDIOMA_EN
+set "T_AYU_01=[5] SYSTEM HELP - TECHNICAL MANUAL"
+set "T_AYU_02=Choose one section of the manual:"
+set "T_AYU_03=  [1] Useful commands and tools available in WinPE"
+set "T_AYU_04=  [2] Step-by-step guide: Option 1 (layout) and Option 2 (wipe)"
+set "T_AYU_05=  [3] Navigation codes and quick shortcuts"
+set "T_AYU_06=   Your option [1-3] (A = back, M = menu):  "
+set "T_AYU_07=   Press 1 to continue:  "
+set "T_GUIA_01=[5] STEP-BY-STEP GUIDE - Page 1 of 2: Option 1 (layout)"
+set "T_GUIA_02=OPTION 1 - QUICK DISK PREPARATION"
+set "T_GUIA_03=1) Choose option [1] in the main menu."
+set "T_GUIA_04=2) The physical disks are listed with diskpart (read only)."
+set "T_GUIA_05=3) Type the disk NUMBER (Disk / Disco column)."
+set "T_GUIA_06=4) Choose the scheme: GPT for UEFI, MBR for BIOS Legacy."
+set "T_GUIA_07=5) Review the diskpart script shown on screen."
+set "T_GUIA_08=6) Confirm TWICE with Y."
+set "T_GUIA_09=7) clean, convert, create, format and assign are executed."
+set "T_GUIA_10=8) At the end the machine is listed again to verify."
+set "T_GUIA_11=PROTECTION: the running system disk and the WinPE boot disk"
+set "T_GUIA_12=are blocked: the tool will not touch them."
+set "T_GUIA_14=[5] STEP-BY-STEP GUIDE - Page 2 of 2: Option 2 and diagnostics"
+set "T_GUIA_15=OPTION 2 - SECURE ERASE / SANITIZATION"
+set "T_GUIA_16=Level [1] clean: wipes the partition table. The data stays"
+set "T_GUIA_17=on the disk and can be recovered. It is the fastest level."
+set "T_GUIA_18=Level [2] TRIM + clean: for SSD/NVMe. Frees the free blocks"
+set "T_GUIA_19=and the controller wipes them. Unrecoverable data."
+set "T_GUIA_20=A VM may not support TRIM: the tool warns and carries on"
+set "T_GUIA_21=without breaking (it never fakes a success)."
+set "T_GUIA_22=Level [3] clean all: zeros over the whole disk (hours); on HDD unrecoverable."
+set "T_GUIA_23=DIAGNOSTICS (Section 3, read only)"
+set "T_GUIA_24=[1] Inventory: CPU, RAM, motherboard and disks."
+set "T_GUIA_25=[2] CHKDSK: checks a drive with /scan, /f or /f /r."
+set "T_GUIA_26=[3] SMART: OK / Pre-fail status of the physical disks."
+set "T_NAV_01=[5] NAVIGATION CODES AND QUICK SHORTCUTS"
+set "T_NAV_02=NAVIGATION"
+set "T_NAV_03=M      returns to the main menu (no pause)"
+set "T_NAV_04=A      returns to the previous step (no pause)"
+set "T_NAV_05=ENTER  cancels the input or goes back one step"
+set "T_NAV_06=0      exit / cancel in the submenus that show it"
+set "T_NAV_07=1-6    choose an option in the main menu"
+set "T_NAV_08=CONFIRMATIONS"
+set "T_NAV_09=Destructive operations ask for TWO confirmations: the first"
+set "T_NAV_10=Y/N question and then the SAFETY question."
+set "T_NAV_11=Only the Y key confirms; any other key cancels."
+set "T_NAV_12=SECURITY"
+set "T_NAV_13=The running system disk and the WinPE boot disk are protected:"
+set "T_NAV_14=they cannot be prepared or wiped."
 set "T_AYU1_01=[5] SYSTEM HELP - Page 1 of 2: disks and storage"
 set "T_AYU1_02=DISKPART ........................ Windows disk manager"
 set "T_AYU1_03=Ways to use it:"
@@ -4384,7 +4569,7 @@ set "T_AYU2_30=command above: a disk with 'Pred Fail' does not deserve a new"
 set "T_AYU2_31=install (the work would be lost in weeks, not in years)."
 set "T_AYU2_32=   Show the list of commands available in this image? [Y/N]:  "
 set "T_AYU2_33=--- NATIVE CMD AND WINPE COMMANDS (use the mouse wheel to scroll) ---"
-set "T_AYU3_01=Press any key to return to the main menu..."
+set "T_AYU3_01=End of the command list for this image."
 set "T_AYU3_02=DISK AND BOOT"
 set "T_AYU3_03=diskpart                  list / select / clean / convert"
 set "T_AYU3_04=wmic diskdrive get status . SMART status (OK or Pred Fail)"
@@ -4446,14 +4631,6 @@ set "T_COM_28=(with no partitions or volumes). That is correct."
 set "T_COM_29=- If the disk does not show the expected result, check the"
 set "T_COM_30=warning diskpart gave before repeating any operation."
 set "T_COM_31=Reading the machine disks with diskpart (read only)..."
-set "T_COM_32=[Help] How to read this listing:"
-set "T_COM_33=- 'list disk'    the physical disks: look at the FIRST column"
-set "T_COM_34=(Disk 0, Disk 1...) and compare it with the SIZE."
-set "T_COM_35=- Status 'Online': the disk is operational."
-set "T_COM_36=- The '*' mark in the 'Gpt' column means it is already GPT."
-set "T_COM_37=- 'list volume'  which volumes exist and with which drive LETTER."
-set "T_COM_38=- Safety tip: look at the LABEL on the case of the machine."
-set "T_COM_39=A 500 GB disk cannot possibly be the 1 TB one."
 set "T_COM_40=Without a listing no disk can be chosen safely: we return"
 set "T_COM_41=to the menu without touching anything."
 set "T_COM_42=Technical Support Tool"
@@ -4469,7 +4646,7 @@ set "T_COM_52=   Received: "
 set "T_COM_53=Direct keys: M = main menu, S = confirm if the number is already correct (no ENTER)."
 set "T_COM_54=      [C] Continue       [M] Main menu"
 set "T_COM_55=   Type your choice:  "
-set "T_COM_56= [M] Main menu   |   [A] Previous step (or Enter to cancel)"
+set "T_COM_56= [A] Previous step   ^|   [M] Main menu (Press Enter)"
 set "T_COM_57=[i] Empty input: going back to the previous step."
 set "T_CONS_01=[4] ADVANCED CONSOLE"
 set "T_CONS_02=Opening an interactive CMD console in the SAME window."
@@ -4479,13 +4656,6 @@ set "T_CONS_05=- NOTE: any variable change you make does NOT affect the menu."
 set "T_CONS_06=Remember: look first, act later. For disks:"
 set "T_CONS_07=diskpart  -^>  list disk  -^>  detail disk  -^>  exit"
 set "T_D1_01=[1] QUICK DISK PREPARATION (layout)"
-set "T_D1_02=This module leaves a disk ready to install Windows:"
-set "T_D1_03=a) Lists the physical disks and sizes (diskpart, read only)."
-set "T_D1_04=b) Asks you for the NUMBER of the disk (validated input)."
-set "T_D1_05=c) Builds the diskpart script with the exact commands and"
-set "T_D1_06=shows it so that you read it BEFORE running anything."
-set "T_D1_07=d) Asks for TWO confirmations (Y/N) before running."
-set "T_D1_08=e) Runs it and lists the machine again to verify."
 set "T_D1_09=Command order:"
 set "T_D1_10=  1) clean"
 set "T_D1_11=  2) convert gpt / mbr (GPT on UEFI, MBR on Legacy)"
@@ -4507,13 +4677,6 @@ set "T_D1_27=  3) create partition primary"
 set "T_D1_28=  4) format fs=ntfs quick label=SISTEMA"
 set "T_D1_29=  5) assign (free letter chosen by Windows)"
 set "T_D2_01=[2] SECURE ERASE / SANITIZATION"
-set "T_D2_05=Reference framework (NIST SP 800-88: Clear and Purge):"
-set "T_D2_06=[1] 'clean'      CLEAR : wipes the partition table; the"
-set "T_D2_07=      data stays on the disk and can be recovered."
-set "T_D2_08=[2] 'TRIM'       PURGE : frees blocks on SSD/NVMe and the"
-set "T_D2_09=      controller wipes them (GC): unrecoverable."
-set "T_D2_36=[3] 'clean all'  PURGE : overwrites EVERYTHING with zeros"
-set "T_D2_37=      (hours); on an HDD practical recovery is impossible."
 set "T_D2_12=[2] SECURE ERASE - SUMMARY AND CONFIRMATION"
 set "T_D2_13=Action:         clean all  (full overwrite with zeros)"
 set "T_D2_14=ESTIMATED TIME (rough; depends on the disk and its connection):"
@@ -4625,8 +4788,7 @@ set "T_DIAG_02=Inspects the machine and lets you check its drives (chkdsk, SMART
 set "T_DIAG_03=  [1] Full hardware           CPU, RAM, motherboard and disks"
 set "T_DIAG_04=  [2] Check a drive           chkdsk: /scan, /f or /f /r"
 set "T_DIAG_05=  [3] SMART health            OK / Pre-fail status of the disks"
-set "T_DIAG_06=  [0] Back to the main menu"
-set "T_DIAG_07=   Your option [0-3] (M = menu):  "
+set "T_DIAG_07=   Your option [1-3] (A = back, M = menu):  "
 set "T_DIAG_08=End of the hardware inventory."
 set "T_DIAG_10=[2] CHKDSK - CHECK A DRIVE"
 set "T_DIAG_11=Checks the drive you choose; it does not delete files."
