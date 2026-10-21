@@ -22,14 +22,15 @@ Desde la **Fase 3** el proyecto además **se compila como ISO arrancable**
 |   Elige idioma / Choose language:  [1] Español   [2] English |
 +--------------------------------------------------------------+
 |   JAH-WinPe  -  Herramienta de Soporte Técnico               |
-|   Versión 1.5.0  -  Fase 4.5  -  Entorno: Windows / WinPE    |
+|   Versión 1.0.0  -  Entorno: Windows / WinPE                 |
 +--------------------------------------------------------------+
-|   [1]  Preparación rápida de disco   limpieza y formato      |
-|   [2]  Borrado seguro / Sanitización destrucción lógica      |
-|   [3]  Diagnóstico / Inventario      consulta SOLO LECTURA   |
-|   [4]  Consola Avanzada              salir a CMD interactivo |
-|   [5]  Ayuda del sistema             guía rápida del técnico |
-|   [6]  Salir / Apagar equipo                                 |
+|   [1]  Operaciones sobre discos y particiones                |
+|   [2]  Sanitización y borrado seguro                         |
+|   [3]  Diagnóstico y salud de hardware                       |
+|   [4]  Consola de comandos                                   |
+|   [5]  Ayuda y documentación técnica                         |
+|   [6]  Herramientas y utilidades de terceros                 |
+|   [7]  Apagar o reiniciar el equipo                          |
 +--------------------------------------------------------------+
 |   Firmware: UEFI  ->  GPT     |   Log: persistente / RAM     |
 +--------------------------------------------------------------+
@@ -39,27 +40,34 @@ Desde la **Fase 3** el proyecto además **se compila como ISO arrancable**
 
 ## Estado del proyecto
 
+> **Versión actual del ejecutable:** `1.0.0`. El menú principal tiene **7
+> opciones**; la opción **[6]** es un contenedor informativo de herramientas
+> de terceros, todavía en desarrollo. La tabla siguiente conserva el
+> histórico de fases funcionales.
+
 | Fase | Contenido | Estado |
 |------|-----------|--------|
-| **1** | Interfaz: bienvenida, menú, ayuda, consola avanzada, apagado | ✅ Completada |
-| **2** | Módulos de disco con `diskpart`: maquetación rápida y borrado seguro | ✅ Completada |
+| **1** | Interfaz: bienvenida, menú, ayuda, consola de comandos, apagado | ✅ Completada |
+| **2** | Módulos de disco con `diskpart`: preparación y borrado seguro | ✅ Completada |
 | **2.5** | Interfaz **multilenguaje** (Español / English) + README bilingüe | ✅ Completada |
-| **2.8** | **Escudo de seguridad**: bloqueo del disco de arranque + confirmación por palabra | ✅ Completada |
+| **2.8** | **Escudo de seguridad**: bloqueo del disco de arranque + doble confirmación S/N | ✅ Completada |
 | **3** | **Entorno WinPE**: arranque automático (`startnet.cmd`) + **ISO arrancable** doble (UEFI/BIOS) | ✅ Completada |
 | **4** | **Firmware UEFI/Legacy** (esquema GPT/MBR automático) + **registro de actividad** (`jah-winpe.log`) | ✅ Completada |
-| **4.5** | **Inventario** de hardware (solo lectura) + **estimación de tiempo** del borrado según tamaño real y tipo de disco | ✅ Completada |
-| **5** | Más idiomas; recordar el idioma entre sesiones | ⏳ Pendiente |
+| **4.5** | **Diagnóstico** de hardware (RAM, discos, SMART y `chkdsk`) + **estimación de tiempo** del borrado | ✅ Completada |
+| **5** | Más idiomas; recordar el idioma; integrar herramientas portables de terceros (opción 6) | ⏳ Pendiente |
 
-> **Importante:** las opciones **[1]** y **[2]** ya ejecutan operaciones
-> **destructivas reales** sobre el disco elegido. Ninguna actúa sin que
-> teclees la palabra de confirmación `CONFIRMAR` (o `CONFIRM` en English) y,
-> además, repitas el número de disco. Antes de confirmar, el programa
-> **muestra el guion de `diskpart`** que va a ejecutar, e **identifica
+> **Importante:** las opciones **[1]** y **[2]** ejecutan operaciones
+> **destructivas reales** sobre el disco elegido. Ninguna actúa sin una
+> **doble confirmación S/N**: primero la pregunta de confirmación y, tras
+> mostrar el resumen, la pregunta de seguridad. Solo `S` (o `Y` en English)
+> continúa; `N`, `SI`, `YES`, Enter o cualquier otra respuesta cancela. Antes
+> de confirmar, el programa **muestra el guion de `diskpart`** e **identifica
 > automáticamente el disco de arranque**: si eliges ese disco, la operación
 > se **bloquea** y no se genera ningún guion.
 >
-> Si solo quieres mirar el equipo sin modificar nada, usa la opción
-> **[3] Diagnóstico / Inventario** (es de **solo lectura**).
+> Si solo quieres mirar el equipo, usa **[3] Diagnóstico y salud de
+> hardware**: incluye inventario de solo lectura, comprobación de unidades
+> con `chkdsk` y consulta SMART.
 >
 > Desde la **Fase 4**, el programa **detecta el firmware** (UEFI o BIOS
 > Legacy) y elige solo el esquema de particionado correcto (**GPT** en UEFI,
@@ -68,10 +76,10 @@ Desde la **Fase 3** el proyecto además **se compila como ISO arrancable**
 > anotada con fecha y hora en un **registro de actividad** (`jah-winpe.log`)
 > que, cuando existe un disco persistente conectado, sobrevive al reinicio.
 >
-> Desde la **Fase 4.5**, antes de un `clean all` el programa **lee el tamaño
-> real del disco** y muestra una **estimación orientativa del tiempo** de
-> borrado (según sea HDD o SSD y su capacidad) en un aviso amarillo, **antes**
-> de pedir la palabra de confirmación.
+> Desde la **Fase 4.5**, antes de un `clean all` (nivel [3] de la opción [2])
+> el programa **lee el tamaño real del disco** y muestra una **estimación
+> orientativa del tiempo** de borrado (según sea HDD o SSD y su capacidad) en
+> un aviso amarillo, **antes** de la doble confirmación.
 
 ---
 
@@ -84,6 +92,10 @@ Desde la **Fase 3** el proyecto además **se compila como ISO arrancable**
   (en WinPE se ejecuta ya con privilegios de SYSTEM).
 - Solo para **compilar la ISO** (no para usarla): Windows ADK + complemento
   WinPE. Detalles en [`docs/BUILD_GUIDE.md`](docs/BUILD_GUIDE.md).
+- El script de compilación añade automáticamente los componentes
+  **WinPE-WMI**, **WinPE-Scripting**, **WinPE-NetFx**,
+  **WinPE-PowerShell** y **WinPE-StorageWMI**. Son necesarios para el
+  inventario, la salud SMART y el listado de volúmenes con PowerShell.
 - Opcional: `choice.exe` en `%SystemRoot%\System32`.
   Si no existe (algunas imágenes WinPE minimalistas), el script detecta la
   ausencia y usa automáticamente su respaldo con `set /p` + lista blanca.
@@ -101,8 +113,10 @@ Desde la **Fase 3** el proyecto además **se compila como ISO arrancable**
    Si no eliges, el programa continúa en Español.
 4. Muévete por los menús tecleando el número de la opción
    (si tu consola no reacciona a una sola tecla, termina con `ENTER`).
-5. Desde **[4] Consola Avanzada** puedes ejecutar cualquier comando;
+5. Desde **[4] Consola de comandos** puedes ejecutar cualquier comando;
    escribe `exit` para volver al menú principal.
+6. **[6] Herramientas y utilidades de terceros** es por ahora una pantalla
+   informativa; **[7]** apaga el equipo o sale de la herramienta.
 
 ### Compilar la ISO arrancable (Fase 3)
 
@@ -126,35 +140,37 @@ y las instrucciones para **probarla en QEMU** están en
 
 | Opción | Nombre | Qué hace | Estado |
 |--------|--------|----------|--------|
-| `[1]` | Preparación rápida de disco | `clean` + `convert gpt` + partición primaria + NTFS rápido (`SISTEMA`) + letra | Operativa |
-| `[2]` | Borrado seguro / Sanitización | `clean all` (sobrescritura con ceros, NIST SP 800-88 nivel Purge), con estimación previa del tiempo | Operativa |
-| `[3]` | Diagnóstico / Inventario | **Solo lectura**: sistema/CPU/RAM/placa base y discos físicos con su tamaño (`wmic`/`diskpart`) | Operativa |
-| `[4]` | Consola Avanzada | Abre un `cmd` interactivo y vuelve al menú con `exit` | Operativa |
-| `[5]` | Ayuda del sistema | Guía rápida de `diskpart`, `chkdsk`, `format`, `wmic`… + `help` nativo | Operativa |
-| `[6]` | Salir / Apagar equipo | Salir del script o apagar (con confirmación) | Operativa |
+| `[1]` | Operaciones sobre discos y particiones | `clean` + `convert gpt/mbr` + partición primaria NTFS (`SISTEMA`) + letra; módulo guiado con protección de arranque | Operativa |
+| `[2]` | Sanitización y borrado seguro | Tres niveles: estructura (`clean`), TRIM/Deallocate para SSD/NVMe y ceros (`clean all`) para HDD; doble confirmación y estimación previa | Operativa |
+| `[3]` | Diagnóstico y salud de hardware | Submenú: inventario (CPU/RAM/placa/discos), `chkdsk` por unidad y salud SMART | Operativa |
+| `[4]` | Consola de comandos | `cmd` interactivo; `exit` vuelve al menú | Operativa |
+| `[5]` | Ayuda y documentación técnica | Tres apartados (comandos, guía paso a paso y navegación) con paginación Enter/A/M | Operativa |
+| `[6]` | Herramientas y utilidades de terceros | Contenedor informativo; se integrarán recuperación de datos, gestión BCD y análisis avanzado | En desarrollo |
+| `[7]` | Apagar o reiniciar el equipo | Apagar o salir de la herramienta (en WinPE reinicia) con confirmación | Operativa |
 
-### Inventario de solo lectura y estimación de tiempo (Fase 4.5)
+### Diagnóstico, salud y estimación
 
-La opción **[3]** muestra, sin tocar nada, un resumen del equipo:
+La opción **[3]** abre un submenú de diagnóstico para revisar el equipo:
 
-- **Sistema** operativo y modelo (`wmic os`, `wmic csproduct`).
-- **Procesador**, núcleos físicos y lógicos (`wmic cpu`).
-- **Memoria RAM** total y disponible (`wmic OS`, en KB → MB/GB).
-- **Placa base** (`wmic baseboard`).
-- **Discos físicos** con índice, tamaño y estado (`diskpart list disk` +
-  `wmic diskdrive`).
+- **[1] Hardware completo:** sistema operativo y modelo, CPU (núcleos
+  físicos y lógicos), RAM total y disponible, placa base y discos físicos con
+  tamaño y estado. Usa PowerShell/WMI y cae a `wmic` o `diskpart` si faltan.
+- **[2] Comprobar unidad:** pide una letra real, muestra el comando y permite
+  `chkdsk /scan`, `/f` o `/f /r`. Nunca se ejecuta sobre `X:` (RAM de WinPE).
+- **[3] Salud SMART:** consulta `Get-PhysicalDisk`, `Win32_DiskDrive` y
+  `MSStorageDriver_FailurePredictStatus`; muestra OK, Pre-fail o “sin datos”
+  y avisa si el disco está en riesgo.
 
-Es un módulo **100 % de solo lectura**: ni selecciona discos ni escribe
-guiones. Si la imagen WinPE no incluye `wmic`, se degrada con elegancia
-(usa `diskpart list disk` y variables de entorno como
-`%PROCESSOR_IDENTIFIER%`) y avisa en pantalla; nunca inventa un dato.
+El inventario no escribe nada. `chkdsk /f` y `/f /r` sí pueden reparar la
+unidad, por eso piden confirmación S/N antes de ejecutarse. La consulta SMART
+es ligera y no modifica el disco.
 
-En la opción **[2]**, **antes** de pedir la palabra de confirmación, el
-programa lee el **tamaño real** del disco (`wmic diskdrive ... size`) e
-intenta saber si es **HDD o SSD** (WMI `MSFT_PhysicalDisk`); si no lo puede
-detectar, **pregunta**. Con esos datos muestra un **aviso amarillo** con un
-rango de tiempo **orientativo** (`de X a Y`), recordando que depende del bus
-(USB/SATA) y del estado del disco.
+En la opción **[2]** hay **tres niveles** de borrado: `[1]` estructura,
+`[2]` TRIM/Deallocate para SSD/NVMe y `[3]` ceros (`clean all`) para HDD.
+Antes del nivel [3] el programa lee el **tamaño real** del disco e intenta
+saber si es **HDD o SSD**; si no puede, **pregunta**. Muestra un **aviso
+amarillo** con un rango de tiempo **orientativo** (`de X a Y`), recordando
+que depende del bus (USB/SATA) y del estado del disco.
 
 ---
 
@@ -197,12 +213,13 @@ igual:
    listado y, si no puede confirmarlo, te pregunta en lugar de suponer.
 3. **Genera el guion** en la carpeta temporal del sistema (`_jah_diskpart.txt`).
 4. **Muestra el guion en pantalla** para que lo leas antes de ejecutarlo.
-5. **Pide confirmación escrita**: la palabra `CONFIRMAR` (`CONFIRM` si la
-   interfaz está en English) **y además** repetir el número de disco. Si el
-   escudo de arranque no pudo verificar qué disco está protegido, exige
-   antes la palabra `RIESGO` (`RISK`).
+5. **Pide dos confirmaciones S/N**: primero la pregunta de confirmación y,
+   tras mostrar el resumen, la pregunta de seguridad. Solo `S` (o `Y` en
+   English) continúa; `N`, `SI`, `YES`, Enter o cualquier otra respuesta
+   cancela. Si el escudo no pudo verificar qué disco está protegido, muestra
+   antes un aviso amarillo de riesgo.
 6. **Ejecuta** `diskpart /s` sin capturar la salida, para que veas el avance
-   (en `clean all` puede tardar horas).
+   (el nivel de ceros `clean all` puede tardar horas).
 7. **Verifica** volviendo a listar discos y volúmenes.
 8. **Borra los ficheros temporales** (incluido el guion: no dejamos por ahí
    una "receta de borrado" reutilizable por error).
@@ -285,10 +302,12 @@ Estas convenciones están explicadas en detalle dentro de `src\menu.bat`:
     `echo` (`_jah_diskpart.txt`), se muestran antes de ejecutar y se borran
     al terminar. En las líneas que se escriben hacia el fichero no puede
     haber símbolos de redirección, porque `cmd.exe` los interpretaría.
-11. **Antes de toda acción destructiva** hay que teclear una palabra
-    literal (`CONFIRMAR`, o `CONFIRM` en English) **y** el número de disco:
-    un `ENTER` de más no borra nada. Si no se pudo verificar el disco de
-    arranque, se exige antes una palabra extra `RIESGO`/`RISK`.
+11. **Antes de toda acción destructiva** hay que superar **dos
+    confirmaciones S/N**: la primera pregunta y, tras el resumen, la pregunta
+    de seguridad. Solo `S` (o `Y` en English) continúa; `N`, `SI`, `YES`,
+    Enter o cualquier otra entrada cancela. Si no se pudo verificar el disco
+    de arranque, se muestra antes un aviso de riesgo y se aplica la misma
+    doble confirmación.
 12. **Multilenguaje (i18n) con diccionarios de variables.** No hay ficheros
     de traducción: el idioma se resuelve con **dos bloques de variables de
     texto** (`:IDIOMA_ES` y `:IDIOMA_EN`) que definen **los mismos nombres**
@@ -317,26 +336,26 @@ Estas convenciones están explicadas en detalle dentro de `src\menu.bat`:
     (`X:`), el script busca **primero junto a sí mismo**, después **cualquier
     disco escribible** y, si no hay, deja el log **en RAM** avisando de que
     se perderá al reiniciar. Nunca guarda texto tecleado por el técnico:
-    solo datos ya validados (números de disco, códigos, palabras clave).
-15. **Inventario de solo lectura (Fase 4.5).** La opción `[3]` consulta el
-    hardware con `wmic` (sistema, CPU, RAM, placa base y discos) y con
-    `diskpart list disk` (tamaño y estado). Ninguna de esas órdenes modifica
-    nada. Como `wmic` está en desuso en Windows 11 y puede faltar en WinPE,
-    cada bloque comprueba la herramienta antes de usarla y, si no está,
-    ofrece un respaldo (`diskpart` para discos, variables de entorno para la
-    CPU) o avisa. La RAM se lee en **kilobytes** y se convierte a MB/GB con
-    `set /a`, porque `set /a` no maneja los bytes de un disco grande (se
-    desbordarían los 32 bits).
-16. **Estimación del tiempo de borrado (Fase 4.5).** Antes de un `clean all`
-    se lee el **tamaño exacto en bytes** (`wmic diskdrive ... size`) y se
-    convierte a GB **por texto** (se recortan los últimos 9 dígitos), no con
-    aritmética, por el mismo motivo de desbordamiento. El tipo de disco
-    (HDD/SSD) se detecta con WMI (`MSFT_PhysicalDisk`: `3`=HDD, `4`=SSD) y,
-    si no se puede, se pregunta. El tiempo se calcula con dos velocidades de
-    referencia (HDD 60–150 MB/s; SSD 100–300 MB/s) y se muestra como un
-    **rango** `de X a Y`, siempre con la etiqueta **orientativa**: un disco
-    por USB 2.0 puede tardar diez veces más. El aviso aparece **después** de
-    mostrar el guion y **antes** de la confirmación, en amarillo.
+    solo datos ya validados (números de disco, códigos de error, resultados).
+15. **Diagnóstico y salud (Fase 4.5).** La opción `[3]` abre un submenú:
+    `[1]` inventario de hardware, `[2]` comprobación de una unidad con
+    `chkdsk` y `[3]` salud SMART. El inventario es de solo lectura; `chkdsk`
+    con `/f` o `/f /r` puede reparar la unidad y por eso pide confirmación
+    S/N. Se usan PowerShell/WMI (`Get-Volume`, `Get-PhysicalDisk`,
+    `Win32_*`) y, si faltan, `wmic` o `diskpart`. La RAM se lee en
+    **kilobytes** y se convierte a MB/GB con `set /a`, porque `set /a` no
+    maneja los bytes de un disco grande (se desbordarían los 32 bits).
+16. **Estimación del tiempo de borrado (Fase 4.5).** Se aplica al nivel `[3]`
+    de la opción `[2]` (`clean all`). Antes de ese nivel se lee el **tamaño
+    exacto en bytes** (`wmic diskdrive ... size`) y se convierte a GB **por
+    texto** (se recortan los últimos 9 dígitos), no con aritmética, por el
+    mismo motivo de desbordamiento. El tipo de disco (HDD/SSD) se detecta con
+    WMI (`MSFT_PhysicalDisk`: `3`=HDD, `4`=SSD) y, si no se puede, se
+    pregunta. El tiempo se calcula con dos velocidades de referencia
+    (HDD 60–150 MB/s; SSD 100–300 MB/s) y se muestra como un **rango**
+    `de X a Y`, siempre con la etiqueta **orientativa**: un disco por USB 2.0
+    puede tardar diez veces más. El aviso aparece **después** de mostrar el
+    guion y **antes** de la doble confirmación, en amarillo.
 
 ---
 
@@ -352,34 +371,36 @@ Estas convenciones están explicadas en detalle dentro de `src\menu.bat`:
 - **Verificación imposible = aviso de riesgo:** si el entorno no permite
   identificar el disco de arranque (WinPE muy recortado sin PowerShell,
   `diskpart` en un idioma no reconocido), el script lo dice con un aviso
-  amarillo y exige teclear además la palabra `RIESGO` (`RISK` en English)
-  antes de la confirmación normal. Nunca afirma estar seguro cuando no lo
-  está.
-- **Doble confirmación escrita:** toda acción destructiva pide teclear
-  `CONFIRMAR` (o `CONFIRM` en English) **y** repetir el número de disco;
-  ante cualquier respuesta dudosa, el script **no ejecuta nada** y vuelve
-  al menú. La palabra se compara sin distinguir mayúsculas (`if /i`).
+  amarillo y aplica la misma doble confirmación S/N. Nunca afirma estar
+  seguro cuando no lo está.
+- **Doble confirmación S/N:** toda acción destructiva pide dos respuestas:
+  la pregunta de confirmación y, tras el resumen, la pregunta de seguridad.
+  Solo `S` (o `Y` en English) continúa; `N`, `SI`, `YES`, Enter o cualquier
+  otra entrada cancela y el script **no ejecuta nada**. La segunda respuesta
+  se lee con `set /p`, así que hay que pulsar Enter después de la letra.
 - **Entrada validada:** el número de disco tecleado se contrasta con el
   listado real (`list disk`); entradas vacías, letras o números
   inexistentes se rechazan sin generar guiones.
 - **Regla de oro:** verifica siempre el disco correcto
   (`diskpart` → `list disk` → `detail disk` / `list volume`) antes de tocar
   nada. Compara el tamaño con la etiqueta física del disco.
-- `clean` borra solo la tabla de particiones (los datos siguen ahí);
-  `clean all` sobrescribe el medio y es lento. Entiende la diferencia antes
-  de usarlos.
-- En **SSD**, `clean all` **no** garantiza el borrado físico (el
-  controlador reparte las escrituras): usa la herramienta del fabricante o
-  el ATA Secure Erase.
+- El nivel `[1]` (`clean`) borra solo la tabla de particiones (los datos
+  siguen ahí); el nivel `[2]` usa TRIM/Deallocate para SSD/NVMe; el nivel
+  `[3]` (`clean all`) sobrescribe el medio con ceros y es lento. Entiende la
+  diferencia antes de usarlos.
+- En **SSD/NVMe**, `clean all` **no** garantiza el borrado físico y desgasta
+  las celdas: usa el nivel `[2]` (TRIM) o la herramienta del fabricante /
+  ATA Secure Erase.
 - **Auditoría (Fase 4):** todas las operaciones relevantes (inicio de sesión,
   disco elegido, limpieza, `clean all`, códigos de error de `diskpart`,
   bloqueos y salida) quedan registradas con fecha y hora en `jah-winpe.log`,
   de modo que una intervención se puede reconstruir después.
-- **Inventario sin riesgo (Fase 4.5):** la opción `[3]` es de **solo
-  lectura** (no genera guiones ni escribe en discos) y queda registrada en el
-  log como `INVENTARIO`. El **aviso de tiempo** de `[2]` no cambia el
-  borrado: solo informa antes de la confirmación, con la advertencia de no
-  interrumpir el proceso una vez iniciado.
+- **Diagnóstico sin riesgo (Fase 4.5):** el inventario y la consulta SMART de
+  `[3]` son de **solo lectura** y quedan registrados en el log como
+  `DIAGNOSTICO`. `chkdsk /f` y `/f /r` sí pueden reparar la unidad y piden
+  confirmación S/N antes de ejecutarse. El **aviso de tiempo** del nivel `[3]`
+  de `[2]` no cambia el borrado: solo informa antes de la confirmación, con
+  la advertencia de no interrumpir el proceso una vez iniciado.
 
 ---
 
@@ -387,32 +408,35 @@ Estas convenciones están explicadas en detalle dentro de `src\menu.bat`:
 
 - [ ] La pantalla de idioma aparece antes de la bienvenida y `[1] Español`
       / `[2] English` cambia todos los textos (menú, ayuda, avisos).
-- [ ] Con English, la confirmación destructiva pide `CONFIRM`.
+- [ ] Con English, la segunda confirmación pide `Y` y solo `Y`/`y` continúa.
 - [ ] El pie del menú muestra `Modo de entrada: CHOICE` (o `SETP` en WinPE
       sin `choice.exe`).
 - [ ] Pulsar una tecla no válida: solo *beep*, el script **no** se cierra.
 - [ ] Pulsar `ENTER` en vacío: mensaje `[!] Entrada no válida` y vuelve a pedir.
 - [ ] `Ctrl+C`: el script no queda en un estado roto.
 - [ ] `[4]` abre consola; `exit` devuelve al menú principal.
-- [ ] `[5]` muestra las dos páginas y el `help` nativo.
-- [ ] `[6]` → `[3]` (volver) no apaga nada; `[1]` pide confirmación.
+- [ ] `[5]` muestra los tres apartados (comandos, guía y navegación) y
+      avanza con Enter, `A` o `M` sin teclear números.
+- [ ] `[6]` muestra el contenedor de terceros; `A` y `M` vuelven al menú.
+- [ ] `[7]` → `[3]` (volver) no apaga nada; `[1]` pide confirmación.
 - [ ] Los acentos se ven correctamente (sin "runas").
-- [ ] En WinPE: `[6]` → apagar usa `wpeutil`; en Windows, `shutdown`.
+- [ ] En WinPE: `[7]` → apagar usa `wpeutil`; en Windows, `shutdown`.
 - [ ] `[1]`: al teclear `A` en el número de disco vuelve al menú sin tocar nada.
 - [ ] `[1]`: al teclear letras, símbolos o ceros a la izquierda avisa y
       vuelve a pedir el número (no se cierra).
-- [ ] `[1]`: antes de ejecutar, el guion aparece en pantalla y una palabra
-      distinta de `CONFIRMAR` cancela la operación.
-- [ ] `[2]`: pide `CONFIRMAR` **y** repetir el número de disco; si el número
-      no coincide, cancela.
+- [ ] `[1]`: antes de ejecutar, el guion aparece en pantalla y solo `S`
+      (o `Y` en English) en las dos confirmaciones ejecuta la operación.
+- [ ] `[2]`: pide dos confirmaciones S/N; `SI`, `YES`, Enter o cualquier
+      otra entrada cancela.
 - [ ] `[1]`/`[2]`: si eliges el disco de arranque (el de Windows en marcha
       o el medio WinPE), aparece la **pantalla roja de bloqueo** y no se
       genera guion.
 - [ ] `[1]`/`[2]`: si el número no aparece en el listado, sale una pantalla
-      de duda con tres opciones y la opción 2 exige la palabra `RIESGO`.
+      de duda con tres opciones; la opción 2 muestra el aviso de riesgo y
+      aplica la misma doble confirmación.
 - [ ] En WinPE sin PowerShell (o `diskpart` en otro idioma), el resumen
-      muestra "Protección de arranque: SIN VERIFICADA" y pide `RIESGO`
-      antes de `CONFIRMAR`.
+      muestra "Protección de arranque: SIN VERIFICADA", aparece el aviso de
+      riesgo y se piden las dos confirmaciones S/N.
 - [ ] `[1]`/`[2]`: al terminar, la verificación (nuevo listado) muestra el
       resultado esperado.
 - [ ] Al salir de un módulo, los ficheros `_jah_*.txt` ya no están en la
@@ -446,15 +470,23 @@ Estas convenciones están explicadas en detalle dentro de `src\menu.bat`:
       en ese disco y **sobrevive** al reinicio.
 - [ ] Sin disco persistente, el menú avisa `Registro (log): solo en RAM`.
 
-### Inventario y estimación de tiempo (Fase 4.5)
+### Diagnóstico, salud y estimación (Fase 4.5)
 
-- [ ] `[3]` muestra sistema, CPU, RAM (total y disponible), placa base y
-      discos físicos con su tamaño, y **no** modifica nada.
-- [ ] Tras salir de `[3]`, `jah-winpe.log` contiene una línea `INVENTARIO`.
-- [ ] Si la imagen no tiene `wmic`, `[3]` avisa en los bloques afectados y,
-      aun así, lista los discos con `diskpart`.
-- [ ] `[2]`: tras mostrar el guion aparece el **aviso amarillo** con el
-      tamaño real del disco y un rango de tiempo estimado.
+- [ ] `[3]` abre el submenú con `[1]` hardware, `[2]` `chkdsk` y `[3]` SMART.
+- [ ] `[3]` → `[1]` muestra sistema, CPU, RAM (total y disponible), placa
+      base y discos físicos con su tamaño, y **no** modifica nada.
+- [ ] `[3]` → `[2]` lista las unidades con letra, permite elegir una y ofrece
+      `chkdsk /scan`, `/f` o `/f /r`; rechaza `X:` y pide confirmación S/N.
+- [ ] `[3]` → `[3]` muestra la salud SMART y distingue OK, Pre-fail y
+      “sin datos” sin inventar un veredicto.
+- [ ] Tras el inventario o SMART, `jah-winpe.log` contiene una línea
+      `DIAGNOSTICO`.
+- [ ] Si la imagen no tiene PowerShell o `wmic`, `[3]` avisa en los bloques
+      afectados y, aun así, lista las unidades con `diskpart`.
+- [ ] `[2]`: el nivel `[1]` limpia solo estructura, el `[2]` aplica
+      TRIM/Deallocate y el `[3]` sobrescribe con ceros.
+- [ ] `[2]`: tras mostrar el guion, el nivel `[3]` muestra el **aviso
+      amarillo** con el tamaño real del disco y un rango de tiempo estimado.
 - [ ] Si el tipo de disco no se puede detectar, `[2]` **pregunta**
       `[1=HDD / 2=SSD]` antes de estimar (no adivina).
 - [ ] `jah-winpe.log` registra la estimación (`... media=HDD ...`) tras elegir
@@ -466,13 +498,14 @@ Estas convenciones están explicadas en detalle dentro de `src\menu.bat`:
 
 - [x] Módulo guiado de `diskpart` para **[1]** (listar, seleccionar,
       `clean`, `convert gpt`, partición primaria, NTFS rápido, letra).
-- [x] Flujo de **borrado seguro** para **[2]** (`clean all` + verificación).
-- [x] Confirmación escrita (palabra clave) antes de toda acción destructiva.
+- [x] Flujo de **borrado seguro** para **[2]** con tres niveles
+      (estructura, TRIM y ceros) + verificación.
+- [x] **Doble confirmación S/N** antes de toda acción destructiva.
 - [x] Interfaz **multilenguaje** Español / English (diccionarios dentro de
       `src/menu.bat` + selector de idioma al arrancar).
 - [x] **Escudo de seguridad** (Fase 2.8): bloqueo del disco de arranque,
-      validación de existencia del disco y confirmación con palabra clave
-      (`CONFIRMAR`/`CONFIRM` y `RIESGO`/`RISK`).
+      validación de existencia del disco, aviso de riesgo y doble
+      confirmación S/N.
 - [x] **Entorno WinPE** (Fase 3): arranque automático con
       `src/startnet.cmd` (wpeinit + búsqueda de `menu.bat`).
 - [x] **ISO arrancable** doble (UEFI x64 + BIOS Legacy) con `oscdimg` y
@@ -485,8 +518,12 @@ Estas convenciones están explicadas en detalle dentro de `src\menu.bat`:
 - [x] **Lectura del tamaño real del disco** (Fase 4.5) para estimar el
       tiempo de `clean all` (HDD/SSD, con aviso orientativo antes de
       confirmar).
-- [x] **Modo "solo lectura" / inventario** del equipo (Fase 4.5):
-      `systeminfo`/`wmic` para CPU, RAM, placa base y discos.
+- [x] **Diagnóstico y salud** del equipo (Fase 4.5): inventario, `chkdsk` y
+      salud SMART.
+- [x] **Menú de 7 opciones** con ayuda paginada y contenedor de herramientas
+      de terceros (opción 6).
+- [ ] Integrar herramientas portables en la opción **[6]** (recuperación de
+      datos, gestión BCD y análisis avanzado).
 - [ ] Guardar el idioma elegido entre ejecuciones (fichero junto al script).
 - [ ] Más idiomas: añadir un bloque `:IDIOMA_xx` y su opción en el selector.
 

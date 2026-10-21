@@ -51,12 +51,13 @@ REM  MAPA DE NAVEGACION (etiquetas del script)
 REM  --------------------------------------------------------------------
 REM    SELECCION_IDIOMA -^> elegir castellano/ingles -^> BIENVENIDA
 REM    BIENVENIDA  -^> bienvenida una sola vez -^> MENU
-REM    MENU        -^> [1] OP_DISCO ......... maquetacion guiada (diskpart)
+REM    MENU        -^> [1] OP_DISCO ......... operaciones sobre discos y particiones
 REM                -^> [2] OP_SANITIZAR ..... borrado 3 NIVELES: clean/TRIM/clean all
-REM                -^> [3] OP_INVENTARIO ... diagnostico (SOLO LECTURA)
-REM                -^> [4] OP_CONSOLA ....... CMD interactivo
-REM                -^> [5] OP_AYUDA ......... 2 paginas + comandos reales de WinPE
-REM                -^> [6] OP_SALIR ......... apagar / salir (con confirmacion)
+REM                -^> [3] OP_INVENTARIO ... diagnostico y salud de hardware
+REM                -^> [4] OP_CONSOLA ....... consola de comandos (CMD)
+REM                -^> [5] OP_AYUDA ......... ayuda y documentacion tecnica
+REM                -^> [6] OP_TERCEROS ..... herramientas de terceros (en desarrollo)
+REM                -^> [7] OP_SALIR ......... apagar o reiniciar el equipo
 REM    FIN_SCRIPT  -^> salida limpia del script
 REM    FIN_APAGADO -^> salida tras solicitar el apagado
 REM    (al final)  -^> subrutinas internas invocadas con 'call :etiqueta'
@@ -509,6 +510,7 @@ echo      %T_MENU_04%
 echo      %T_MENU_05%
 echo      %T_MENU_06%
 echo      %T_MENU_15%
+echo      %T_MENU_16%
 echo(
 echo   %C_VERDE%------------------------------------------------------------------%C_FIN%
 echo   %T_MENU_07%
@@ -530,7 +532,7 @@ REM cuando esta cierra con 'exit /b'. Le pasamos dos argumentos:
 REM   1) el texto que vera el tecnico,
 REM   2) los digitos permitidos (lista blanca).
 REM El resultado queda en la variable global %OPCION%.
-call :LEER_OPCION "%T_MENU_11%" "1 2 3 4 5 6"
+call :LEER_OPCION "%T_MENU_11%" "1 2 3 4 5 6 7"
 
 REM Anotamos la opcion elegida en el registro (auditoria de uso). Se hace
 REM solo si hay un digito valido: asi no ensuciamos el log con ENTERs en
@@ -544,7 +546,8 @@ REM parentesados: asi evitamos problemas de expansion de variables
 REM dentro de bloques (que exigen expansion retrasada).
 REM
 REM ALTERNATIVA classica, si despacharamos directamente con choice:
-REM     if errorlevel 6 goto OP_SALIR
+REM     if errorlevel 7 goto OP_SALIR
+REM     if errorlevel 6 goto OP_TERCEROS
 REM     if errorlevel 5 goto OP_AYUDA
 REM     ...siempre de MAYOR a MENOR, porque 'if errorlevel N' significa
 REM     "errorlevel MAYOR O IGUAL que N" y no "igual a N".
@@ -555,9 +558,10 @@ if "%OPCION%"=="2" goto OP_SANITIZAR
 if "%OPCION%"=="3" goto OP_INVENTARIO
 if "%OPCION%"=="4" goto OP_CONSOLA
 if "%OPCION%"=="5" goto OP_AYUDA
-if "%OPCION%"=="6" goto OP_SALIR
+if "%OPCION%"=="6" goto OP_TERCEROS
+if "%OPCION%"=="7" goto OP_SALIR
 
-REM Si llegamos aqui, la entrada no fue un digito valido del 1 al 6.
+REM Si llegamos aqui, la entrada no fue un digito valido del 1 al 7.
 REM Solo puede pasar en dos casos: el tecnico respondio a la pregunta de
 REM Ctrl+C con "no" (choice devuelve 0 o 255) o el modo set /p recibio
 REM algo raro. En cualquier caso: NI SE CIERRA NI SE SALE; simplemente
@@ -565,7 +569,7 @@ REM repintamos el menu y volvemos a pedir la opcion.
 goto MENU
 
 REM =====================================================================
-REM  PASO 5 - OPCION [1] PREPARACION RAPIDA DE DISCO (maquetacion)
+REM  PASO 5 - OPCION [1] OPERACIONES SOBRE DISCOS Y PARTICIONES (maquetacion)
 REM =====================================================================
 REM  Este bloque es solo el "interruptor": todo el trabajo real vive en
 REM  la subrutina MODULO_PREPARAR (PASO 13). Asi el flujo principal se
@@ -894,7 +898,36 @@ if "%AYU_DESTINO%"=="MENU" goto MENU
 goto OP_AYUDA
 
 REM =====================================================================
-REM  PASO 10 - OPCION [6] SALIR / APAGAR EQUIPO
+REM  PASO 9.1 - OPCION [6] HERRAMIENTAS DE TERCEROS (contenedor)
+REM =====================================================================
+REM  Pantalla informativa: de momento NO ejecuta binarios externos. A y M
+REM  vuelven siempre al menu principal, de modo que esta pantalla no puede
+REM  caer nunca a un prompt de System32.
+REM =====================================================================
+:OP_TERCEROS
+cls
+call :MOSTRAR_CABECERA
+echo(
+echo   %C_VERDE%%T_TER_01%%C_FIN%
+echo   %C_VERDE%------------------------------------------------------------------%C_FIN%
+echo(
+echo   %C_VERDE%%T_TER_02%%C_FIN%
+echo(
+echo     %C_BLANCO%%T_TER_03%%C_FIN%
+echo     %C_BLANCO%%T_TER_04%%C_FIN%
+echo     %C_BLANCO%%T_TER_05%%C_FIN%
+echo(
+echo   %C_BLANCO%%T_TER_06%%C_FIN%
+echo(
+echo   %C_VERDE%%T_COM_56%%C_RESET%
+echo(
+call :LEER_OPCION "%T_TER_07%" "1" M A
+REM A (paso anterior) y M (menu principal) regresan al MENU. Cualquier
+REM otra salida de la captura tambien vuelve aqui: no hay caida a System32.
+goto MENU
+
+REM =====================================================================
+REM  PASO 10 - OPCION [7] SALIR / APAGAR EQUIPO
 REM  (todas las acciones de esta seccion piden confirmacion previa)
 REM =====================================================================
 :OP_SALIR
@@ -4093,15 +4126,15 @@ REM ---------------------------------------------------------------------
 REM  IDIOMA_ES - castellano (%LANG%=ES). Idioma por defecto.
 REM ---------------------------------------------------------------------
 :IDIOMA_ES
-set "T_AYU_01=[5] AYUDA DEL SISTEMA - MANUAL TÉCNICO"
+set "T_AYU_01=[5] AYUDA Y DOCUMENTACIÓN TÉCNICA"
 set "T_AYU_02=Selecciona un apartado del manual:"
 set "T_AYU_03=  [1] Comandos útiles y herramientas disponibles en WinPE"
-set "T_AYU_04=  [2] Guía paso a paso: Opción 1 (maquetar) y Opción 2 (sanitizar)"
+set "T_AYU_04=  [2] Guía paso a paso: Opción 1 (discos y particiones) y Opción 2 (sanitizar)"
 set "T_AYU_05=  [3] Códigos de navegación y atajos rápidos"
 set "T_AYU_06=   Tu opción [1-3] (A = atrás, M = menú):  "
 set "T_AYU_07=   [Enter] Continuar   [A] Atrás   [M] Menú:  "
-set "T_GUIA_01=[5] GUÍA PASO A PASO - Página 1 de 2: Opción 1 (maquetar)"
-set "T_GUIA_02=OPCIÓN 1 - PREPARACIÓN RÁPIDA DE DISCO"
+set "T_GUIA_01=[5] GUÍA PASO A PASO - Página 1 de 2: Opción 1 (discos y particiones)"
+set "T_GUIA_02=OPCIÓN 1 - OPERACIONES SOBRE DISCOS Y PARTICIONES"
 set "T_GUIA_03=1) Elige la opción [1] en el menú principal."
 set "T_GUIA_04=2) Se listan los discos físicos con diskpart (solo lectura)."
 set "T_GUIA_05=3) Escribe el NÚMERO del disco (columna Disk / Disco)."
@@ -4131,7 +4164,7 @@ set "T_NAV_03=M      vuelve al menú principal (sin pausa)"
 set "T_NAV_04=A      vuelve al paso anterior (sin pausa)"
 set "T_NAV_05=ENTER  cancela la entrada o vuelve al paso anterior"
 set "T_NAV_06=0      salir / cancelar en los submenús que lo muestran"
-set "T_NAV_07=1-6    elegir una opción del menú principal"
+set "T_NAV_07=1-7    elegir una opción del menú principal"
 set "T_NAV_08=CONFIRMACIONES"
 set "T_NAV_09=Las operaciones destructivas piden DOS confirmaciones: la"
 set "T_NAV_10=primera pregunta S/N y después la pregunta de SEGURIDAD."
@@ -4291,14 +4324,14 @@ set "T_CONS_04=- Heredas el entorno actual (unidad de trabajo, variables)."
 set "T_CONS_05=- OJO: los cambios que hagas en variables NO afectan al menú."
 set "T_CONS_06=Recuerda: primero mira, después actúa. Para discos:"
 set "T_CONS_07=diskpart  -^>  list disk  -^>  detail disk  -^>  exit"
-set "T_D1_01=[1] PREPARACIÓN RÁPIDA DE DISCO (maquetación)"
+set "T_D1_01=[1] OPERACIONES SOBRE DISCOS Y PARTICIONES"
 set "T_D1_09=Orden de comandos:"
 set "T_D1_10=  1) clean"
 set "T_D1_11=  2) convert gpt / mbr (GPT en UEFI, MBR en Legacy)"
 set "T_D1_12=RECUERDA: 'clean' borra la tabla de particiones del disco elegido."
 set "T_D1_13=Todo lo que hubiera en él dejará de ser visible de inmediato."
 set "T_D1_14=Siguiente: se carga el listado de discos con diskpart (solo lectura)..."
-set "T_D1_15=[1] PREPARACIÓN RÁPIDA DE DISCO - RESUMEN Y CONFIRMACIÓN"
+set "T_D1_15=[1] OPERACIONES SOBRE DISCOS Y PARTICIONES - RESUMEN Y CONFIRMACIÓN"
 set "T_D1_16=Acción:         borrar la tabla de particiones y crear una única"
 set "T_D1_17=partición NTFS (GPT o MBR segun firmware) con la etiqueta SISTEMA."
 set "T_D1_18=ejecución. La protección de arranque bloquea el disco del sistema"
@@ -4477,23 +4510,31 @@ set "T_DP_02=apagues el equipo mientras el comando esté en curso."
 set "T_DP_03=Nota: diskpart escribe en el idioma del sistema. Si ves caracteres"
 set "T_DP_04=raros, prueba en la Consola Avanzada:  chcp 850   y luego  chcp 65001"
 set "T_MENU_01=MENÚ PRINCIPAL"
-set "T_MENU_02=[1]  Preparación rápida de disco        limpieza y formato básico"
-set "T_MENU_03=[2]  Borrado seguro / Sanitización      3 niveles (estructura/TRIM/ceros)"
-set "T_MENU_04=[3]  Diagnóstico / Inventario           consulta sin modificar nada"
-set "T_MENU_05=[4]  Consola Avanzada                   salir a CMD interactivo"
-set "T_MENU_06=[5]  Ayuda del sistema                  guía rápida del técnico"
-set "T_MENU_15=[6]  Salir / Apagar equipo"
+set "T_MENU_02=[1]  Operaciones sobre discos y particiones   limpieza y formato"
+set "T_MENU_03=[2]  Sanitización y borrado seguro            3 niveles (estructura/TRIM/ceros)"
+set "T_MENU_04=[3]  Diagnóstico y salud de hardware          consulta sin modificar nada"
+set "T_MENU_05=[4]  Consola de comandos                      CMD interactivo"
+set "T_MENU_06=[5]  Ayuda y documentación técnica            manual y guía del técnico"
+set "T_MENU_15=[6]  Herramientas y utilidades de terceros    sección en desarrollo"
+set "T_MENU_16=[7]  Apagar o reiniciar el equipo"
 set "T_MENU_07=Aviso: [1] y [2] modifican DISCOS de verdad y piden DOS confirmaciones"
-set "T_MENU_08=seguidas con una tecla S/N. Las opciones [3] a [6] no tocan el hardware solas."
+set "T_MENU_08=seguidas con una tecla S/N. Las opciones [3] a [7] no tocan el hardware solas."
 set "T_MENU_09=(Si la consola no reacciona a una sola tecla, teclea el número"
 set "T_MENU_10=y termina con ENTER.)"
-set "T_MENU_11=   Su opción [1-6]:  "
+set "T_MENU_11=   Su opción [1-7]:  "
 set "T_MENU_12=Fecha y hora:"
 set "T_MENU_13=Modo de entrada:"
 set "T_MENU_14=Firmware:"
+set "T_TER_01=[6] HERRAMIENTAS Y UTILIDADES DE TERCEROS"
+set "T_TER_02=En desarrollo: se integrarán herramientas portables en una próxima versión."
+set "T_TER_03=  - Recuperación de datos: rescatar archivos de discos dañados o formateados."
+set "T_TER_04=  - Gestión BCD: reparar o reconstruir el arranque de Windows."
+set "T_TER_05=  - Análisis avanzado: clonado, particionado y diagnóstico de discos."
+set "T_TER_06=De momento no se ejecuta ninguna herramienta: esta pantalla es solo informativa."
+set "T_TER_07=   Su opción [A/M]:  "
 set "T_LOG_01=Registro (log): PERSISTENTE en"
 set "T_LOG_02=Registro (log): solo en RAM (se perdera al reiniciar):"
-set "T_SAL_01=[6] SALIR / APAGAR EQUIPO"
+set "T_SAL_01=[7] APAGAR O REINICIAR EL EQUIPO"
 set "T_SAL_02=[1]  Apagar el equipo"
 set "T_SAL_03=[2]  Salir de la herramienta (en WinPE reinicia el equipo)"
 set "T_SAL_04=[3]  Volver al menú principal (me he equivocado)"
@@ -4539,15 +4580,15 @@ REM  IDIOMA_EN - ingles (%LANG%=EN).
 REM  Mismos nombres de variable que el bloque anterior, uno a uno.
 REM ---------------------------------------------------------------------
 :IDIOMA_EN
-set "T_AYU_01=[5] SYSTEM HELP - TECHNICAL MANUAL"
+set "T_AYU_01=[5] HELP AND TECHNICAL DOCUMENTATION"
 set "T_AYU_02=Choose one section of the manual:"
 set "T_AYU_03=  [1] Useful commands and tools available in WinPE"
-set "T_AYU_04=  [2] Step-by-step guide: Option 1 (layout) and Option 2 (wipe)"
+set "T_AYU_04=  [2] Step-by-step guide: Option 1 (disks and partitions) and Option 2 (wipe)"
 set "T_AYU_05=  [3] Navigation codes and quick shortcuts"
 set "T_AYU_06=   Your option [1-3] (A = back, M = menu):  "
 set "T_AYU_07=   [Enter] Continue   [A] Back   [M] Menu:  "
-set "T_GUIA_01=[5] STEP-BY-STEP GUIDE - Page 1 of 2: Option 1 (layout)"
-set "T_GUIA_02=OPTION 1 - QUICK DISK PREPARATION"
+set "T_GUIA_01=[5] STEP-BY-STEP GUIDE - Page 1 of 2: Option 1 (disks and partitions)"
+set "T_GUIA_02=OPTION 1 - DISK AND PARTITION OPERATIONS"
 set "T_GUIA_03=1) Choose option [1] in the main menu."
 set "T_GUIA_04=2) The physical disks are listed with diskpart (read only)."
 set "T_GUIA_05=3) Type the disk NUMBER (Disk / Disco column)."
@@ -4577,7 +4618,7 @@ set "T_NAV_03=M      returns to the main menu (no pause)"
 set "T_NAV_04=A      returns to the previous step (no pause)"
 set "T_NAV_05=ENTER  cancels the input or goes back one step"
 set "T_NAV_06=0      exit / cancel in the submenus that show it"
-set "T_NAV_07=1-6    choose an option in the main menu"
+set "T_NAV_07=1-7    choose an option in the main menu"
 set "T_NAV_08=CONFIRMATIONS"
 set "T_NAV_09=Destructive operations ask for TWO confirmations: the first"
 set "T_NAV_10=Y/N question and then the SAFETY question."
@@ -4737,14 +4778,14 @@ set "T_CONS_04=- You inherit the current environment (work drive, variables)."
 set "T_CONS_05=- NOTE: any variable change you make does NOT affect the menu."
 set "T_CONS_06=Remember: look first, act later. For disks:"
 set "T_CONS_07=diskpart  -^>  list disk  -^>  detail disk  -^>  exit"
-set "T_D1_01=[1] QUICK DISK PREPARATION (layout)"
+set "T_D1_01=[1] DISK AND PARTITION OPERATIONS"
 set "T_D1_09=Command order:"
 set "T_D1_10=  1) clean"
 set "T_D1_11=  2) convert gpt / mbr (GPT on UEFI, MBR on Legacy)"
 set "T_D1_12=REMEMBER: 'clean' erases the partition table of the chosen disk."
 set "T_D1_13=Everything on it stops being visible immediately."
 set "T_D1_14=Next: the disk listing is loaded with diskpart (read only)..."
-set "T_D1_15=[1] QUICK DISK PREPARATION - SUMMARY AND CONFIRMATION"
+set "T_D1_15=[1] DISK AND PARTITION OPERATIONS - SUMMARY AND CONFIRMATION"
 set "T_D1_16=Action:         erase the partition table and create one single"
 set "T_D1_17=NTFS partition (GPT or MBR per firmware) with the SISTEMA label."
 set "T_D1_18=here. The boot protection blocks the system disk when it"
@@ -4923,23 +4964,31 @@ set "T_DP_02=do not power off the machine while the command is running."
 set "T_DP_03=Note: diskpart writes in the system language. If you see strange"
 set "T_DP_04=characters, try the Advanced Console:  chcp 850   then  chcp 65001"
 set "T_MENU_01=MAIN MENU"
-set "T_MENU_02=[1]  Quick disk preparation             wipe table and format"
-set "T_MENU_03=[2]  Secure erase / Sanitization        3 levels (structure/TRIM/zeros)"
-set "T_MENU_04=[3]  Diagnostics / Inventory            read-only machine info"
-set "T_MENU_05=[4]  Advanced console                   drop to interactive CMD"
-set "T_MENU_06=[5]  System help                        technician quick guide"
-set "T_MENU_15=[6]  Exit / Shut down the computer"
+set "T_MENU_02=[1]  Disk and partition operations            wipe table and format"
+set "T_MENU_03=[2]  Sanitization and secure erase            3 levels (structure/TRIM/zeros)"
+set "T_MENU_04=[3]  Hardware diagnostics and health          read-only machine info"
+set "T_MENU_05=[4]  Command console                          interactive CMD"
+set "T_MENU_06=[5]  Help and technical documentation         manual and technician guide"
+set "T_MENU_15=[6]  Third-party tools and utilities          work in progress"
+set "T_MENU_16=[7]  Shut down or restart the computer"
 set "T_MENU_07=Warning: [1] and [2] really modify DISKS and ask for TWO"
-set "T_MENU_08=confirmations in a row with a single key (Y/N). Options [3] to [6] touch no hardware alone."
+set "T_MENU_08=confirmations in a row with a single key (Y/N). Options [3] to [7] touch no hardware alone."
 set "T_MENU_09=(If the console does not react to a single key, type the number"
 set "T_MENU_10=and finish with ENTER.)"
-set "T_MENU_11=   Your option [1-6]:  "
+set "T_MENU_11=   Your option [1-7]:  "
 set "T_MENU_12=Date and time:"
 set "T_MENU_13=Input mode:"
 set "T_MENU_14=Firmware:"
+set "T_TER_01=[6] THIRD-PARTY TOOLS AND UTILITIES"
+set "T_TER_02=Work in progress: portable tools will be integrated in a future version."
+set "T_TER_03=  - Data recovery: rescue files from damaged or formatted disks."
+set "T_TER_04=  - BCD management: repair or rebuild the Windows boot."
+set "T_TER_05=  - Advanced analysis: cloning, partitioning and disk diagnostics."
+set "T_TER_06=No tool is executed yet: this screen is informative only."
+set "T_TER_07=   Your option [A/M]:  "
 set "T_LOG_01=Activity log: PERSISTENT at"
 set "T_LOG_02=Activity log: RAM only (lost on reboot):"
-set "T_SAL_01=[6] EXIT / SHUT DOWN THE COMPUTER"
+set "T_SAL_01=[7] SHUT DOWN OR RESTART THE COMPUTER"
 set "T_SAL_02=[1]  Shut down the computer"
 set "T_SAL_03=[2]  Exit the tool (in WinPE it restarts the computer)"
 set "T_SAL_04=[3]  Return to the main menu (my mistake)"
