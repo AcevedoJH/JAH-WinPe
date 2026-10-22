@@ -11,7 +11,9 @@ REM  comando 'color': ese comando repinta toda la consola y provoca el
 REM  parpadeo a blanco que queremos evitar.
 REM  Si ESC no se pudiera obtener, los colores quedan vacios y el texto
 REM  se imprime igual (la interfaz nunca se rompe por falta de color).
-REM  C_FIN devuelve la consola al color de reposo (blanco brillante).
+REM  C_FIN devuelve la consola al color de reposo (gris claro / blanco suave).
+REM  C_BLANCO conserva el nombre por compatibilidad, pero usa el gris claro
+REM  clasico de CMD/PowerShell (37), no el blanco puro cegador (97).
 REM =====================================================================
 set "ESC="
 for /F "tokens=1,2 delims=#" %%a in ('"prompt #$H#$E# & echo on & for %%b in (1) do rem"') do set "ESC=%%b"
@@ -23,7 +25,7 @@ set "C_RESET="
 if defined ESC set "C_VERDE=%ESC%[92m"
 if defined ESC set "C_AMARILLO=%ESC%[93m"
 if defined ESC set "C_ROJO=%ESC%[91m"
-if defined ESC set "C_BLANCO=%ESC%[97m"
+if defined ESC set "C_BLANCO=%ESC%[37m"
 if defined ESC set "C_RESET=%ESC%[0m"
 set "C_FIN=%C_RESET%%C_BLANCO%"
 
@@ -301,6 +303,10 @@ REM color  -^> NO se usa. La paleta se aplica con las variables ANSI
 REM            definidas al inicio (C_VERDE, C_AMARILLO, C_ROJO,
 REM            C_BLANCO, C_RESET). Asi no hay repintados globales ni
 REM            parpadeos a blanco durante la ejecucion de los modulos.
+REM  font   -^> la fuente legible (Lucida Console 18) se fija en
+REM            startnet.cmd mediante HKCU\Console antes de abrir esta
+REM            consola. Si se lanza menu.bat a mano, se conserva la
+REM            fuente que ya tenga la consola actual.
 title %TOOL_NAME% v%TOOL_VER%
 mode con: cols=94 lines=44 >nul 2>&1
 <nul set /p "=%C_BLANCO%"
@@ -465,7 +471,7 @@ REM  Solo muestra datos neutros (marca y version): ni una palabra que
 REM  hubiera que traducir.
 REM ---------------------------------------------------------------------
 :MOSTRAR_CABECERA_BASE
-REM Cabecera en VERDE ANSI; cada linea vuelve al blanco brillante base
+REM Cabecera en VERDE ANSI; cada linea vuelve al gris claro base
 REM con C_FIN, de modo que el cuerpo de la pantalla siga siendo legible.
 echo   %C_VERDE%==========================================================================%C_FIN%
 echo     %C_VERDE%%TOOL_NAME%   -   v%TOOL_VER%%C_FIN%
@@ -689,7 +695,7 @@ echo     %T_AYU_03%
 echo     %T_AYU_04%
 echo     %T_AYU_05%
 echo(
-echo   %C_VERDE%%T_COM_56%%C_RESET%
+echo   %C_VERDE%%T_COM_56%%C_FIN%
 echo(
 call :LEER_OPCION "%T_AYU_06%" "1 2 3" M A
 if /i "%OPCION%"=="M" goto MENU
@@ -743,7 +749,7 @@ echo     %T_AYU1_32%
 echo(
 echo   %T_AYU1_33%
 echo(
-echo   %C_VERDE%%T_COM_56%%C_RESET%
+echo   %C_VERDE%%T_COM_56%%C_FIN%
 echo(
 call :AYUDA_PAGINA
 if "%AYU_DESTINO%"=="MENU" goto MENU
@@ -816,7 +822,7 @@ echo(
 :OP_AYUDA_P2_FIN
 echo   %T_AYU3_01%
 echo(
-echo   %C_VERDE%%T_COM_56%%C_RESET%
+echo   %C_VERDE%%T_COM_56%%C_FIN%
 echo(
 call :AYUDA_PAGINA
 if "%AYU_DESTINO%"=="MENU" goto MENU
@@ -845,7 +851,7 @@ echo(
 echo   %T_GUIA_11%
 echo   %T_GUIA_12%
 echo(
-echo   %C_VERDE%%T_COM_56%%C_RESET%
+echo   %C_VERDE%%T_COM_56%%C_FIN%
 echo(
 call :AYUDA_PAGINA
 if "%AYU_DESTINO%"=="MENU" goto MENU
@@ -874,7 +880,7 @@ echo     %T_GUIA_24%
 echo     %T_GUIA_25%
 echo     %T_GUIA_26%
 echo(
-echo   %C_VERDE%%T_COM_56%%C_RESET%
+echo   %C_VERDE%%T_COM_56%%C_FIN%
 echo(
 call :AYUDA_PAGINA
 if "%AYU_DESTINO%"=="MENU" goto MENU
@@ -906,7 +912,7 @@ echo   %T_NAV_12%
 echo   %T_NAV_13%
 echo   %T_NAV_14%
 echo(
-echo   %C_VERDE%%T_COM_56%%C_RESET%
+echo   %C_VERDE%%T_COM_56%%C_FIN%
 echo(
 call :AYUDA_PAGINA
 if "%AYU_DESTINO%"=="MENU" goto MENU
@@ -934,7 +940,7 @@ echo     %C_BLANCO%%T_TER_05%%C_FIN%
 echo(
 echo   %C_BLANCO%%T_TER_06%%C_FIN%
 echo(
-echo   %C_VERDE%%T_COM_56%%C_RESET%
+echo   %C_VERDE%%T_COM_56%%C_FIN%
 echo(
 call :LEER_OPCION "%T_TER_07%" "1" M A
 REM A (paso anterior) y M (menu principal) regresan al MENU. Cualquier
@@ -1062,7 +1068,7 @@ REM  texto duplicado por el archivo, que es donde nacen los errores.)
 REM ---------------------------------------------------------------------
 :MOSTRAR_CABECERA
 REM Cabecera en VERDE ANSI: marca, version y fase destacan como en una
-REM consola PowerShell. Cada linea termina en C_FIN (blanco brillante),
+REM consola PowerShell. Cada linea termina en C_FIN (gris claro),
 REM asi el resto de la pantalla sigue siendo legible.
 echo   %C_VERDE%==========================================================================%C_FIN%
 echo     %C_VERDE%%TOOL_NAME%   -   %T_COM_42%%C_FIN%
@@ -1098,7 +1104,7 @@ REM  (comandos exactos y resultado de diskpart) y despues el log general.
 REM ---------------------------------------------------------------------
 :PULSA_TECLA_LOG
 echo(
-echo   %C_VERDE%%T_LOG_03%%C_RESET%
+echo   %C_VERDE%%T_LOG_03%%C_FIN%
 :PULSA_TECLA_LOG_BUCLE
 set "TECLA_LOG="
 set /p "TECLA_LOG=%C_VERDE%%T_LOG_04%%C_FIN%"
@@ -1185,7 +1191,7 @@ REM ---------------------------------------------------------------------
 :AYUDA_PAGINA
 set "AYU_DESTINO=SIGUIENTE"
 set "AYU_PAG="
-set /p "AYU_PAG=%C_VERDE%%T_AYU_07%%C_RESET%"
+set /p "AYU_PAG=%C_VERDE%%T_AYU_07%%C_FIN%"
 if not defined AYU_PAG exit /b 0
 set "AYU_PAG=%AYU_PAG:"=%"
 if not defined AYU_PAG exit /b 0
@@ -1897,7 +1903,7 @@ if not "%LISTADO_OK%"=="SI" exit /b 0
 echo(
 REM Pie de pagina minimo: una sola linea de navegacion y el prompt. Nada
 REM de explicaciones largas debajo del listado (el listado ya se lee solo).
-echo   %C_VERDE%%PIE_DISCO%%C_RESET%
+echo   %C_VERDE%%PIE_DISCO%%C_FIN%
 call :LEER_NUMERO "%T_COM_19%" DISCO
 if "%NUM_OK%"=="CANCELAR" exit /b 0
 if "%NUM_OK%"=="ATRAS" goto PEDIR_DISCO_ATRAS
@@ -2102,8 +2108,7 @@ REM  siguientes una doble (anaden sin borrar lo anterior).
 REM ---------------------------------------------------------------------
 :GENERAR_SCRIPT_MAQUETAR
 if not defined DISCO exit /b 0
-> "%F_SCRIPT%" echo rem JAH-WinPe - maquetacion rapida del Disco %DISCO%
->> "%F_SCRIPT%" echo select disk %DISCO%
+> "%F_SCRIPT%" echo select disk %DISCO%
 >> "%F_SCRIPT%" echo clean
 >> "%F_SCRIPT%" echo convert %FIRMWARE_FORMATO%
 >> "%F_SCRIPT%" echo create partition primary
@@ -2132,15 +2137,13 @@ if not defined DISCO exit /b 0
 if "%NIVEL_BORRADO%"=="3" goto GENERAR_BORRAR_CEROS
 if "%NIVEL_BORRADO%"=="2" goto GENERAR_BORRAR_TRIM
 REM --- Nivel 1: SOLO estructura ('clean', sin sobrescritura) ----------
-> "%F_SCRIPT%" echo rem JAH-WinPe - nivel 1 limpieza de estructura Disco %DISCO%
->> "%F_SCRIPT%" echo select disk %DISCO%
+> "%F_SCRIPT%" echo select disk %DISCO%
 >> "%F_SCRIPT%" echo clean
 call :REGISTRAR SANITIZAR "disco=%DISCO% nivel=%NIVEL_BORRADO% comando=clean" "GUION_GENERADO"
 exit /b 0
 :GENERAR_BORRAR_TRIM
 REM --- Nivel 2, fase 1/3: volumen temporal para el TRIM ---------------
-> "%F_SCRIPT%" echo rem JAH-WinPe - nivel 2 fase 1/3 volumen temporal Disco %DISCO%
->> "%F_SCRIPT%" echo select disk %DISCO%
+> "%F_SCRIPT%" echo select disk %DISCO%
 >> "%F_SCRIPT%" echo clean
 >> "%F_SCRIPT%" echo create partition primary
 >> "%F_SCRIPT%" echo format fs=ntfs quick
@@ -2148,8 +2151,7 @@ call :REGISTRAR SANITIZAR "disco=%DISCO% nivel=2 fase=1 comando=clean+format" "G
 exit /b 0
 :GENERAR_BORRAR_CEROS
 REM --- Nivel 3: sobrescritura completa ('clean all') -------------------
-> "%F_SCRIPT%" echo rem JAH-WinPe - nivel 3 borrado con ceros (clean all) Disco %DISCO%
->> "%F_SCRIPT%" echo select disk %DISCO%
+> "%F_SCRIPT%" echo select disk %DISCO%
 >> "%F_SCRIPT%" echo clean all
 call :REGISTRAR SANITIZAR "disco=%DISCO% nivel=%NIVEL_BORRADO% comando=clean all" "GUION_GENERADO"
 exit /b 0
@@ -2162,8 +2164,7 @@ REM  del nivel [2] (vuelve a dejar el disco EN BRUTO tras el TRIM).
 REM ---------------------------------------------------------------------
 :GENERAR_SCRIPT_LIMPIO
 if not defined DISCO exit /b 0
-> "%F_SCRIPT%" echo rem JAH-WinPe - limpieza de estructura (clean) Disco %DISCO%
->> "%F_SCRIPT%" echo select disk %DISCO%
+> "%F_SCRIPT%" echo select disk %DISCO%
 >> "%F_SCRIPT%" echo clean
 call :REGISTRAR SANITIZAR "disco=%DISCO% nivel=%NIVEL_BORRADO% comando=clean" "GUION_GENERADO"
 exit /b 0
@@ -2181,8 +2182,10 @@ echo   %C_VERDE%----------------------------------------------------------------
 echo   %T_COM_47%:
 echo   %F_SCRIPT%
 echo   %C_VERDE%------------------------------------------------------------------%C_FIN%
-REM  La vista previa muestra SOLO comandos diskpart: las lineas 'rem' del
-REM  guion generado son documentacion interna y no deben aparecer aqui.
+REM  El guion generado NO lleva lineas 'rem': los comentarios internos
+REM  viven solo en este .bat y no se imprimen ni se copian al log. El
+REM  filtro de abajo se mantiene como defensa por si llegara un guion
+REM  externo con comentarios.
 if not exist "%SystemRoot%\System32\findstr.exe" goto MOSTRAR_SCRIPT_TYPE
 findstr /v /i /b /c:"rem " "%F_SCRIPT%"
 goto MOSTRAR_SCRIPT_FIN
@@ -2205,6 +2208,7 @@ REM  El codigo de salida (ERRORLEVEL) sigue disponible aunque no se
 REM  capture el texto, y lo consultamos justo despues.
 REM ---------------------------------------------------------------------
 :EJECUTAR_DISKPART
+if not defined FASE_DISKPART set "FASE_DISKPART=1/1"
 echo(
 echo   %C_VERDE%------------------------------------------------------------------%C_FIN%
 echo   %T_DP_01%
@@ -2213,29 +2217,45 @@ echo   %C_VERDE%----------------------------------------------------------------
 echo(
 diskpart /s "%F_SCRIPT%"
 set "RESULTADO=%errorlevel%"
+REM Guardamos el resultado de CADA fase por separado: el resumen final de
+REM [L] necesita saber que paso en 1/3, 2/3 y 3/3 sin confundir codigos.
+if "%FASE_DISKPART%"=="1/1" set "RESULTADO_F1=%RESULTADO%"
+if "%FASE_DISKPART%"=="1/3" set "RESULTADO_F1=%RESULTADO%"
+if "%FASE_DISKPART%"=="3/3" set "RESULTADO_F3=%RESULTADO%"
 REM Dejamos un .txt de auditoria con los comandos EXACTOS y el resultado.
 REM Es el fichero que [L] muestra al final del modulo (antes de borrarlo).
+set "AUD_NIVEL=%NIVEL_BORRADO%"
+if not defined AUD_NIVEL set "AUD_NIVEL=N/A"
 if not defined F_AUDIT goto EJECUTAR_DISKPART_AUDIT_FIN
 if not exist "%F_AUDIT%" > "%F_AUDIT%" echo ==================================================
->> "%F_AUDIT%" echo JAH-WinPe - AUDITORIA DE COMANDOS
->> "%F_AUDIT%" echo Fecha: %date% %time:~0,8%   Disco: %DISCO%   Nivel: %NIVEL_BORRADO%
+>> "%F_AUDIT%" echo JAH-WinPe - %T_LOG_05%
+>> "%F_AUDIT%" echo %T_AUD_21% %date% %time:~0,8%
+>> "%F_AUDIT%" echo %T_AUD_18% %DISCO%   %T_AUD_19% %AUD_NIVEL%
+>> "%F_AUDIT%" echo %T_AUD_01% %FASE_DISKPART%
 >> "%F_AUDIT%" echo --------------------------------------------------
 if exist "%F_SCRIPT%" type "%F_SCRIPT%" >> "%F_AUDIT%"
 >> "%F_AUDIT%" echo --------------------------------------------------
->> "%F_AUDIT%" echo Resultado diskpart: %RESULTADO%
+>> "%F_AUDIT%" echo %T_AUD_02% %RESULTADO%
+if "%RESULTADO%"=="0" >> "%F_AUDIT%" echo %T_AUD_03% 0
+if not "%RESULTADO%"=="0" >> "%F_AUDIT%" echo %T_AUD_03% %RESULTADO%
+if "%RESULTADO%"=="0" >> "%F_AUDIT%" echo %C_VERDE%%T_AUD_04%%C_FIN%
+if not "%RESULTADO%"=="0" >> "%F_AUDIT%" echo %C_ROJO%%T_AUD_05% %RESULTADO% %T_AUD_06%%C_FIN%
 >> "%F_AUDIT%" echo(
 :EJECUTAR_DISKPART_AUDIT_FIN
 REM El codigo de salida (0 = exito) es el dato mas importante del log:
 REM queda anotado tanto si funciono como si no, con su numero exacto.
-if "%RESULTADO%"=="0" call :REGISTRAR DISKPART "codigo=0" "OK"
-if not "%RESULTADO%"=="0" call :REGISTRAR DISKPART "codigo=%RESULTADO%" "ERROR"
+set "AUD_DETALLE=disco=%DISCO% nivel=%AUD_NIVEL% fase=%FASE_DISKPART%"
+if "%RESULTADO%"=="0" set "AUD_DETALLE=%AUD_DETALLE% codigo_salida=0 errores=0"
+if not "%RESULTADO%"=="0" set "AUD_DETALLE=%AUD_DETALLE% codigo_salida=%RESULTADO% errores=%RESULTADO%"
+if "%RESULTADO%"=="0" call :REGISTRAR DISKPART "%AUD_DETALLE%" "OK"
+if not "%RESULTADO%"=="0" call :REGISTRAR DISKPART "%AUD_DETALLE%" "ERROR"
 echo(
 echo   %C_VERDE%------------------------------------------------------------------%C_FIN%
 REM Resultado en color ANSI por linea: VERDE si diskpart acabo sin
 REM errores, ROJO si devolvio un codigo de error. Nunca se repinta la
 REM consola entera (sin parpadeos a blanco).
 if "%RESULTADO%"=="0" echo   %C_VERDE%%T_COM_48%%C_FIN%
-if not "%RESULTADO%"=="0" echo   %C_ROJO%%T_COM_49% %RESULTADO%%C_FIN%
+if not "%RESULTADO%"=="0" echo   %C_ROJO%%T_COM_49% %RESULTADO% %T_AUD_06%%C_FIN%
 echo   %C_VERDE%------------------------------------------------------------------%C_FIN%
 echo(
 echo   %T_DP_03%
@@ -2303,14 +2323,88 @@ REM ---------------------------------------------------------------------
 :AUDITAR_PS_ERROR
 if not defined F_AUDIT exit /b 0
 if not exist "%F_AUDIT%" > "%F_AUDIT%" echo ==================================================
->> "%F_AUDIT%" echo JAH-WinPe - AUDITORIA DE COMANDOS
->> "%F_AUDIT%" echo Fecha: %date% %time:~0,8%   Disco: %DISCO%   Nivel: %NIVEL_BORRADO%
+>> "%F_AUDIT%" echo JAH-WinPe - %T_LOG_05%
+>> "%F_AUDIT%" echo %T_AUD_21% %date% %time:~0,8%
+>> "%F_AUDIT%" echo %T_AUD_18% %DISCO%   %T_AUD_19% %NIVEL_BORRADO%
 >> "%F_AUDIT%" echo --------------------------------------------------
->> "%F_AUDIT%" echo BLOQUEO POWERSHELL: %~1
->> "%F_AUDIT%" echo Codigo: %PS_TRIM_RC%   Motivo: %PS_TRIM_MOTIVO%
-if exist "%F_SEG_SAL%" >> "%F_AUDIT%" echo Salida de PowerShell:
+>> "%F_AUDIT%" echo %C_ROJO%[BLOQUEO]%C_RESET%%C_BLANCO% POWERSHELL: %~1%C_FIN%
+>> "%F_AUDIT%" echo %C_ROJO%%T_NIV_48%%C_FIN%
+>> "%F_AUDIT%" echo %T_NIV_56% %TRIM_ESTADO%   %T_NIV_51% %PS_TRIM_MOTIVO%
+if "%PS_TRIM_OK%"=="SI" >> "%F_AUDIT%" echo %T_NIV_50% %PS_TRIM_RC%
+if not "%PS_TRIM_OK%"=="SI" >> "%F_AUDIT%" echo %T_NIV_55%
+if exist "%F_SEG_SAL%" >> "%F_AUDIT%" echo %T_NIV_52%
 if exist "%F_SEG_SAL%" type "%F_SEG_SAL%" >> "%F_AUDIT%"
 >> "%F_AUDIT%" echo --------------------------------------------------
+exit /b 0
+
+REM ---------------------------------------------------------------------
+REM  AUDITAR_RESUMEN_SESION - cierra [L] con un estado final descriptivo
+REM ---------------------------------------------------------------------
+REM  Cada dato lleva su etiqueta (disco, fase, codigo, errores) para que
+REM  ningun cero aparezca suelto. Si no hay datos de una fase se escribe
+REM  "No ejecutada"; nunca se deja una seccion vacia entre separadores.
+REM ---------------------------------------------------------------------
+:AUDITAR_RESUMEN_SESION
+if not defined F_AUDIT exit /b 0
+if not exist "%F_AUDIT%" exit /b 0
+set "AUD_NIVEL=%NIVEL_BORRADO%"
+if not defined AUD_NIVEL set "AUD_NIVEL=N/A"
+>> "%F_AUDIT%" echo --------------------------------------------------
+>> "%F_AUDIT%" echo %T_AUD_08%
+>> "%F_AUDIT%" echo %T_AUD_18% %DISCO%   %T_AUD_19% %AUD_NIVEL%
+if not defined RESULTADO_F1 goto AUD_RESUMEN_F1_NO
+if "%RESULTADO_F1%"=="0" goto AUD_RESUMEN_F1_OK
+>> "%F_AUDIT%" echo %T_AUD_15% %T_AUD_12%   %T_AUD_02% %RESULTADO_F1%
+>> "%F_AUDIT%" echo    %T_AUD_03% %RESULTADO_F1%
+goto AUD_RESUMEN_F2
+:AUD_RESUMEN_F1_OK
+>> "%F_AUDIT%" echo %T_AUD_15% %T_AUD_11%   %T_AUD_02% 0
+>> "%F_AUDIT%" echo    %T_AUD_03% 0
+goto AUD_RESUMEN_F2
+:AUD_RESUMEN_F1_NO
+>> "%F_AUDIT%" echo %T_AUD_15% %T_AUD_10%
+:AUD_RESUMEN_F2
+if not "%AUD_NIVEL%"=="2" goto AUD_RESUMEN_F2_NO
+if not defined RESULTADO_F2 goto AUD_RESUMEN_F2_NO
+if /i "%RESULTADO_F2%"=="OK" goto AUD_RESUMEN_F2_OK
+>> "%F_AUDIT%" echo %T_AUD_16% %T_AUD_12%   %T_AUD_20% %RESULTADO_F2%
+>> "%F_AUDIT%" echo    %T_NIV_51% %PS_TRIM_MOTIVO%
+goto AUD_RESUMEN_F3
+:AUD_RESUMEN_F2_OK
+>> "%F_AUDIT%" echo %T_AUD_16% %T_AUD_11%   %T_AUD_20% OK
+goto AUD_RESUMEN_F3
+:AUD_RESUMEN_F2_NO
+>> "%F_AUDIT%" echo %T_AUD_16% %T_AUD_10%
+:AUD_RESUMEN_F3
+if not "%AUD_NIVEL%"=="2" goto AUD_RESUMEN_F3_NO
+if not defined RESULTADO_F3 goto AUD_RESUMEN_F3_NO
+if "%RESULTADO_F3%"=="0" goto AUD_RESUMEN_F3_OK
+>> "%F_AUDIT%" echo %T_AUD_17% %T_AUD_12%   %T_AUD_02% %RESULTADO_F3%
+>> "%F_AUDIT%" echo    %T_AUD_03% %RESULTADO_F3%
+goto AUD_RESUMEN_ESTADO
+:AUD_RESUMEN_F3_OK
+>> "%F_AUDIT%" echo %T_AUD_17% %T_AUD_11%   %T_AUD_02% 0
+>> "%F_AUDIT%" echo    %T_AUD_03% 0
+goto AUD_RESUMEN_ESTADO
+:AUD_RESUMEN_F3_NO
+>> "%F_AUDIT%" echo %T_AUD_17% %T_AUD_10%
+:AUD_RESUMEN_ESTADO
+set "AUD_ESTADO=%T_AUD_14%"
+if not defined RESULTADO_F1 goto AUD_RESUMEN_ESTADO_FIN
+if not "%RESULTADO_F1%"=="0" goto AUD_RESUMEN_ESTADO_FIN
+if not "%AUD_NIVEL%"=="2" goto AUD_RESUMEN_ESTADO_OK
+if not defined RESULTADO_F3 goto AUD_RESUMEN_ESTADO_FIN
+if not "%RESULTADO_F3%"=="0" goto AUD_RESUMEN_ESTADO_FIN
+if not "%TRIM_ESTADO%"=="OK" goto AUD_RESUMEN_ESTADO_FIN
+:AUD_RESUMEN_ESTADO_OK
+set "AUD_ESTADO=%T_AUD_13%"
+:AUD_RESUMEN_ESTADO_FIN
+set "AUD_COLOR=%C_ROJO%"
+if "%AUD_ESTADO%"=="%T_AUD_13%" set "AUD_COLOR=%C_VERDE%"
+set "AUD_LINEA=%AUD_COLOR%%T_AUD_09% %AUD_ESTADO%%C_FIN%"
+>> "%F_AUDIT%" echo %AUD_LINEA%
+>> "%F_AUDIT%" echo --------------------------------------------------
+>> "%F_AUDIT%" echo(
 exit /b 0
 
 REM ---------------------------------------------------------------------
@@ -2353,6 +2447,15 @@ REM ---------------------------------------------------------------------
 :EJECUTAR_TRIM
 set "TRIM_ESTADO="
 set "PS_TRIM_MOTIVO="
+REM Cabecera de la Fase 2/3 en [L]: deja claro que modulo se ejecuta y
+REM sobre que disco, antes de la salida literal de PowerShell.
+if defined F_AUDIT (
+    >> "%F_AUDIT%" echo --------------------------------------------------
+    >> "%F_AUDIT%" echo %T_AUD_07%
+    >> "%F_AUDIT%" echo %T_AUD_18% %DISCO%   %T_AUD_19% %NIVEL_BORRADO%
+    >> "%F_AUDIT%" echo --------------------------------------------------
+)
+call :REGISTRAR TRIM "disco=%DISCO% fase=2/3 modulo=StorageWMI" "INICIO"
 if not "%PS_OK%"=="SI" goto EJECUTAR_TRIM_SIN_PS
 if not "%PS_TRIM_OK%"=="SI" goto EJECUTAR_TRIM_SIN_PS
 echo   %T_NIV_36% %DISCO%
@@ -2473,8 +2576,7 @@ set "LISTADO_OK=NO"
 echo(
 echo   %T_COM_31%
 echo(
-> "%F_SCRIPT%" echo rem JAH-WinPe - listado del equipo (solo lectura)
->> "%F_SCRIPT%" echo list disk
+> "%F_SCRIPT%" echo list disk
 >> "%F_SCRIPT%" echo list volume
 diskpart /s "%F_SCRIPT%" > "%F_SALIDA%" 2>&1
 set "RESULTADO_LISTADO=%errorlevel%"
@@ -2501,6 +2603,12 @@ REM    entorno -^> listar -^> elegir disco -^> generar guion -^> ensenarlo
 REM    -^> confirmar por escrito -^> ejecutar -^> verificar -^> limpiar
 REM ---------------------------------------------------------------------
 :MODULO_PREPARAR
+set "RESULTADO_F1="
+set "RESULTADO_F2="
+set "RESULTADO_F3="
+REM La opcion [1] no tiene nivel de borrado: evita que el resumen de [L]
+REM herede el nivel de una ejecucion anterior de la opcion [2].
+set "NIVEL_BORRADO="
 cls
 call :MOSTRAR_CABECERA
 echo(
@@ -2570,8 +2678,10 @@ REM [2] con el guion exacto impreso en amarillo. Ninguna palabra que
 REM teclear: basta 'S' (o 'Y' en ingles) en cada paso.
 call :CONFIRMAR_DESTRUCTIVO "maquetar"
 if not "%CONFIRMADO%"=="SI" goto MODULO_PREPARAR_CANCELADO
+set "FASE_DISKPART=1/1"
 call :EJECUTAR_DISKPART
 call :MOSTRAR_RESULTADO "maquetar"
+call :AUDITAR_RESUMEN_SESION
 call :PULSA_TECLA_LOG
 call :BORRAR_TEMPORALES
 exit /b 0
@@ -2605,6 +2715,9 @@ REM  nivel [3]. Retroceso con la tecla directa [0]: en cmd puro ESC no
 REM  es legible (ver el motivo en PULSA_TECLA_MENU).
 REM ---------------------------------------------------------------------
 :MODULO_SANITIZAR
+set "RESULTADO_F1="
+set "RESULTADO_F2="
+set "RESULTADO_F3="
 call :ELEGIR_NIVEL
 if not defined NIVEL_BORRADO exit /b 0
 call :PREPARAR_ENTORNO
@@ -2714,6 +2827,7 @@ REM palabra que teclear: basta 'S' (o 'Y' en ingles) en cada paso.
 call :CONFIRMAR_DESTRUCTIVO "sanitizar"
 if not "%CONFIRMADO%"=="SI" goto MODULO_SANITIZAR_CANCELADO
 if "%NIVEL_BORRADO%"=="2" goto MODULO_SANITIZAR_NIVEL2
+set "FASE_DISKPART=1/1"
 call :EJECUTAR_DISKPART "pausa"
 goto MODULO_SANITIZAR_FIN_EJEC
 :MODULO_SANITIZAR_NIVEL2
@@ -2724,20 +2838,30 @@ REM  La fase [3] solo se lanza si el TRIM se completo sin errores.
 REM  Si PowerShell falla, el modulo se DETIENE: no hay plan B con Diskpart.
 echo(
 echo   %T_NIV_37%
+set "FASE_DISKPART=1/3"
 call :EJECUTAR_DISKPART "pausa"
 if not "%RESULTADO%"=="0" call :REGISTRAR SANITIZAR "nivel=2 fase=1" "ERROR"
 if not "%RESULTADO%"=="0" goto MODULO_SANITIZAR_FIN_EJEC
 echo   %T_NIV_38%
 call :EJECUTAR_TRIM
+set "RESULTADO_F2=%TRIM_ESTADO%"
 if not "%TRIM_ESTADO%"=="OK" goto MODULO_SANITIZAR_PS_FALLO
+REM  TRIM correcto: cerramos la seccion Fase 2 del acta [L] con su
+REM  resultado y su codigo, para que no quede una cabecera vacia.
+if defined F_AUDIT (
+    >> "%F_AUDIT%" echo %T_NIV_56% %TRIM_ESTADO%
+    >> "%F_AUDIT%" echo %T_NIV_50% %PS_TRIM_RC%
+)
 REM Pausa controlada: la salida del TRIM se queda en pantalla para poder
 REM revisarla (o subir con la rueda) antes de la fase final.
 call :PULSA_TECLA "%T_D2_37%"
 call :GENERAR_SCRIPT_LIMPIO
 echo   %T_NIV_39%
+set "FASE_DISKPART=3/3"
 call :EJECUTAR_DISKPART "pausa"
 :MODULO_SANITIZAR_FIN_EJEC
 call :MOSTRAR_RESULTADO "sanitizar"
+call :AUDITAR_RESUMEN_SESION
 call :PULSA_TECLA_LOG
 call :BORRAR_TEMPORALES
 exit /b 0
@@ -2753,18 +2877,27 @@ REM  Bloqueo durante el TRIM: no se ejecuta la fase 3 ni ningun plan B.
 set "PS_ERROR_DISCO=%T_NIV_54%"
 set "PS_ERROR_FASE=TRIM"
 :MOSTRAR_PS_ERROR
-call :REGISTRAR PS_ERROR "nivel=2 fase=%PS_ERROR_FASE% codigo=%PS_TRIM_RC% motivo=%PS_TRIM_MOTIVO% estado=%TRIM_ESTADO%" "ERROR"
+set "PS_ERROR_DETALLE=nivel=2 fase=%PS_ERROR_FASE% modulo_trim=%PS_TRIM_OK%"
+set "PS_ERROR_DETALLE=%PS_ERROR_DETALLE% codigo=%PS_TRIM_RC% motivo=%PS_TRIM_MOTIVO%"
+call :REGISTRAR PS_ERROR "%PS_ERROR_DETALLE% estado=%TRIM_ESTADO%" "ERROR"
 call :VOLCAR_PS_AL_LOG
 call :AUDITAR_PS_ERROR "%PS_ERROR_FASE%"
+call :AUDITAR_RESUMEN_SESION
 cls
 call :MOSTRAR_CABECERA
 echo(
-echo   %T_NIV_48%
+echo   %C_ROJO%[BLOQUEO]%C_RESET% %C_ROJO%%T_NIV_48%%C_RESET%%C_BLANCO%
 echo   %T_NIV_49%
 echo   %PS_ERROR_DISCO%
 if "%TRIM_ESTADO%"=="VACIO" echo   %T_NIV_32%
 echo(
+if "%PS_TRIM_OK%"=="SI" goto MOSTRAR_PS_ERROR_CODIGO
+echo   %T_NIV_55%
+goto MOSTRAR_PS_ERROR_MOTIVO
+:MOSTRAR_PS_ERROR_CODIGO
 echo   %T_NIV_50% %PS_TRIM_RC%
+:MOSTRAR_PS_ERROR_MOTIVO
+echo   %T_NIV_56% %TRIM_ESTADO%
 echo   %T_NIV_51% %PS_TRIM_MOTIVO%
 if exist "%F_SEG_SAL%" echo   %T_NIV_52%
 if exist "%F_SEG_SAL%" type "%F_SEG_SAL%"
@@ -2846,7 +2979,7 @@ echo     %T_NIV_10%
 echo(
 echo   %T_NIV_11%
 echo(
-echo   %C_VERDE%%T_COM_56%%C_RESET%
+echo   %C_VERDE%%T_COM_56%%C_FIN%
 echo(
 call :LEER_OPCION "%T_NIV_12%" "1 2 3 0" M A
 if /i "%OPCION%"=="M" exit /b 0
@@ -3197,7 +3330,7 @@ echo   %T_FW_08%
 echo     %T_FW_09%
 echo     %T_FW_10%
 echo(
-echo   %C_VERDE%%T_FW_11%%C_RESET%
+echo   %C_VERDE%%T_FW_11%%C_FIN%
 echo(
 call :LEER_OPCION "%T_FW_06%" "1 2" M
 if /i "%OPCION%"=="M" exit /b 0
@@ -3391,7 +3524,7 @@ echo     %T_DIAG_03%
 echo     %T_DIAG_04%
 echo     %T_DIAG_05%
 echo(
-echo   %C_VERDE%%T_COM_56%%C_RESET%
+echo   %C_VERDE%%T_COM_56%%C_FIN%
 echo(
 call :LEER_OPCION "%T_DIAG_07%" "1 2 3 0" M A
 if /i "%OPCION%"=="M" exit /b 0
@@ -3460,7 +3593,7 @@ echo     %T_DIAG_16%
 echo     %T_DIAG_17%
 echo     %T_DIAG_18%
 echo(
-echo   %C_VERDE%%T_COM_56%%C_RESET%
+echo   %C_VERDE%%T_COM_56%%C_FIN%
 echo(
 call :LEER_OPCION "%T_DIAG_20%" "1 2 3" M A
 if /i "%OPCION%"=="M" goto DIAG_CHKDSK_MENU
@@ -3539,7 +3672,7 @@ echo   %T_DIAG_13%
 echo(
 call :DIAG_LISTAR_UNIDADES
 echo(
-echo   %C_VERDE%%T_COM_56%%C_RESET%
+echo   %C_VERDE%%T_COM_56%%C_FIN%
 exit /b 0
 :DIAG_CHKDSK_VOLVER
 REM Vuelta al prompt de letra: se repinta el listado completo y se mantiene
@@ -4000,8 +4133,7 @@ exit /b 0
 :INV_DISCOS_DP
 set "INV_DISCOS_HECHO=SI"
 call :ARCHIVO_TEMP_INV
-> "%F_INV%" echo rem JAH-WinPe - inventario de discos (solo lectura)
->> "%F_INV%" echo list disk
+> "%F_INV%" echo list disk
 diskpart /s "%F_INV%" 2>&1
 if exist "%F_INV%" del /f /q "%F_INV%" >nul 2>&1
 exit /b 0
@@ -4536,7 +4668,7 @@ set "T_COM_43=Versión"
 set "T_COM_44=Fase"
 set "T_COM_45=Entorno:"
 set "T_COM_47=GUION TEMPORAL que se va a ejecutar"
-set "T_COM_48=[OK] diskpart terminó sin errores (código 0)."
+set "T_COM_48=Resultado Diskpart: 0 errores (Éxito)"
 set "T_COM_49=[!] diskpart devolvió el código de error"
 set "T_COM_50=[!] diskpart no ha podido completar el listado. Código de error:"
 set "T_COM_51=Disco elegido:"
@@ -4633,13 +4765,15 @@ set "T_NIV_30=[i] Este disco es SSD/NVMe: valora el nivel [2] antes de seguir."
 set "T_NIV_31=TRIM completado: bloques libres desasignados (ReTrim)."
 set "T_NIV_32=TRIM: el disco no expone volúmenes; no hay nada que desasignar."
 set "T_NIV_36=Enviando órdenes TRIM / Deallocate al Disco"
-set "T_NIV_48=[BLOQUEO] Sanitización PowerShell detenida: no se aplicará plan alternativo."
+set "T_NIV_48=Sanitización PowerShell detenida: no se aplicará plan alternativo."
 set "T_NIV_49=Módulo PowerShell/StorageWMI no disponible en esta sesión WinPE o TRIM falló."
 set "T_NIV_50=Código de salida de PowerShell:"
 set "T_NIV_51=Motivo:"
 set "T_NIV_52=Salida de PowerShell:"
 set "T_NIV_53=El disco NO se ha modificado: el proceso se detuvo antes de la fase 1."
 set "T_NIV_54=El disco pasó por la fase 1; NO se ejecutó la limpieza final."
+set "T_NIV_55=Módulo no disponible / No ejecutado."
+set "T_NIV_56=Estado del TRIM:"
 set "T_NIV_37=FASE 1/3  diskpart: crea un volumen temporal y lo formatea"
 set "T_NIV_38=FASE 2/3  PowerShell: ordena TRIM / Deallocate a los volúmenes"
 set "T_NIV_39=FASE 3/3  diskpart: 'clean' final, deja el disco EN BRUTO"
@@ -4771,6 +4905,28 @@ set "T_LOG_05=REGISTRO DE AUDITORÍA (comandos ejecutados)"
 set "T_LOG_06=[i] No hay datos de auditoría disponibles."
 set "T_LOG_07=Registro general de actividad:"
 set "T_LOG_08=Pulsa cualquier tecla para volver al menú..."
+REM --- Textos de la auditoria [L] ---------------------------------------
+set "T_AUD_01=Fase Diskpart:"
+set "T_AUD_02=Código de salida Diskpart:"
+set "T_AUD_03=Errores Diskpart:"
+set "T_AUD_04=Resultado Diskpart: 0 errores (Éxito)"
+set "T_AUD_05=Resultado Diskpart: código"
+set "T_AUD_06=(Fallo)"
+set "T_AUD_07=JAHWinPE Nivel 2 - Fase 2 de 3: Sanitización Trim / StorageWMI"
+set "T_AUD_08=Resumen final de la sesión"
+set "T_AUD_09=Estado final:"
+set "T_AUD_10=No ejecutada"
+set "T_AUD_11=Correcta"
+set "T_AUD_12=Con errores"
+set "T_AUD_13=Operación completada correctamente."
+set "T_AUD_14=Operación detenida o incompleta; revisa las fases."
+set "T_AUD_15=Fase 1 Diskpart:"
+set "T_AUD_16=TRIM fase 2:"
+set "T_AUD_17=Diskpart fase 3:"
+set "T_AUD_18=Disco seleccionado:"
+set "T_AUD_19=Nivel:"
+set "T_AUD_20=Estado:"
+set "T_AUD_21=Fecha:"
 set "T_SAL_01=[7] APAGAR O REINICIAR EL EQUIPO"
 set "T_SAL_02=[1]  Apagar el equipo"
 set "T_SAL_03=[2]  Salir de la herramienta (en WinPE reinicia el equipo)"
@@ -4994,7 +5150,7 @@ set "T_COM_43=Version"
 set "T_COM_44=Phase"
 set "T_COM_45=Environment:"
 set "T_COM_47=TEMPORARY SCRIPT about to be run"
-set "T_COM_48=[OK] diskpart finished with no errors (code 0)."
+set "T_COM_48=Diskpart result: 0 errors (Success)"
 set "T_COM_49=[!] diskpart returned the error code"
 set "T_COM_50=[!] diskpart could not complete the listing. Error code:"
 set "T_COM_51=Selected disk:"
@@ -5091,13 +5247,15 @@ set "T_NIV_30=[i] This disk is SSD/NVMe: consider level [2] before proceeding."
 set "T_NIV_31=TRIM completed: free blocks deallocated (ReTrim)."
 set "T_NIV_32=TRIM: the disk exposes no volumes; nothing to deallocate."
 set "T_NIV_36=Sending TRIM / Deallocate orders to Disk"
-set "T_NIV_48=[BLOCK] PowerShell sanitization stopped: no alternative plan will run."
+set "T_NIV_48=PowerShell sanitization stopped: no alternative plan will run."
 set "T_NIV_49=PowerShell/StorageWMI unavailable in this WinPE session or TRIM failed."
 set "T_NIV_50=PowerShell exit code:"
 set "T_NIV_51=Reason:"
 set "T_NIV_52=PowerShell output:"
 set "T_NIV_53=The disk was NOT modified: the process stopped before phase 1."
 set "T_NIV_54=The disk went through phase 1; the final clean was NOT run."
+set "T_NIV_55=Module unavailable / Not executed."
+set "T_NIV_56=TRIM status:"
 set "T_NIV_37=PHASE 1/3  diskpart: creates a temporary volume and formats it"
 set "T_NIV_38=PHASE 2/3  PowerShell: issues TRIM / Deallocate on the volumes"
 set "T_NIV_39=PHASE 3/3  diskpart: final 'clean', leaves the disk RAW"
@@ -5229,6 +5387,28 @@ set "T_LOG_05=AUDIT LOG (commands executed)"
 set "T_LOG_06=[i] No audit data is available."
 set "T_LOG_07=General activity log:"
 set "T_LOG_08=Press any key to return to the menu..."
+REM --- Audit texts [L] ---------------------------------------------------
+set "T_AUD_01=Diskpart phase:"
+set "T_AUD_02=Diskpart exit code:"
+set "T_AUD_03=Diskpart errors:"
+set "T_AUD_04=Diskpart result: 0 errors (Success)"
+set "T_AUD_05=Diskpart result: code"
+set "T_AUD_06=(Failure)"
+set "T_AUD_07=JAHWinPE Level 2 - Phase 2 of 3: TRIM / StorageWMI sanitization"
+set "T_AUD_08=Final session summary"
+set "T_AUD_09=Final status:"
+set "T_AUD_10=Not run"
+set "T_AUD_11=Success"
+set "T_AUD_12=With errors"
+set "T_AUD_13=Operation completed successfully."
+set "T_AUD_14=Operation stopped or incomplete; review the phases."
+set "T_AUD_15=Diskpart phase 1:"
+set "T_AUD_16=TRIM phase 2:"
+set "T_AUD_17=Diskpart phase 3:"
+set "T_AUD_18=Selected disk:"
+set "T_AUD_19=Level:"
+set "T_AUD_20=Status:"
+set "T_AUD_21=Date:"
 set "T_SAL_01=[7] SHUT DOWN OR RESTART THE COMPUTER"
 set "T_SAL_02=[1]  Shut down the computer"
 set "T_SAL_03=[2]  Exit the tool (in WinPE it restarts the computer)"

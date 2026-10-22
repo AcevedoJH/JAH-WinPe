@@ -15,7 +15,8 @@ REM  POR QUE ESTE ORDEN DE PASOS
 REM    1) wpeinit .... inicializa Plug and Play (discos, USB) y red.
 REM    2) espera ..... pequeno margen para que termine de enumerar los USB.
 REM    3) buscar ..... localiza menu.bat en cualquier unidad.
-REM    4) lanzar ..... ejecuta menu.bat (la interfaz del taller).
+REM    4) fuente ..... fija Lucida Console 18 px para la consola nueva.
+REM    5) lanzar ..... ejecuta menu.bat (la interfaz del taller).
 REM
 REM  NOTA SOBRE ACENTOS
 REM    TODO este fichero va en ASCII puro (sin acentos, ni siquiera en los
@@ -70,19 +71,34 @@ if defined MENU_RUTA exit /b 0
 if exist "%~1:\menu.bat" set "MENU_RUTA=%~1:\menu.bat"
 exit /b 0
 
-REM --- Paso 4: lanzar la herramienta -----------------------------------
+REM --- Paso 4: fuente de consola legible -------------------------------
+REM  WinPE arranca con una fuente raster comprimida. Estas claves son las
+REM  mismas que usan CMD/PowerShell: Lucida Console, 18 px, peso normal.
+REM  Se aplican al ABRIR la consola nueva del paso 5.
 :LANZAR
+for %%K in ("HKCU\Console" "HKCU\Console\JAH-WinPe") do (
+    reg add %%K /v FaceName /t REG_SZ /d "Lucida Console" /f >nul 2>&1
+    reg add %%K /v FontFamily /t REG_DWORD /d 54 /f >nul 2>&1
+    reg add %%K /v FontWeight /t REG_DWORD /d 400 /f >nul 2>&1
+    reg add %%K /v FontSize /t REG_DWORD /d 1179648 /f >nul 2>&1
+)
 echo.
 echo  JAH-WinPe: arrancando el menu desde  %MENU_RUTA%
 echo.
-REM  'call' es OBLIGATORIO para ejecutar un .bat/.cmd desde otro: sin
-REM  'call', cmd cederia el control para siempre a menu.bat y, al
-REM  terminar, la sesion quedaria en una pantalla negra sin retorno.
+REM  Se abre una consola NUEVA para que nazca con la fuente configurada.
+REM  /wait mantiene startnet vivo y, al cerrar menu.bat, se reinicia.
+start "JAH-WinPe" /max /wait cmd /c "%MENU_RUTA%"
+if errorlevel 1 goto LANZAR_ACTUAL
+goto REINICIAR
+:LANZAR_ACTUAL
+REM  Si 'start' no puede abrir otra consola (WinPE muy recortado), se
+REM  ejecuta en la actual: la herramienta funciona igual.
 call "%MENU_RUTA%"
 REM  Si llegamos aqui, el tecnico ha salido del menu (opcion [2]) o el
 REM  menu termino. En WinPE no hay escritorio al que volver: reiniciamos
-REM  el equipo de forma limpia y directa. Nada de consolas huerfanas ni
-REM  bucles de salida.
+REM  el equipo de forma limpia y directa. La consola original queda
+REM  detras de la nueva y ambas se cierran al reiniciar: no se deja
+REM  ninguna consola huerfana.
 goto REINICIAR
 
 REM ---------------------------------------------------------------------
