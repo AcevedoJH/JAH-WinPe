@@ -16,6 +16,8 @@
                 - que existen las fuentes del proyecto (src\*.bat/cmd).
       PASO 2  Crea un soporte WinPE LIMPIO con 'copype' (carpeta media).
       PASO 3  Personaliza 'boot.wim' (hay que MONTARLO con DISM):
+                - inyecta los componentes opcionales de WinPE (WMI, .NET,
+                  Scripting, PowerShell y StorageWMI),
                 - mete src\startnet.cmd en Windows\System32 -> arranque auto,
                 - mete src\menu.bat en la carpeta JAH\ -> X:\JAH\menu.bat.
       PASO 4  Maqueta la ISO con 'oscdimg' en modo arranque dual.
@@ -398,6 +400,77 @@ Escribir-Info "  DISMRoot    = $env:DISMRoot"
 Escribir-Info "  OSCDImgRoot = $env:OSCDImgRoot"
 
 # =====================================================================
+#  1.h) COMPONENTES OPCIONALES DEL ADK (OBLIGATORIOS PARA JAH-WinPe)
+# =====================================================================
+#  WinPE nace sin WMI, sin .NET y sin PowerShell. menu.bat necesita
+#  StorageWMI (Get-Volume, Get-PhysicalDisk, Optimize-Volume) para la
+#  Opcion 2; por eso estos CABs deben entrar en boot.wim durante ESTE
+#  build. Si faltan, la ISO se generaria con la Opcion 2 bloqueada.
+#
+#  Nombres reales del ADK: no existe un unico 'WinPE-Scripting-PowerShell.cab'.
+#  El motor de PowerShell se reparte en DOS paquetes (WinPE-Scripting.cab
+#  y WinPE-PowerShell.cab) y ambos son obligatorios. Se instalan en orden
+#  de dependencias: WMI -> .NET -> Scripting -> PowerShell -> StorageWMI.
+$PaquetesWinPE = @(
+    'WinPE-WMI'
+    'WinPE-NetFX'
+    'WinPE-Scripting'
+    'WinPE-PowerShell'
+    'WinPE-StorageWMI'
+)
+
+#  Busqueda dinamica de WinPE_OCs. La ruta estandar del ADK es:
+#    <ADK>\Windows Preinstallation Environment\<arch>\WinPE_OCs
+#  Se anaden las raices ya detectadas y KITSROOT (si el ADK la define),
+#  para no depender de una unica instalacion ni de una ruta fija.
+$CandidatosOcs = @(
+    (Join-Path $DirWinPEAdk "$Arch\WinPE_OCs")
+)
+foreach ($raiz in $RaicesAdk) {
+    $CandidatosOcs += (Join-Path $raiz "Windows Preinstallation Environment\$Arch\WinPE_OCs")
+}
+if ($env:KITSROOT) {
+    $CandidatosOcs += (Join-Path $env:KITSROOT "Assessment and Deployment Kit\Windows Preinstallation Environment\$Arch\WinPE_OCs")
+    $CandidatosOcs += (Join-Path $env:KITSROOT "Windows Preinstallation Environment\$Arch\WinPE_OCs")
+}
+$CandidatosOcs = $CandidatosOcs | Select-Object -Unique
+$DirOcs = $CandidatosOcs | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+
+if (-not $DirOcs) {
+    Escribir-Aviso 'No encuentro la carpeta WinPE_OCs del complemento WinPE del ADK.'
+    Escribir-Aviso 'Rutas comprobadas:'
+    foreach ($candidato in $CandidatosOcs) {
+        Escribir-Aviso "  $candidato"
+    }
+    Fallar ('Sin WinPE_OCs no se pueden inyectar los CABs de WMI, .NET, ' +
+            'Scripting, PowerShell y StorageWMI. La ISO arrancaria, pero la ' +
+            'Opcion 2 (sanitizacion PowerShell/StorageWMI) quedaria bloqueada. ' +
+            'Instala el complemento WinPE completo del ADK o indica su raiz con -AdkRoot.')
+}
+
+#  Comprobacion temprana de los CABs: mejor abortar antes de copype que
+#  montar boot.wim, fallar a mitad y dejar una compilacion a medias.
+$CabsFaltantes = @()
+foreach ($paq in $PaquetesWinPE) {
+    $cab = Join-Path $DirOcs ($paq + '.cab')
+    if (-not (Test-Path -LiteralPath $cab)) {
+        $CabsFaltantes += $cab
+    }
+}
+if ($CabsFaltantes.Count -gt 0) {
+    Escribir-Aviso 'La carpeta WinPE_OCs existe, pero faltan CABs obligatorios:'
+    foreach ($cab in $CabsFaltantes) {
+        Escribir-Aviso "  $cab"
+    }
+    Fallar ('El complemento WinPE del ADK esta incompleto. Reinstalalo con ' +
+            'los componentes opcionales o usa una instalacion completa. Sin ' +
+            'estos CABs, la Opcion 2 no puede ejecutar PowerShell/StorageWMI.')
+}
+
+Escribir-Ok "WinPE_OCs: $DirOcs"
+Escribir-Info ("CABs para la ISO: " + ($PaquetesWinPE -join ', '))
+
+# =====================================================================
 #  PASO 2/4 - CREAR EL SOPORTE WinPE LIMPIO (copype)
 # =====================================================================
 Escribir-Paso 2 4 'Crear el soporte WinPE (copype)'
@@ -454,25 +527,23 @@ try {
 
     #  3.0) Componentes opcionales de WinPE que necesita el diagnostico.
     #       Sin WinPE-WMI no funcionan wmic ni las clases Win32_*; sin
-    #       WinPE-PowerShell no se puede ejecutar la RAM/SMART embebidas,
-    #       y sin WinPE-StorageWMI no existen Get-Volume/Get-PhysicalDisk.
-    #       Se instalan SIEMPRE, en este orden de dependencias, para que
-    #       menu.bat encuentre las mismas herramientas en cualquier equipo.
-    $dirOcs = Join-Path $DirWinPEAdk "$Arch\WinPE_OCs"
-    $paquetes = @('WinPE-WMI','WinPE-Scripting','WinPE-NetFx','WinPE-PowerShell','WinPE-StorageWMI')
-    foreach ($paq in $paquetes) {
-        $cab = Join-Path $dirOcs ($paq + '.cab')
-        if (-not (Test-Path -LiteralPath $cab)) {
-            throw ("Falta el componente opcional $paq.cab en: $dirOcs. " +
-                   'Instala el complemento WinPE completo del ADK.')
-        }
-        Escribir-Info "Anadiendo componente WinPE: $paq..."
+    #       WinPE-NetFX/WinPE-PowerShell no se puede ejecutar la RAM/SMART
+    #       embebidas, y sin WinPE-StorageWMI no existen Get-Volume,
+    #       Get-PhysicalDisk ni Optimize-Volume.
+    #       $DirOcs y $PaquetesWinPE se resolvieron y validaron en el paso
+    #       1.h, ANTES de crear el soporte y de montar boot.wim.
+    $totalPaquetes = $PaquetesWinPE.Count
+    $numPaquete    = 0
+    foreach ($paq in $PaquetesWinPE) {
+        $numPaquete++
+        $cab = Join-Path $DirOcs ($paq + '.cab')
+        Escribir-Info ("Anadiendo componente WinPE {0}/{1}: {2}..." -f $numPaquete, $totalPaquetes, $paq)
         & $RutaDism /Image:$DirMount /Add-Package /PackagePath:$cab
         if ($LASTEXITCODE -ne 0) {
             throw "DISM /Add-Package $paq fallo con el codigo $LASTEXITCODE."
         }
     }
-    Escribir-Ok 'Componentes WinPE-WMI/PowerShell/StorageWMI anadidos.'
+    Escribir-Ok 'Componentes WinPE-WMI/NetFX/Scripting/PowerShell/StorageWMI anadidos.'
 
     #  3.a) startnet.cmd: sustituye al de serie. winpeshl.exe lo ejecuta
     #       al arrancar, y es lo que lanza menu.bat automaticamente.

@@ -182,7 +182,7 @@ Solo para **construir** la ISO (el equipo de destino no necesita nada):
 |-----------|----------|-------|
 | **Windows 10/11 (x64)** | Compilar | Linux también puede, pero con otras herramientas (`wimlib`, `xorriso`); fuera del alcance de este script. |
 | **Windows ADK** | `oscdimg.exe` | Descarga: <https://learn.microsoft.com/windows-hardware/get-started/adk-install> |
-| **Complemento WinPE del ADK** | `copype.cmd` + `winpe.wim` | Se instala **aparte** del ADK (a veces se olvida). |
+| **Complemento WinPE del ADK** | `copype.cmd` + `winpe.wim` + `WinPE_OCs` | Se instala **aparte** del ADK (a veces se olvida). Debe incluir los CABs de WMI, .NET, Scripting, PowerShell y StorageWMI: el build los valida y se detiene si faltan. |
 | **Permisos de Administrador** | Montar `boot.wim` con DISM | Sin elevación, DISM no puede montar. |
 | **~2 GB libres** | media + montaje + ISO | El script lo comprueba. |
 
@@ -233,7 +233,9 @@ powershell -ExecutionPolicy Bypass -File build\build_iso.ps1
    ADK (`oscdimg`), complemento WinPE (`copype`), DISM y espacio libre.
    *Si algo falta, **no se toca nada** y se explica qué instalar.*
 2. **`copype`:** crea el soporte WinPE limpio en `build\work\media`.
-3. **Personalización de `boot.wim` (DISM):** monta la imagen, copia
+3. **Personalización de `boot.wim` (DISM):** monta la imagen, inyecta los
+   componentes opcionales de WinPE (`WinPE-WMI`, `WinPE-NetFX`,
+   `WinPE-Scripting`, `WinPE-PowerShell` y `WinPE-StorageWMI`), copia
    `src\startnet.cmd` a `Windows\System32` y `src\menu.bat` a la carpeta
    `JAH\`, y desmonta **guardando** los cambios (*commit*).
 4. **`oscdimg`:** maqueta `JAH-WinPe.iso` con **arranque dual** y muestra
@@ -389,6 +391,7 @@ La orden que genera `build_iso.ps1` (guardada en `build\work\oscdimg_temp.cmd`):
 |---------|----------------|----------|
 | `No encuentro oscdimg.exe` | Falta el **ADK** (Deployment Tools) | Instala el Windows ADK completo. |
 | `Te falta el COMPLEMENTO WinPE` | Falta el *WinPE add-on* | Instálalo **después** del ADK. |
+| `No encuentro la carpeta WinPE_OCs` o `faltan CABs obligatorios` | El *WinPE add-on* está incompleto | Reinstala el complemento WinPE completo (incluye los CABs de WMI, .NET, Scripting, PowerShell y StorageWMI). |
 | `Se necesita una consola como Administrador` | Consola no elevada | Abre CMD/PowerShell como Administrador. |
 | `La carpeta de trabajo ya existe` | Compilación anterior | Añade `-Force` (borra y regenera). |
 | `DISM /Mount-Wim fallo` | Imagen ya montada por un fallo previo | Ejecuta `dism /Cleanup-Wim` y reintenta. |
