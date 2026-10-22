@@ -340,8 +340,8 @@ REM PowerShell es el primer metodo para obtener el numero de disco (exacto,
 REM independiente del idioma). Si no existe, caemos al metodo diskpart.
 REM 'PS_EXE' apunta a la ruta canonica de PS 5.x/Windows. No basta con que
 REM el .exe exista: en una ISO recortada puede faltar el runtime. Se prueba
-REM una ejecucion minima; si falla, PS_OK=NO y todos los modulos usan sus
-REM respaldos nativos (wmic/diskpart), sin errores rojos ni bloqueos.
+REM una ejecucion minima; si falla, PS_OK=NO. La deteccion de discos usa
+REM entonces wmic/diskpart; la Opcion 2 (TRIM) se DETIENE sin plan B.
 set "PS_OK=NO"
 set "PS_EXE=%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe"
 if not exist "%PS_EXE%" goto PS_DETECTADO
@@ -2181,7 +2181,14 @@ echo   %C_VERDE%----------------------------------------------------------------
 echo   %T_COM_47%:
 echo   %F_SCRIPT%
 echo   %C_VERDE%------------------------------------------------------------------%C_FIN%
+REM  La vista previa muestra SOLO comandos diskpart: las lineas 'rem' del
+REM  guion generado son documentacion interna y no deben aparecer aqui.
+if not exist "%SystemRoot%\System32\findstr.exe" goto MOSTRAR_SCRIPT_TYPE
+findstr /v /i /b /c:"rem " "%F_SCRIPT%"
+goto MOSTRAR_SCRIPT_FIN
+:MOSTRAR_SCRIPT_TYPE
 type "%F_SCRIPT%"
+:MOSTRAR_SCRIPT_FIN
 echo   %C_VERDE%------------------------------------------------------------------%C_FIN%
 echo(
 exit /b 0
@@ -2243,21 +2250,67 @@ REM ---------------------------------------------------------------------
 REM  COMPROBAR_PS_TRIM - valida PowerShell y los cmdlets del TRIM
 REM  -------------------------------------------------------------------
 REM  WinPE puede traer powershell.exe pero NO los cmdlets de almacenamiento
-REM  (Get-Partition / Optimize-Volume) si falta WinPE-StorageWMI. Antes de
-REM  prometer el TRIM comprobamos ambos y dejamos PS_TRIM_OK = SI / NO.
-REM  Asi el modulo avisa en amarillo y se salta la fase sin un error rojo.
+REM  (Get-Disk / Get-Partition / Optimize-Volume) si falta WinPE-StorageWMI. Antes de
+REM  tocar el disco comprobamos ambos con try/catch y guardamos la salida
+REM  EXACTA y el codigo de PowerShell. Si falta algo, la Opcion 2 se DETIENE:
+REM  no se ejecuta Diskpart como plan B ni se finge un exito.
 REM ---------------------------------------------------------------------
 :COMPROBAR_PS_TRIM
+if exist "%F_SEG_SAL%" del /f /q "%F_SEG_SAL%" >nul 2>&1
 set "PS_TRIM_OK=NO"
+set "PS_TRIM_RC=NO_DISPONIBLE"
+set "PS_TRIM_MOTIVO=powershell_no_disponible"
 if not "%PS_OK%"=="SI" goto COMPROBAR_PS_TRIM_FIN
-set "PS_CMD=if(-not (Get-Command Get-Partition -EA SilentlyContinue) -or"
-set "PS_CMD=%PS_CMD% -not (Get-Command Optimize-Volume -EA SilentlyContinue))"
-set "PS_CMD=%PS_CMD% { exit 1 } else { exit 0 }"
-"%PS_EXE%" -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "%PS_CMD%" >nul 2>&1
-if not errorlevel 1 set "PS_TRIM_OK=SI"
+set "PS_TRIM_RC="
+set "PS_TRIM_MOTIVO=cmdlets_no_disponibles"
+set "PS_CMD=try {"
+set "PS_CMD=%PS_CMD% $null=Get-Command Get-Partition -ErrorAction Stop;"
+set "PS_CMD=%PS_CMD% $null=Get-Command Optimize-Volume -ErrorAction Stop;"
+set "PS_CMD=%PS_CMD% $null=Get-Disk -Number %DISCO% -ErrorAction Stop;"
+set "PS_CMD=%PS_CMD% 'PS_TRIM_OK'; exit 0"
+set "PS_CMD=%PS_CMD% } catch { 'PS_TRIM_ERROR|'+$_.Exception.Message; exit 2 }"
+"%PS_EXE%" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "%PS_CMD%" > "%F_SEG_SAL%" 2>&1
+set "PS_TRIM_RC=%errorlevel%"
+if not "%PS_TRIM_RC%"=="0" set "PS_TRIM_MOTIVO=error_ejecucion"
+if not "%PS_TRIM_RC%"=="0" goto COMPROBAR_PS_TRIM_FIN
+set "PS_TRIM_OK=SI"
 :COMPROBAR_PS_TRIM_FIN
-if not "%PS_TRIM_OK%"=="SI" call :REGISTRAR ENTORNO "PowerShell=%PS_OK% cmdlets_trim=NO" "AVISO"
+if not "%PS_TRIM_OK%"=="SI" call :REGISTRAR ENTORNO "PowerShell=%PS_OK% cmdlets_trim=NO codigo=%PS_TRIM_RC% motivo=%PS_TRIM_MOTIVO%" "ERROR"
 if "%PS_TRIM_OK%"=="SI" call :REGISTRAR ENTORNO "PowerShell=%PS_OK% cmdlets_trim=SI" "OK"
+exit /b 0
+
+REM ---------------------------------------------------------------------
+REM  VOLCAR_PS_AL_LOG - copia la salida literal al log general
+REM ---------------------------------------------------------------------
+REM  'type' escribe bytes sin interpretar '|', '&' ni el signo porcentaje,
+REM  asi que el mensaje exacto de PowerShell llega intacto al log y a [L].
+REM ---------------------------------------------------------------------
+:VOLCAR_PS_AL_LOG
+if not defined LOG_ARCHIVO exit /b 0
+if not exist "%F_SEG_SAL%" exit /b 0
+>> "%LOG_ARCHIVO%" echo [PS_ERROR] Salida exacta de PowerShell:
+type "%F_SEG_SAL%" >> "%LOG_ARCHIVO%"
+>> "%LOG_ARCHIVO%" echo [PS_ERROR] Fin de la salida de PowerShell.
+exit /b 0
+
+REM ---------------------------------------------------------------------
+REM  AUDITAR_PS_ERROR - deja en [L] el bloque exacto de PowerShell
+REM ---------------------------------------------------------------------
+REM  Se anade al mismo _jah_auditoria.txt que muestra la tecla [L]. Incluye
+REM  el codigo de salida, el motivo categorizado y la salida literal de
+REM  PowerShell (stderr+stdout), sin interpretarla como comandos de cmd.
+REM ---------------------------------------------------------------------
+:AUDITAR_PS_ERROR
+if not defined F_AUDIT exit /b 0
+if not exist "%F_AUDIT%" > "%F_AUDIT%" echo ==================================================
+>> "%F_AUDIT%" echo JAH-WinPe - AUDITORIA DE COMANDOS
+>> "%F_AUDIT%" echo Fecha: %date% %time:~0,8%   Disco: %DISCO%   Nivel: %NIVEL_BORRADO%
+>> "%F_AUDIT%" echo --------------------------------------------------
+>> "%F_AUDIT%" echo BLOQUEO POWERSHELL: %~1
+>> "%F_AUDIT%" echo Codigo: %PS_TRIM_RC%   Motivo: %PS_TRIM_MOTIVO%
+if exist "%F_SEG_SAL%" >> "%F_AUDIT%" echo Salida de PowerShell:
+if exist "%F_SEG_SAL%" type "%F_SEG_SAL%" >> "%F_AUDIT%"
+>> "%F_AUDIT%" echo --------------------------------------------------
 exit /b 0
 
 REM ---------------------------------------------------------------------
@@ -2279,10 +2332,10 @@ REM  COMPATIBILIDAD HONESTA:
 REM    - SSD/NVMe fisico con soporte de TRIM  -^> se aplica de verdad.
 REM    - Disco virtual (VM) sin soporte del hipervisor, o controlador que
 REM      no acepta deallocate -^> Optimize-Volume lanza excepcion; se
-REM      CAPTURA volumen a volumen, se informa en AMARILLO y el script
-REM      SIGUE con la fase 3 sin romperse ni fingir un exito.
-REM    - Volumen sin letra asignada -^> no admite -DriveLetter; se avisa
-REM      con T_NIV_45 y se omite SOLO ese volumen.
+REM      CAPTURA volumen a volumen, se informa y el modulo SE DETIENE
+REM      sin ejecutar la fase 3 ni ningun plan alternativo.
+REM    - Volumen sin letra asignada -^> no admite -DriveLetter; se informa
+REM      en la salida y el TRIM se considera PARCIAL (no hay exito falso).
 REM
 REM  El comando PowerShell se arma en TROZOS (variable PS_CMD) porque en
 REM  una sola linea pasaria de 94 columnas. Las 'pipe' van DENTRO de las
@@ -2298,30 +2351,28 @@ REM  existe se lo dice al tecnico y se registra en el log, jamas se finge
 REM  que el TRIM se aplico.
 REM ---------------------------------------------------------------------
 :EJECUTAR_TRIM
+set "TRIM_ESTADO="
+set "PS_TRIM_MOTIVO="
 if not "%PS_OK%"=="SI" goto EJECUTAR_TRIM_SIN_PS
 if not "%PS_TRIM_OK%"=="SI" goto EJECUTAR_TRIM_SIN_PS
 echo   %T_NIV_36% %DISCO%
-set "PS_CMD=$a=@(Get-Partition -DiskNumber %DISCO% -ErrorAction SilentlyContinue)"
+REM  try/catch EXTERIOR: si Get-Partition falla (modulo ausente, disco no
+REM  valido, error de carga) se escribe TRIM_ERROR| y el modulo se DETIENE.
+REM  No hay plan B: la Opcion 2 no se degrada a Diskpart.
+set "PS_CMD=$ProgressPreference='SilentlyContinue'; try { $a=@(Get-Partition -DiskNumber %DISCO% -ErrorAction Stop)"
 set "PS_CMD=%PS_CMD%; $p=@($a | Where-Object {$_.DriveLetter})"
 set "PS_CMD=%PS_CMD%; if($a.Count -eq 0){ 'SIN_VOLUMENES' } else {"
 set "PS_CMD=%PS_CMD% $s=$a.Count-$p.Count; if($s -gt 0){ 'SINLETRA|'+$s }"
 set "PS_CMD=%PS_CMD%; $ok=0; $ko=0"
 set "PS_CMD=%PS_CMD%; foreach($x in $p){ try{ Optimize-Volume -DriveLetter $x.DriveLetter"
 set "PS_CMD=%PS_CMD% -ReTrim -Defrag -Verbose -ErrorAction Stop | Out-Null"
-set "PS_CMD=%PS_CMD% $ok++ } catch { $ko++; 'FALLO|'+$x.DriveLetter+'|'+$_.Exception.Message } }"
-set "PS_CMD=%PS_CMD%; if($ok -eq 0){ 'TRIM_NADA' } elseif($ko -gt 0){ 'TRIM_PARCIAL' } else { 'TRIM_OK' } }"
-"%PS_EXE%" -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "%PS_CMD%" > "%F_SEG_SAL%" 2>&1
+set "PS_CMD=%PS_CMD%; $ok++ } catch { $ko++; 'FALLO|'+$x.DriveLetter+'|'+$_.Exception.Message } }"
+set "PS_CMD=%PS_CMD%; if($ko -gt 0){ 'TRIM_PARCIAL' } elseif($ok -eq 0){ 'TRIM_NADA' } elseif($s -gt 0){ 'TRIM_PARCIAL' } else { 'TRIM_OK' } }"
+set "PS_CMD=%PS_CMD% } catch { 'TRIM_ERROR|'+$_.Exception.Message; exit 3 }"
+"%PS_EXE%" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "%PS_CMD%" > "%F_SEG_SAL%" 2>&1
 set "TRIM_RC=%errorlevel%"
-REM Aviso informativo: volumenes del disco sin letra (no admiten
-REM -DriveLetter). Se pinta en amarillo y no corta el proceso. El salto
-REM es OBLIGATORIO: cada 'if errorlevel' consume el codigo de salida, asi
-REM que no pueden encadenarse dos comprobaciones sobre la misma cifra.
-findstr /c:"SINLETRA|" "%F_SEG_SAL%" >nul 2>&1
-if errorlevel 1 goto EJECUTAR_TRIM_SINLETRA_FIN
-<nul set /p "=%C_AMARILLO%"
-echo   %T_NIV_45%
-<nul set /p "=%C_FIN%"
-:EJECUTAR_TRIM_SINLETRA_FIN
+REM  Se conserva el codigo exacto para el bloqueo y para el log [L].
+set "PS_TRIM_RC=%TRIM_RC%"
 findstr /c:"TRIM_OK" "%F_SEG_SAL%" >nul 2>&1
 if not errorlevel 1 goto EJECUTAR_TRIM_OK
 findstr /c:"TRIM_PARCIAL" "%F_SEG_SAL%" >nul 2>&1
@@ -2330,54 +2381,48 @@ findstr /c:"TRIM_NADA" "%F_SEG_SAL%" >nul 2>&1
 if not errorlevel 1 goto EJECUTAR_TRIM_NADA
 findstr /c:"SIN_VOLUMENES" "%F_SEG_SAL%" >nul 2>&1
 if not errorlevel 1 goto EJECUTAR_TRIM_VACIO
-goto EJECUTAR_TRIM_ERROR
+REM  Sin marcador de exito o de fallo controlado: se trata como error y se
+REM  detiene el modulo. No se ejecuta ninguna limpieza alternativa.
+goto EJECUTAR_TRIM_FALLO
 :EJECUTAR_TRIM_OK
 REM Buenas noticias: el TRIM se aplico. Mensaje en VERDE (C_VERDE).
+set "TRIM_ESTADO=OK"
 <nul set /p "=%C_VERDE%"
 echo   %T_NIV_31%
 <nul set /p "=%C_FIN%"
-call :REGISTRAR TRIM "disco=%DISCO% codigo=%TRIM_RC%" "OK"
+call :REGISTRAR TRIM "disco=%DISCO% codigo=%TRIM_RC% motivo=ok" "OK"
 exit /b 0
 :EJECUTAR_TRIM_PARCIAL
-REM Algun volumen ha sido desasignado y otro ha fallado. AMARILLO y se
-REM muestra la salida cruda de PowerShell con el detalle por volumen.
-<nul set /p "=%C_AMARILLO%"
-echo   %T_NIV_42%
-if exist "%F_SEG_SAL%" findstr /c:"FALLO|" "%F_SEG_SAL%"
-<nul set /p "=%C_FIN%"
-call :REGISTRAR TRIM "disco=%DISCO% codigo=%TRIM_RC%" "PARCIAL"
+REM Algun volumen no pudo recibir TRIM: se detiene el modulo y se muestra
+REM la salida literal en la pantalla de bloqueo. NO se hace 'clean' final.
+set "TRIM_ESTADO=PARCIAL"
+set "PS_TRIM_MOTIVO=trim_parcial"
+call :REGISTRAR TRIM "disco=%DISCO% codigo=%TRIM_RC% motivo=trim_parcial" "ERROR"
 exit /b 0
 :EJECUTAR_TRIM_NADA
-REM Ningun volumen ha podido recibir el TRIM: disco virtual (VM) cuyo
-REM hipervisor no implementa deallocate, controlador que lo rechaza o
-REM volumenes sin letra. Se INFORMA limpiamente en AMARILLO y el modulo
-REM sigue con la fase 3: no se finge exito y no se rompe el script.
-<nul set /p "=%C_AMARILLO%"
-echo   %T_NIV_43%
-echo   %T_NIV_44%
-if exist "%F_SEG_SAL%" findstr /c:"FALLO|" "%F_SEG_SAL%"
-<nul set /p "=%C_FIN%"
-call :REGISTRAR TRIM "disco=%DISCO% codigo=%TRIM_RC%" "NO_APLICABLE"
+REM Ningun volumen pudo recibir TRIM: se detiene el modulo sin plan B.
+set "TRIM_ESTADO=NADA"
+set "PS_TRIM_MOTIVO=trim_no_aplicable"
+call :REGISTRAR TRIM "disco=%DISCO% codigo=%TRIM_RC% motivo=trim_no_aplicable" "ERROR"
 exit /b 0
 :EJECUTAR_TRIM_VACIO
-echo   %T_NIV_32%
-call :REGISTRAR TRIM "disco=%DISCO% codigo=%TRIM_RC%" "SIN_VOLUMENES"
+set "TRIM_ESTADO=VACIO"
+set "PS_TRIM_MOTIVO=sin_volumenes"
+call :REGISTRAR TRIM "disco=%DISCO% codigo=%TRIM_RC% motivo=sin_volumenes" "ERROR"
 exit /b 0
-:EJECUTAR_TRIM_ERROR
-REM Error grave del paso TRIM: ROJO (C_ROJO) y se muestra la salida cruda.
-<nul set /p "=%C_ROJO%"
-echo   %T_NIV_33% %TRIM_RC%
-echo   %T_NIV_35%
-if exist "%F_SEG_SAL%" type "%F_SEG_SAL%"
-<nul set /p "=%C_FIN%"
-call :REGISTRAR TRIM "disco=%DISCO% codigo=%TRIM_RC%" "ERROR"
+:EJECUTAR_TRIM_FALLO
+REM  Excepcion de PowerShell o salida sin marcador: bloqueo controlado.
+set "TRIM_ESTADO=FALLO"
+set "PS_TRIM_MOTIVO=error_ejecucion"
+call :REGISTRAR TRIM "disco=%DISCO% codigo=%TRIM_RC% motivo=error_ejecucion" "ERROR"
 exit /b 0
 :EJECUTAR_TRIM_SIN_PS
-REM Precaucion (no hay PowerShell): AMARILLO (C_AMARILLO) y a blanco.
-<nul set /p "=%C_AMARILLO%"
-echo   %T_NIV_34%
-<nul set /p "=%C_FIN%"
-call :REGISTRAR TRIM "disco=%DISCO%" "SIN_POWERSHELL_O_CMDLETS"
+REM  No hay PowerShell o faltan cmdlets: la Opcion 2 se detiene sin tocar
+REM  el disco. No se ejecuta Diskpart como sustituto.
+set "TRIM_ESTADO=SIN_PS"
+set "PS_TRIM_RC=NO_DISPONIBLE"
+set "PS_TRIM_MOTIVO=powershell_no_disponible"
+call :REGISTRAR TRIM "disco=%DISCO% motivo=powershell_no_disponible" "ERROR"
 exit /b 0
 
 REM ---------------------------------------------------------------------
@@ -2578,11 +2623,12 @@ REM  nivel [3] ('clean all' puede durar horas); los niveles [1] y [2] son
 REM  instantaneos. Para el [2] detectamos ademas el TIPO de medio (sin
 REM  preguntar) para avisar si el disco es HDD y el TRIM no aporta.
 REM  Tambien comprobamos si PowerShell tiene los cmdlets de almacenamiento
-REM  que necesita el TRIM: si faltan, se avisa ANTES y no se pinta un error
-REM  rojo durante la ejecucion.
+REM  que necesita el TRIM: si faltan, el modulo se detiene ANTES de tocar
+REM  el disco y muestra el error exacto, sin plan alternativo.
 if "%NIVEL_BORRADO%"=="3" call :CALCULAR_ESTIMACION_BORRADO
 if "%NIVEL_BORRADO%"=="2" call :DETECTAR_MEDIA
 if "%NIVEL_BORRADO%"=="2" call :COMPROBAR_PS_TRIM
+if "%NIVEL_BORRADO%"=="2" if not "%PS_TRIM_OK%"=="SI" goto MODULO_SANITIZAR_PS_BLOQUEO
 call :GENERAR_SCRIPT_BORRAR
 REM Sin 'cls': el resumen y las fases se imprimen hacia abajo para poder
 REM revisar todo el historial con la rueda del raton.
@@ -2626,8 +2672,6 @@ if "%NIVEL_BORRADO%"=="2" echo       %T_NIV_40%
 if "%NIVEL_BORRADO%"=="2" echo       %T_NIV_41%
 if "%NIVEL_BORRADO%"=="2" if "%MEDIA_TIPO%"=="HDD" echo     %T_NIV_24%
 if "%NIVEL_BORRADO%"=="2" if "%MEDIA_TIPO%"=="HDD" echo       %T_NIV_25%
-if "%NIVEL_BORRADO%"=="2" if not "%PS_TRIM_OK%"=="SI" echo   %T_NIV_22%
-if "%NIVEL_BORRADO%"=="2" if not "%PS_TRIM_OK%"=="SI" echo       %T_NIV_23%
 goto MODULO_SANITIZAR_AVISOS_FIN
 :MODULO_SANITIZAR_AVISOS_N3
 echo   %T_D2_20%
@@ -2676,7 +2720,8 @@ goto MODULO_SANITIZAR_FIN_EJEC
 REM  Nivel [2] en TRES FASES: (1) diskpart deja un volumen temporal,
 REM  (2) PowerShell desasigna los bloques libres con ReTrim (TRIM) y
 REM  (3) diskpart vuelve a dejar el disco EN BRUTO con 'clean'.
-REM  La fase [3] solo se lanza si la fase [1] salio bien (RESULTADO=0).
+REM  La fase [3] solo se lanza si el TRIM se completo sin errores.
+REM  Si PowerShell falla, el modulo se DETIENE: no hay plan B con Diskpart.
 echo(
 echo   %T_NIV_37%
 call :EJECUTAR_DISKPART "pausa"
@@ -2684,6 +2729,7 @@ if not "%RESULTADO%"=="0" call :REGISTRAR SANITIZAR "nivel=2 fase=1" "ERROR"
 if not "%RESULTADO%"=="0" goto MODULO_SANITIZAR_FIN_EJEC
 echo   %T_NIV_38%
 call :EJECUTAR_TRIM
+if not "%TRIM_ESTADO%"=="OK" goto MODULO_SANITIZAR_PS_FALLO
 REM Pausa controlada: la salida del TRIM se queda en pantalla para poder
 REM revisarla (o subir con la rueda) antes de la fase final.
 call :PULSA_TECLA "%T_D2_37%"
@@ -2692,6 +2738,37 @@ echo   %T_NIV_39%
 call :EJECUTAR_DISKPART "pausa"
 :MODULO_SANITIZAR_FIN_EJEC
 call :MOSTRAR_RESULTADO "sanitizar"
+call :PULSA_TECLA_LOG
+call :BORRAR_TEMPORALES
+exit /b 0
+:MODULO_SANITIZAR_PS_BLOQUEO
+REM  Bloqueo PREVIO: faltan PowerShell o los cmdlets. No se ha ejecutado
+REM  ningun comando de disco. Se muestra el motivo exacto y se detiene.
+set "TRIM_ESTADO=PREVIA"
+set "PS_ERROR_DISCO=%T_NIV_53%"
+set "PS_ERROR_FASE=PREVIA"
+goto MOSTRAR_PS_ERROR
+:MODULO_SANITIZAR_PS_FALLO
+REM  Bloqueo durante el TRIM: no se ejecuta la fase 3 ni ningun plan B.
+set "PS_ERROR_DISCO=%T_NIV_54%"
+set "PS_ERROR_FASE=TRIM"
+:MOSTRAR_PS_ERROR
+call :REGISTRAR PS_ERROR "nivel=2 fase=%PS_ERROR_FASE% codigo=%PS_TRIM_RC% motivo=%PS_TRIM_MOTIVO% estado=%TRIM_ESTADO%" "ERROR"
+call :VOLCAR_PS_AL_LOG
+call :AUDITAR_PS_ERROR "%PS_ERROR_FASE%"
+cls
+call :MOSTRAR_CABECERA
+echo(
+echo   %T_NIV_48%
+echo   %T_NIV_49%
+echo   %PS_ERROR_DISCO%
+if "%TRIM_ESTADO%"=="VACIO" echo   %T_NIV_32%
+echo(
+echo   %T_NIV_50% %PS_TRIM_RC%
+echo   %T_NIV_51% %PS_TRIM_MOTIVO%
+if exist "%F_SEG_SAL%" echo   %T_NIV_52%
+if exist "%F_SEG_SAL%" type "%F_SEG_SAL%"
+echo(
 call :PULSA_TECLA_LOG
 call :BORRAR_TEMPORALES
 exit /b 0
@@ -3432,7 +3509,15 @@ echo   %T_DIAG_23%
 chkdsk %CHK_LETRA%: %CHK_ARGS%
 set "CHK_RC=%errorlevel%"
 call :DIAG_CHKDSK_RESULTADO
-call :REGISTRAR DIAGNOSTICO "chkdsk=%CHK_LETRA% modo=%CHK_MODO% codigo=%CHK_RC%" "OK"
+REM  El resultado del log debe reflejar el codigo real: 11 no es un exito
+REM  total, pero tampoco un fallo irrecuperable. Asi [L] no engana al tecnico.
+set "CHK_LOG_RES=ERROR"
+if "%CHK_RC%"=="0" set "CHK_LOG_RES=OK"
+if "%CHK_RC%"=="1" set "CHK_LOG_RES=OK"
+if "%CHK_RC%"=="2" set "CHK_LOG_RES=AVISO"
+if "%CHK_RC%"=="3" set "CHK_LOG_RES=AVISO"
+if "%CHK_RC%"=="11" set "CHK_LOG_RES=AVISO"
+call :REGISTRAR DIAGNOSTICO "chkdsk=%CHK_LETRA% modo=%CHK_MODO% codigo=%CHK_RC%" "%CHK_LOG_RES%"
 echo(
 REM Tras ejecutar chkdsk NO se abandona el modulo: se pausa y se vuelve a
 REM listar/pedir otra unidad, conservando el modo elegido.
@@ -3468,8 +3553,18 @@ if "%CHK_RC%"=="0" goto DIAG_CHKDSK_RC_OK
 if "%CHK_RC%"=="1" goto DIAG_CHKDSK_RC_OK
 if "%CHK_RC%"=="2" goto DIAG_CHKDSK_RC_WARN
 if "%CHK_RC%"=="3" goto DIAG_CHKDSK_RC_WARN
+if "%CHK_RC%"=="11" goto DIAG_CHKDSK_RC_11
 <nul set /p "=%C_AMARILLO%"
 echo   %T_DIAG_28% %CHK_RC%
+<nul set /p "=%C_FIN%"
+exit /b 0
+:DIAG_CHKDSK_RC_11
+REM Codigo 11: chkdsk termino con restricciones (unidad bloqueada, archivos
+REM en uso o sin capacidad de reparacion total). No es un fallo del script:
+REM se explica y se permite volver al listado con la pausa habitual.
+<nul set /p "=%C_AMARILLO%"
+echo   %T_DIAG_50%
+echo   %T_DIAG_51%
 <nul set /p "=%C_FIN%"
 exit /b 0
 :DIAG_CHKDSK_RC_OK
@@ -4528,12 +4623,6 @@ set "T_NIV_20=- El TRIM a nivel de controlador SÍ destruye la recuperación"
 set "T_NIV_21=  de datos a nivel de bloques: el controlador recicla las"
 set "T_NIV_40=  celdas liberadas (Garbage Collection) y no escribe ceros,"
 set "T_NIV_41=  así que es rápido, seguro y sin desgaste de celdas (TBW)."
-set "T_NIV_42=TRIM aplicado solo en parte de los volúmenes. Detalle de los fallos:"
-set "T_NIV_43=[i] TRIM no aplicable en este entorno (disco virtual o sin soporte"
-set "T_NIV_44=del hipervisor): el paso se OMITE y se continúa con la limpieza."
-set "T_NIV_45=[i] Volumen sin letra asignada: no admite -DriveLetter, se omite."
-set "T_NIV_22=[!] PowerShell o sus cmdlets de almacenamiento no están disponibles:"
-set "T_NIV_23=el paso TRIM se omitirá y solo se aplicará la limpieza de estructura."
 set "T_NIV_24=- Este disco es HDD: el TRIM no aplicará; solo limpieza de"
 set "T_NIV_25=  estructura. Para sobrescribir contenido usa el nivel [3]."
 set "T_NIV_26=[AVISO CRÍTICO] Esta opción sobrescribe todos los sectores del disco con ceros."
@@ -4543,10 +4632,14 @@ set "T_NIV_29=útil por desgaste de celdas NAND Flash."
 set "T_NIV_30=[i] Este disco es SSD/NVMe: valora el nivel [2] antes de seguir."
 set "T_NIV_31=TRIM completado: bloques libres desasignados (ReTrim)."
 set "T_NIV_32=TRIM: el disco no expone volúmenes; no hay nada que desasignar."
-set "T_NIV_33=TRIM no completado. Código de salida de PowerShell:"
-set "T_NIV_34=PowerShell o sus cmdlets no disponibles: TRIM omitido (solo limpieza)."
-set "T_NIV_35=Salida de PowerShell:"
 set "T_NIV_36=Enviando órdenes TRIM / Deallocate al Disco"
+set "T_NIV_48=[BLOQUEO] Sanitización PowerShell detenida: no se aplicará plan alternativo."
+set "T_NIV_49=Módulo PowerShell/StorageWMI no disponible en esta sesión WinPE o TRIM falló."
+set "T_NIV_50=Código de salida de PowerShell:"
+set "T_NIV_51=Motivo:"
+set "T_NIV_52=Salida de PowerShell:"
+set "T_NIV_53=El disco NO se ha modificado: el proceso se detuvo antes de la fase 1."
+set "T_NIV_54=El disco pasó por la fase 1; NO se ejecutó la limpieza final."
 set "T_NIV_37=FASE 1/3  diskpart: crea un volumen temporal y lo formatea"
 set "T_NIV_38=FASE 2/3  PowerShell: ordena TRIM / Deallocate a los volúmenes"
 set "T_NIV_39=FASE 3/3  diskpart: 'clean' final, deja el disco EN BRUTO"
@@ -4630,6 +4723,8 @@ set "T_DIAG_46=Formato: [índice] modelo (tipo) salud / estado tamaño"
 set "T_DIAG_47=Comprobación terminada. Pulsa una tecla para elegir otra unidad..."
 set "T_DIAG_48=Pulsa una tecla para elegir otra unidad..."
 set "T_DIAG_49=   Modo de comprobación:"
+set "T_DIAG_50=[!] Código 11: finalización con restricciones o unidad bloqueada."
+set "T_DIAG_51=    Reparación total no completada: archivos en uso o acceso denegado."
 set "T_MED_01=TIPO DE DISCO NO DETECTADO"
 set "T_MED_02=No he podido saber si el Disco"
 set "T_MED_03=es un HDD (mecánico) o un SSD (sólido):"
@@ -4986,12 +5081,6 @@ set "T_NIV_20=- Controller-level TRIM DOES destroy block-level data"
 set "T_NIV_21=  recovery: the controller recycles the freed cells"
 set "T_NIV_40=  (Garbage Collection) without writing zeros, so it is"
 set "T_NIV_41=  fast, safe and causes no cell wear (TBW)."
-set "T_NIV_42=TRIM applied only to part of the volumes. Failure detail:"
-set "T_NIV_43=[i] TRIM not applicable here (virtual disk or no support from"
-set "T_NIV_44=the hypervisor): the step is SKIPPED and the clean continues."
-set "T_NIV_45=[i] Volume without a drive letter: -DriveLetter not possible, skipped."
-set "T_NIV_22=[!] PowerShell or its storage cmdlets are not available:"
-set "T_NIV_23=the TRIM step will be skipped and only the structure clean will run."
 set "T_NIV_24=- This disk is an HDD: TRIM will not apply; structure clean"
 set "T_NIV_25=  only. To overwrite content use level [3]."
 set "T_NIV_26=[CRITICAL WARNING] This option overwrites every sector of the disk with zeros."
@@ -5001,10 +5090,14 @@ set "T_NIV_29=severely through NAND cell wear."
 set "T_NIV_30=[i] This disk is SSD/NVMe: consider level [2] before proceeding."
 set "T_NIV_31=TRIM completed: free blocks deallocated (ReTrim)."
 set "T_NIV_32=TRIM: the disk exposes no volumes; nothing to deallocate."
-set "T_NIV_33=TRIM not completed. PowerShell exit code:"
-set "T_NIV_34=PowerShell or its cmdlets unavailable: TRIM skipped (structure clean only)."
-set "T_NIV_35=PowerShell output:"
 set "T_NIV_36=Sending TRIM / Deallocate orders to Disk"
+set "T_NIV_48=[BLOCK] PowerShell sanitization stopped: no alternative plan will run."
+set "T_NIV_49=PowerShell/StorageWMI unavailable in this WinPE session or TRIM failed."
+set "T_NIV_50=PowerShell exit code:"
+set "T_NIV_51=Reason:"
+set "T_NIV_52=PowerShell output:"
+set "T_NIV_53=The disk was NOT modified: the process stopped before phase 1."
+set "T_NIV_54=The disk went through phase 1; the final clean was NOT run."
 set "T_NIV_37=PHASE 1/3  diskpart: creates a temporary volume and formats it"
 set "T_NIV_38=PHASE 2/3  PowerShell: issues TRIM / Deallocate on the volumes"
 set "T_NIV_39=PHASE 3/3  diskpart: final 'clean', leaves the disk RAW"
@@ -5088,6 +5181,8 @@ set "T_DIAG_46=Format: [index] model (type) health / status size"
 set "T_DIAG_47=Check finished. Press any key to choose another drive..."
 set "T_DIAG_48=Press any key to choose another drive..."
 set "T_DIAG_49=   Check mode:"
+set "T_DIAG_50=[!] Code 11: finished with restrictions or the drive is locked."
+set "T_DIAG_51=    Full repair not completed: files in use or access denied."
 set "T_MED_01=DISK TYPE NOT DETECTED"
 set "T_MED_02=I could not tell whether Disk"
 set "T_MED_03=is an HDD (mechanical) or an SSD (solid):"
