@@ -294,11 +294,15 @@ set "TOOL_FASE=1.0"
 
 REM --- Apariencia de la consola -----------------------------------------
 REM title  -^> texto de la barra de titulo de la ventana.
-REM mode   -^> tamano de la ventana (columnas x lineas). Fijamos ~44 lineas
+REM mode   -^> tamano de la VENTANA (columnas x lineas). Fijamos ~44 lineas
 REM            para que quepan cabecera + menu + mensajes sin scroll.
 REM            Se silencia su salida porque 'mode' puede fallar si la
 REM            consola no permite redimensionar (ventanas embebidas en
 REM            otros programas) y ese fallo no debe tumbar el script.
+REM            OJO: en conhost, 'mode con lines=44' tambien reduce la
+REM            ALTURA del buffer. Para conservar el historial (scroll)
+REM            se vuelve a ampliar solo el buffer tras detectar PowerShell
+REM            (ver PASO 1, deteccion de PS_OK), sin tocar la ventana.
 REM color  -^> NO se usa. La paleta se aplica con las variables ANSI
 REM            definidas al inicio (C_VERDE, C_AMARILLO, C_ROJO,
 REM            C_BLANCO, C_RESET). Asi no hay repintados globales ni
@@ -348,10 +352,14 @@ REM 'PS_EXE' apunta a la ruta canonica de PS 5.x/Windows. No basta con que
 REM el .exe exista: en una ISO recortada puede faltar el runtime. Se prueba
 REM una ejecucion minima; si falla, PS_OK=NO. La deteccion de discos usa
 REM entonces wmic/diskpart; la Opcion 2 (TRIM) se DETIENE sin plan B.
+REM La misma ejecucion aprovecha para AMPLIAR SOLO LA ALTURA DEL BUFFER
+REM de la consola (2000 lineas): 'mode con' deja el buffer del tamano de
+REM la ventana y, sin esto, al hacer scroll se perderia el historial del
+REM inventario. No se toca el tamano de la ventana (94x44).
 set "PS_OK=NO"
 set "PS_EXE=%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe"
 if not exist "%PS_EXE%" goto PS_DETECTADO
-"%PS_EXE%" -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "exit 0" >nul 2>&1
+"%PS_EXE%" -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "try { $b=$Host.UI.RawUI.BufferSize; if ($b.Height -lt 2000) { $b.Height=2000; $Host.UI.RawUI.BufferSize=$b } } catch { }; exit 0" >nul 2>&1
 if errorlevel 1 goto PS_DETECTADO
 set "PS_OK=SI"
 :PS_DETECTADO
@@ -1105,6 +1113,7 @@ REM ---------------------------------------------------------------------
 :PULSA_TECLA_LOG
 echo(
 echo   %C_VERDE%%T_LOG_03%%C_FIN%
+if "%MODO_ENTRADA%"=="CHOICE" goto PULSA_TECLA_LOG_CHOICE
 :PULSA_TECLA_LOG_BUCLE
 set "TECLA_LOG="
 set /p "TECLA_LOG=%C_VERDE%%T_LOG_04%%C_FIN%"
@@ -1115,6 +1124,21 @@ set "TECLA_LOG=%TECLA_LOG: =%"
 if /i "%TECLA_LOG%"=="M" exit /b 0
 if /i "%TECLA_LOG%"=="L" goto PULSA_TECLA_LOG_VER
 goto PULSA_TECLA_LOG_BUCLE
+:PULSA_TECLA_LOG_CHOICE
+REM  En modo choice, M/L se capturan sin ENTER y sin eco: imprimimos el
+REM  prompt con 'set /p <nul' y mandamos la salida de choice a NUL. Asi
+REM  'l' y 'L' (igual que 'm' y 'M') no dejan caracteres ni restos
+REM  graficos sobre la linea; choice sigue leyendo del teclado.
+set /p "TECLA_LOG=%C_VERDE%%T_LOG_04%%C_FIN%" <nul
+choice /c ML /n >nul 2>&1
+if "%errorlevel%"=="0" goto PULSA_TECLA_LOG_MENU
+if "%errorlevel%"=="255" goto PULSA_TECLA_LOG_MENU
+if errorlevel 2 goto PULSA_TECLA_LOG_VER
+if errorlevel 1 goto PULSA_TECLA_LOG_MENU
+goto PULSA_TECLA_LOG_CHOICE
+:PULSA_TECLA_LOG_MENU
+echo(
+exit /b 0
 :PULSA_TECLA_LOG_VER
 cls
 call :MOSTRAR_CABECERA
@@ -1506,7 +1530,12 @@ REM A -^> 13. Las demas teclas hacen 'beep' sin consumirse: jamas entra
 REM basura.
 REM (choice solo admite a-z, A-Z, 0-9 y ASCII 128-254: por eso la
 REM tecla de confirmacion es S y no un simbolo como '*').
-choice /c 0123456789MSA /n
+REM La salida de choice se manda a NUL: en consola, choice escribe la
+REM tecla elegida y un salto de linea. Si no se silencia, el eco manual
+REM de abajo duplicaria el digito (efecto espejo) y partiria el prompt.
+choice /c 0123456789MSA /n >nul 2>&1
+if "%errorlevel%"=="0" goto LEER_NUMERO_CANCELAR
+if "%errorlevel%"=="255" goto LEER_NUMERO_ATRAS
 if errorlevel 13 goto LEER_NUMERO_ATRAS
 if errorlevel 12 goto LEER_NUMERO_CHOICE_CONFIRMAR
 if errorlevel 11 goto LEER_NUMERO_CANCELAR
@@ -3543,7 +3572,11 @@ REM ---------------------------------------------------------------------
 REM  DIAG_HARDWARE - inventario completo del equipo (solo lectura)
 REM ---------------------------------------------------------------------
 :DIAG_HARDWARE
-cls
+REM  SIN 'cls' a proposito: el inventario se imprime debajo de la pantalla
+REM  del menu de diagnostico. El buffer ampliado conserva todo el texto y
+REM  el tecnico puede subir con la barra hasta la primera linea del sistema
+REM  sin que un repintado intermedio borre el historial.
+echo(
 call :MOSTRAR_CABECERA
 echo(
 echo   %T_INV_01%
