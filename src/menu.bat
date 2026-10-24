@@ -377,7 +377,9 @@ REM entonces wmic/diskpart; la Opcion 2 (TRIM) se DETIENE sin plan B.
 REM La misma ejecucion aprovecha para AMPLIAR SOLO LA ALTURA DEL BUFFER
 REM de la consola (2000 lineas): 'mode con' deja el buffer del tamano de
 REM la ventana y, sin esto, al hacer scroll se perderia el historial del
-REM inventario. No se toca el tamano de la ventana (94x44).
+REM inventario. No se toca el tamano de la ventana (94x60).
+REM Ademas, las pantallas con textos extensos llaman a :CONSOLA_LARGA para
+REM reforzar este ajuste justo antes de pintar.
 set "PS_OK=NO"
 set "PS_EXE=%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe"
 if not exist "%PS_EXE%" goto PS_DETECTADO
@@ -405,6 +407,24 @@ REM De aqui saltamos a la pantalla de seleccion de idioma. Se usa 'goto'
 REM (salto sin retorno) porque es el flujo normal del programa: una vez
 REM elegido el idioma ya no se vuelve a esta pantalla.
 goto SELECCION_IDIOMA
+
+REM ---------------------------------------------------------------------
+REM  CONSOLA_LARGA - prepara el búfer/ventana para pantallas extensas.
+REM  -------------------------------------------------------------------
+REM  Pantallas de ayuda, listados y confirmaciones pueden superar la
+REM  altura por defecto de algunas consolas. Si PowerShell está disponible
+REM  se amplia SOLO la altura del búfer (conserva el historial y evita el
+REM  efecto espejo al hacer scroll). Si no, se intenta redimensionar la
+REM  ventana/búfer con mode con. Los errores se ignoran: nunca se detiene
+REM  la herramienta por un ajuste visual.
+REM ---------------------------------------------------------------------
+:CONSOLA_LARGA
+if "%PS_OK%"=="SI" (
+    "%PS_EXE%" -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "try { $b=$Host.UI.RawUI.BufferSize; if ($b.Height -lt 2000) { $b.Height=2000; $Host.UI.RawUI.BufferSize=$b } } catch { }; exit 0" >nul 2>&1
+) else (
+    mode con: cols=94 lines=60 >nul 2>&1
+)
+exit /b 0
 
 REM =====================================================================
 REM  PASO 2 - SELECCION DE IDIOMA (internacionalizacion / i18n)
@@ -739,6 +759,7 @@ goto OP_AYUDA
 REM --- Apartado 1: comandos y herramientas de WinPE ---------------------
 :OP_AYUDA_P1
 cls
+call :CONSOLA_LARGA
 call :MOSTRAR_CABECERA
 echo(
 echo   %T_AYU1_01%
@@ -789,6 +810,7 @@ goto OP_AYUDA_P2
 
 :OP_AYUDA_P2
 cls
+call :CONSOLA_LARGA
 call :MOSTRAR_CABECERA
 echo(
 echo   %T_AYU2_01%
@@ -867,6 +889,7 @@ goto OP_AYUDA
 REM --- Apartado 2: guia paso a paso de la Opcion 1 y de la Opcion 2 -----
 :OP_AYUDA_GUIA
 cls
+call :CONSOLA_LARGA
 call :MOSTRAR_CABECERA
 echo(
 echo   %T_GUIA_01%
@@ -895,6 +918,7 @@ goto OP_AYUDA_GUIA_P2
 
 :OP_AYUDA_GUIA_P2
 cls
+call :CONSOLA_LARGA
 call :MOSTRAR_CABECERA
 echo(
 echo   %T_GUIA_14%
@@ -925,6 +949,7 @@ goto OP_AYUDA
 REM --- Apartado 3: codigos de navegacion y atajos ------------------------
 :OP_AYUDA_NAV
 cls
+call :CONSOLA_LARGA
 call :MOSTRAR_CABECERA
 echo(
 echo   %T_NAV_01%
@@ -2048,6 +2073,7 @@ REM  Cada paso queda en el log por separado (etapa=... paso=1/2).
 REM  Devuelve CONFIRMADO = SI / NO.
 REM ---------------------------------------------------------------------
 :CONFIRMAR_DESTRUCTIVO
+call :CONSOLA_LARGA
 set "CONFIRMADO=NO"
 set "CONF_ETAPA=%~1"
 set "CONF_CLAVES=SN"
@@ -2696,6 +2722,7 @@ REM Etiqueta por defecto del volumen. Se usa SIEMPRE la etiqueta SYSTEM
 REM en las opciones de limpieza/formateo.
 set "CUSTOM_LABEL=SYSTEM"
 cls
+call :CONSOLA_LARGA
 call :MOSTRAR_CABECERA
 echo(
 echo   %T_D1_01%
@@ -2721,6 +2748,7 @@ call :PREPARAR_ENTORNO
 if not "%ENTORNO_OK%"=="SI" goto MODULO_PREPARAR_CANCELADO
 :MODULO_PREPARAR_RELISTAR
 cls
+call :CONSOLA_LARGA
 call :MOSTRAR_CABECERA
 echo(
 call :LISTAR_DISCOS solo
@@ -2816,6 +2844,7 @@ if not "%ENTORNO_OK%"=="SI" goto MODULO_SANITIZAR_CANCELADO
 REM  Pantalla limpia antes de listar: sin esto la tabla de discos queda
 REM  mezclada con la pantalla anterior de ELEGIR_NIVEL y no se ve.
 cls
+call :CONSOLA_LARGA
 call :MOSTRAR_CABECERA
 echo(
 call :LISTAR_DISCOS solo
@@ -3054,6 +3083,7 @@ REM ---------------------------------------------------------------------
 :ELEGIR_NIVEL
 set "NIVEL_BORRADO="
 cls
+call :CONSOLA_LARGA
 call :MOSTRAR_CABECERA
 echo(
 echo   %T_D2_01%
@@ -3687,6 +3717,7 @@ set "CHK_MODO="
 set "CHK_ARGS="
 :DIAG_CHKDSK_MODO
 cls
+call :CONSOLA_LARGA
 call :MOSTRAR_CABECERA
 echo(
 echo   %T_DIAG_10%
@@ -3767,6 +3798,7 @@ goto DIAG_CHKDSK_VOLVER
 REM Cabecera COMUN de la opcion [2]: titulo, avisos y LISTADO AUTOMATICO
 REM de las unidades montadas (paso previo obligatorio: el tecnico elige
 REM sobre letras REALES que acaba de ver, nunca de memoria).
+call :CONSOLA_LARGA
 call :MOSTRAR_CABECERA
 echo(
 echo   %T_DIAG_10%
