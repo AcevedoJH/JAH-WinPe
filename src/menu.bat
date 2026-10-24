@@ -29,6 +29,27 @@ if defined ESC set "C_BLANCO=%ESC%[37m"
 if defined ESC set "C_RESET=%ESC%[0m"
 set "C_FIN=%C_RESET%%C_BLANCO%"
 
+REM --- Posicion fija del pie del listado de discos -----------------------
+REM  El cursor del prompt de numero de disco NO debe quedar en la ultima
+REM  fila fisica de la ventana: al teclear, conhost redibuja/desplaza y el
+REM  prompt se duplica o se corta (efecto espejo). Estas secuencias usan
+REM  CUP (ESC[fila;colH), que en Windows se mueve DENTRO DE LA VENTANA:
+REM    1) ir al borde inferior (999 se recorta a la ultima fila visible),
+REM    2) subir 6 filas,
+REM    3) limpiar las dos filas del pie/prompt.
+REM  La fila 38 de una ventana de 44 lineas queda a 6 del borde: el prompt
+REM  en la 39 y 5 filas libres por debajo para errores/confirmaciones.
+REM  C_PIE_DISCO_LIMPIO se usa solo la primera vez: limpia desde el pie
+REM  hasta el final para que no queden restos del listado debajo. En las
+REM  repeticiones se limpian solo las dos filas del pie, para no borrar el
+REM  mensaje de error que el tecnico acaba de recibir.
+set "C_PIE_DISCO="
+set "C_PIE_DISCO_LIMPIO="
+set "C_PIE_ALERTA_DISCO="
+if defined ESC set "C_PIE_DISCO=%ESC%[999;1H%ESC%[6A%ESC%[2K%ESC%[1B%ESC%[2K%ESC%[1A"
+if defined ESC set "C_PIE_DISCO_LIMPIO=%ESC%[999;1H%ESC%[6A%ESC%[0J"
+if defined ESC set "C_PIE_ALERTA_DISCO=%ESC%[999;1H%ESC%[10A%ESC%[0J"
+
 REM =====================================================================
 REM  JAH-WinPe  ::  menu.bat  -  INTERFAZ PRINCIPAL DEL TALLER
 REM =====================================================================
@@ -1928,10 +1949,19 @@ set "DISCO_ATRAS=NO"
 set "DISCO="
 if not defined PIE_DISCO set "PIE_DISCO=%T_COM_56%"
 if not "%LISTADO_OK%"=="SI" exit /b 0
+set "PEDIR_DISCO_PINTADO=NO"
 :PEDIR_DISCO_BUCLE
-echo(
-REM Pie de pagina minimo: una sola linea de navegacion y el prompt. Nada
-REM de explicaciones largas debajo del listado (el listado ya se lee solo).
+REM  Sin 'echo(' ni saltos de linea de mas: el pie y el prompt se pintan
+REM  SIEMPRE en las mismas dos filas, a 6 lineas del borde inferior. La
+REM  primera vez se limpia desde ahi hasta el final (puede haber cola del
+REM  listado); las siguientes solo se repintan esas dos filas para que el
+REM  aviso de error anterior siga visible debajo.
+if not "%PEDIR_DISCO_PINTADO%"=="SI" (
+    <nul set /p "=%C_PIE_DISCO_LIMPIO%"
+    set "PEDIR_DISCO_PINTADO=SI"
+) else (
+    <nul set /p "=%C_PIE_DISCO%"
+)
 echo   %C_VERDE%%PIE_DISCO%%C_FIN%
 call :LEER_NUMERO "%T_COM_19%" DISCO
 if "%NUM_OK%"=="CANCELAR" exit /b 0
@@ -1940,7 +1970,10 @@ if not "%NUM_OK%"=="SI" goto PEDIR_DISCO_BUCLE
 REM --- Contraste con el listado ya capturado --------------------------
 call :DISCO_EXISTE
 if "%EXISTE%"=="SI" goto PEDIR_DISCO_OK
-echo(
+REM  Aviso de disco inexistente: tambien en zona fija. Se coloca en la
+REM  fila 34 (10 por encima del borde), se imprimen 4 lineas y el prompt
+REM  queda en la 39, con margen de sobra hasta la ultima fila.
+<nul set /p "=%C_PIE_ALERTA_DISCO%"
 echo   %T_SEG_19% %DISCO% %T_SEG_20%
 echo       %T_SEG_21%
 echo       %T_SEG_22%
@@ -3353,7 +3386,7 @@ echo(
 echo   %T_FW_01%
 echo   %C_VERDE%------------------------------------------------------------------%C_FIN%
 echo(
-if "%FIRMWARE%"=="?" echo   %T_FW_05%
+if "%FIRMWARE%"=="?" echo   %C_AMARILLO%%T_FW_05%%C_RESET%
 if not "%FIRMWARE%"=="?" echo   %T_FW_02% %FIRMWARE%
 echo   %T_FW_08%
 echo     %T_FW_09%
@@ -4900,7 +4933,7 @@ set "T_FW_01=FIRMWARE Y ESQUEMA DE PARTICIONADO"
 set "T_FW_02=Firmware detectado:"
 set "T_FW_03=Esquema de particionado:"
 set "T_FW_05=[!] Firmware SIN VERIFICAR (ni registro ni BCD): elige el esquema."
-set "T_FW_06=   Esquema a aplicar [1=GPT / 2=MBR]:  "
+set "T_FW_06=   Esquema [1=GPT / 2=MBR]:  "
 set "T_FW_08=   Elige el esquema manualmente (no se aplica ninguno automaticamente):"
 set "T_FW_09=     [1] GPT  -  recomendado para UEFI"
 set "T_FW_10=     [2] MBR  -  recomendado para BIOS Legacy"
@@ -5382,7 +5415,7 @@ set "T_FW_01=FIRMWARE AND PARTITION LAYOUT"
 set "T_FW_02=Detected firmware:"
 set "T_FW_03=Partition layout:"
 set "T_FW_05=[!] Firmware UNVERIFIED (no registry or BCD): choose the layout."
-set "T_FW_06=   Layout to apply [1=GPT / 2=MBR]:  "
+set "T_FW_06=   Layout [1=GPT / 2=MBR]:  "
 set "T_FW_08=   Choose the layout manually (nothing is applied automatically):"
 set "T_FW_09=     [1] GPT  -  recommended for UEFI"
 set "T_FW_10=     [2] MBR  -  recommended for BIOS Legacy"
