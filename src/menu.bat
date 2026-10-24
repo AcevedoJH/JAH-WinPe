@@ -315,8 +315,9 @@ set "TOOL_FASE=1.0"
 
 REM --- Apariencia de la consola -----------------------------------------
 REM title  -^> texto de la barra de titulo de la ventana.
-REM mode   -^> tamano de la VENTANA (columnas x lineas). Fijamos ~44 lineas
-REM            para que quepan cabecera + menu + mensajes sin scroll.
+REM mode   -^> tamano de la VENTANA (columnas x lineas). Fijamos ~60 lineas
+REM            para que quepan cabecera + menu + mensajes de ayuda y
+REM            confirmacion sin scroll.
 REM            Se silencia su salida porque 'mode' puede fallar si la
 REM            consola no permite redimensionar (ventanas embebidas en
 REM            otros programas) y ese fallo no debe tumbar el script.
@@ -333,7 +334,7 @@ REM            startnet.cmd mediante HKCU\Console antes de abrir esta
 REM            consola. Si se lanza menu.bat a mano, se conserva la
 REM            fuente que ya tenga la consola actual.
 title %TOOL_NAME% v%TOOL_VER%
-mode con: cols=94 lines=44 >nul 2>&1
+mode con: cols=94 lines=60 >nul 2>&1
 <nul set /p "=%C_BLANCO%"
 
 REM --- Deteccion del metodo de lectura de teclado ----------------------
@@ -500,10 +501,11 @@ REM  Solo muestra datos neutros (marca y version): ni una palabra que
 REM  hubiera que traducir.
 REM ---------------------------------------------------------------------
 :MOSTRAR_CABECERA_BASE
-REM Cabecera en VERDE ANSI; cada linea vuelve al gris claro base
-REM con C_FIN, de modo que el cuerpo de la pantalla siga siendo legible.
+REM Cabecera en VERDE ANSI; estructura IDENTICA a MOSTRAR_CABECERA,
+REM pero sin depender del diccionario (aun no sabemos el idioma).
 echo   %C_VERDE%==========================================================================%C_FIN%
-echo     %C_VERDE%%TOOL_NAME%   -   v%TOOL_VER%%C_FIN%
+echo     %C_VERDE%%TOOL_NAME%   -   Herramienta de Soporte Tecnico%C_FIN%
+echo     %C_VERDE%Version %TOOL_VER%   -   Fase %TOOL_FASE%   -   Entorno: Windows / WinPE%C_FIN%
 echo   %C_VERDE%==========================================================================%C_FIN%
 exit /b 0
 
@@ -556,18 +558,18 @@ echo      %T_MENU_06%
 echo      %T_MENU_15%
 echo      %T_MENU_16%
 echo(
-echo   %C_VERDE%------------------------------------------------------------------%C_FIN%
-echo   %T_MENU_07%
-echo          %T_MENU_08%
+REM Cuadro de telemetria y estado: siempre dentro de lineas verdes.
 echo   %C_VERDE%------------------------------------------------------------------%C_FIN%
 echo      %T_MENU_12% %date%  %time:~0,5%
 echo      %T_MENU_13% %MODO_ENTRADA%
 echo      %T_MENU_14% %FIRMWARE%   -^>   %FIRMWARE_FORMATO%
+echo      %T_MENU_17% %FIRMWARE_METODO%
 if "%LOG_PERSISTENTE%"=="SI" echo      %T_LOG_01% %LOG_ARCHIVO%
 if not "%LOG_PERSISTENTE%"=="SI" echo      %T_LOG_02% %LOG_ARCHIVO%
+echo   %C_VERDE%------------------------------------------------------------------%C_FIN%
 echo(
-REM Aviso de seguridad SIEMPRE en amarillo: las opciones 1 y 2 modifican
-REM discos de verdad. Se restaura el color al terminar el bloque.
+REM Aviso de seguridad UNICO e INFERIOR, SIEMPRE en amarillo. La segunda
+REM linea se sangra para alinearse bajo los dos puntos de 'Aviso:'.
 <nul set /p "=%C_AMARILLO%"
 echo   %T_MENU_07%
 echo   %T_MENU_08%
@@ -829,6 +831,10 @@ echo      %T_AYU2_31%
 echo(
 call :LEER_SN "%T_AYU2_32%"
 if not "%SN%"=="SI" goto OP_AYUDA_P2_FIN
+REM  La lista de comandos es larga; se muestra en pantalla limpia para que
+REM  el prompt final de navegacion quede visible sin scroll manual.
+cls
+call :MOSTRAR_CABECERA
 echo(
 echo   %T_AYU2_33%
 echo(
@@ -1273,6 +1279,10 @@ REM  Cuarto argumento opcional: si vale A, la letra A se acepta como
 REM  salida al paso anterior. El llamante decide a donde lleva esa A.
 set "PERMITE_A=NO"
 if /i "%~4"=="A" set "PERMITE_A=SI"
+REM  Quinto argumento opcional: si vale E, la letra E se acepta como
+REM  accion extra (por ejemplo, cambiar la etiqueta del volumen).
+set "PERMITE_E=NO"
+if /i "%~5"=="E" set "PERMITE_E=SI"
 if "%MODO_ENTRADA%"=="CHOICE" goto LEER_CON_CHOICE
 goto LEER_CON_SETP
 
@@ -1291,6 +1301,7 @@ REM Sufijo de navegacion: A y/o M se anaden AL FINAL de los digitos.
 REM Su posicion real se calcula contando los digitos de la lista blanca.
 set "SUFIJO="
 if "%PERMITE_A%"=="SI" set "SUFIJO=A"
+if "%PERMITE_E%"=="SI" set "SUFIJO=%SUFIJO%E"
 if "%PERMITE_M%"=="SI" set "SUFIJO=%SUFIJO%M"
 if not defined SUFIJO goto LEER_CON_CHOICE_SIMPLE
 set "CLAVES_N=0"
@@ -1315,6 +1326,7 @@ REM Fuera de los digitos: la posicion del sufijo dice la tecla pulsada.
 set /a OFFSET=ELECT-CLAVES_N
 if "%OFFSET%"=="1" set "OPCION=%SUFIJO:~0,1%"
 if "%OFFSET%"=="2" set "OPCION=%SUFIJO:~1,1%"
+if "%OFFSET%"=="3" set "OPCION=%SUFIJO:~2,1%"
 exit /b 0
 
 :LEER_CON_CHOICE_SIMPLE
@@ -1363,8 +1375,11 @@ REM no ofrecen M (idioma, formato, tipo de medio) siguen siendo estrictos.
 if not "%PERMITE_M%"=="SI" goto LEER_CON_SETP_VER_A
 if /i "%OPCION%"=="M" exit /b 0
 :LEER_CON_SETP_VER_A
-if not "%PERMITE_A%"=="SI" goto LEER_CON_SETP_LISTA
+if not "%PERMITE_A%"=="SI" goto LEER_CON_SETP_VER_E
 if /i "%OPCION%"=="A" exit /b 0
+:LEER_CON_SETP_VER_E
+if not "%PERMITE_E%"=="SI" goto LEER_CON_SETP_LISTA
+if /i "%OPCION%"=="E" exit /b 0
 :LEER_CON_SETP_LISTA
 REM --- Lista blanca ---
 REM 'for' recorre cada digito de la lista (%~2) y compara con lo
@@ -1777,7 +1792,8 @@ exit /b 0
 REM ---------------------------------------------------------------------
 REM  PARSER_DISCOS - extrae los identificadores de disco del listado.
 REM  -------------------------------------------------------------------
-REM  Entrada:  %F_SALIDA% (salida de 'list disk' + 'list volume')
+REM  Entrada:  %F_SALIDA% (salida de 'list disk', opcionalmente con
+REM            'list volume' si el llamante lo pidio).
 REM  Devuelve: LISTA_DISCOS = identificadores numericos de la PRIMERA
 REM            columna, separados por espacios y con espacios de
 REM            reserva en los extremos: " 0 1 10 ".
@@ -2162,7 +2178,7 @@ REM                            arranca en BIOS Legacy necesita MBR. Por eso
 REM                            el comando se escribe con %FIRMWARE_FORMATO%
 REM                            y no con un valor fijo.
 REM    create partition primary  una particion con TODO el espacio libre
-REM    format fs=ntfs quick label="SISTEMA"  NTFS rapido con etiqueta
+REM    format fs=ntfs quick label="SYSTEM"  NTFS rapido con etiqueta SYSTEM
 REM    assign                  asigna la primera letra de unidad libre
 REM  'echo' escribe cada linea en el fichero temporal. La PRIMERA linea
 REM  usa una redireccion simple (crea el fichero de cero) y las
@@ -2170,13 +2186,15 @@ REM  siguientes una doble (anaden sin borrar lo anterior).
 REM ---------------------------------------------------------------------
 :GENERAR_SCRIPT_MAQUETAR
 if not defined DISCO exit /b 0
+REM  Defensa: si por cualquier ruta no se inicializo, usamos el default.
+if not defined CUSTOM_LABEL set "CUSTOM_LABEL=SYSTEM"
 > "%F_SCRIPT%" echo select disk %DISCO%
 >> "%F_SCRIPT%" echo clean
 >> "%F_SCRIPT%" echo convert %FIRMWARE_FORMATO%
 >> "%F_SCRIPT%" echo create partition primary
->> "%F_SCRIPT%" echo format fs=ntfs quick label="SISTEMA"
+>> "%F_SCRIPT%" echo format fs=ntfs quick label="%CUSTOM_LABEL%"
 >> "%F_SCRIPT%" echo assign
-call :REGISTRAR MAQUETAR "disco=%DISCO% esquema=%FIRMWARE_FORMATO%" "GUION_GENERADO"
+call :REGISTRAR MAQUETAR "disco=%DISCO% esquema=%FIRMWARE_FORMATO% etiqueta=%CUSTOM_LABEL%" "GUION_GENERADO"
 exit /b 0
 
 REM ---------------------------------------------------------------------
@@ -2208,7 +2226,7 @@ REM --- Nivel 2, fase 1/3: volumen temporal para el TRIM ---------------
 > "%F_SCRIPT%" echo select disk %DISCO%
 >> "%F_SCRIPT%" echo clean
 >> "%F_SCRIPT%" echo create partition primary
->> "%F_SCRIPT%" echo format fs=ntfs quick
+>> "%F_SCRIPT%" echo format fs=ntfs quick label="SYSTEM"
 call :REGISTRAR SANITIZAR "disco=%DISCO% nivel=2 fase=1 comando=clean+format" "GUION_GENERADO"
 exit /b 0
 :GENERAR_BORRAR_CEROS
@@ -2639,7 +2657,10 @@ echo(
 echo   %T_COM_31%
 echo(
 > "%F_SCRIPT%" echo list disk
->> "%F_SCRIPT%" echo list volume
+REM  Durante la seleccion de disco solo interesa la tabla de discos
+REM  fisicos; los volumenes/particiones generan ruido visual y la accion
+REM  se aplica a la unidad completa. El parametro "solo" omite list volume.
+if /i not "%~1"=="solo" >> "%F_SCRIPT%" echo list volume
 diskpart /s "%F_SCRIPT%" > "%F_SALIDA%" 2>&1
 set "RESULTADO_LISTADO=%errorlevel%"
 if not "%RESULTADO_LISTADO%"=="0" goto LISTAR_DISCOS_FIN
@@ -2671,6 +2692,9 @@ set "RESULTADO_F3="
 REM La opcion [1] no tiene nivel de borrado: evita que el resumen de [L]
 REM herede el nivel de una ejecucion anterior de la opcion [2].
 set "NIVEL_BORRADO="
+REM Etiqueta por defecto del volumen. Se usa SIEMPRE la etiqueta SYSTEM
+REM en las opciones de limpieza/formateo.
+set "CUSTOM_LABEL=SYSTEM"
 cls
 call :MOSTRAR_CABECERA
 echo(
@@ -2695,7 +2719,11 @@ call :PULSA_TECLA_MENU "%T_D1_14%"
 if "%VUELTA_MENU%"=="SI" exit /b 0
 call :PREPARAR_ENTORNO
 if not "%ENTORNO_OK%"=="SI" goto MODULO_PREPARAR_CANCELADO
-call :LISTAR_DISCOS
+:MODULO_PREPARAR_RELISTAR
+cls
+call :MOSTRAR_CABECERA
+echo(
+call :LISTAR_DISCOS solo
 call :DETECTAR_DISCO_ARRANQUE
 set "PIE_DISCO=%T_COM_58%"
 call :PEDIR_DISCO
@@ -2705,6 +2733,7 @@ call :REGISTRAR DISCO "modulo=maquetar disco=%DISCO%" "SELECCIONADO"
 call :COMPROBAR_DISCO_SEGURO
 if "%BLOQUEADO%"=="SI" goto MODULO_PREPARAR_BLOQUEO
 call :ELEGIR_FORMATO_MANUAL
+if "%FORMATO_ATRAS%"=="SI" goto MODULO_PREPARAR_RELISTAR
 if not "%FORMATO_OK%"=="SI" goto MODULO_PREPARAR_CANCELADO
 call :GENERAR_SCRIPT_MAQUETAR
 REM Sin 'cls': durante la ejecucion del modulo el historial se queda
@@ -2720,7 +2749,7 @@ if "%PROTECCION_ESTADO%"=="DUDA" echo   %T_SEG_17%
 if "%PROTECCION_ESTADO%"=="NA" echo   %T_SEG_18%
 echo   %T_FW_02% %FIRMWARE%   -   %T_FW_03% %FIRMWARE_FORMATO%
 echo   %T_D1_16%
-echo                   %T_D1_17%
+echo                   %T_D1_17% %CUSTOM_LABEL%.
 echo(
 call :MOSTRAR_SCRIPT
 if "%ES_WINPE%"=="SI" goto MODULO_PREPARAR_FIN_AVISO
@@ -2784,7 +2813,12 @@ call :ELEGIR_NIVEL
 if not defined NIVEL_BORRADO exit /b 0
 call :PREPARAR_ENTORNO
 if not "%ENTORNO_OK%"=="SI" goto MODULO_SANITIZAR_CANCELADO
-call :LISTAR_DISCOS
+REM  Pantalla limpia antes de listar: sin esto la tabla de discos queda
+REM  mezclada con la pantalla anterior de ELEGIR_NIVEL y no se ve.
+cls
+call :MOSTRAR_CABECERA
+echo(
+call :LISTAR_DISCOS solo
 call :DETECTAR_DISCO_ARRANQUE
 set "PIE_DISCO=%T_COM_56%"
 call :PEDIR_DISCO
@@ -3044,6 +3078,7 @@ echo(
 echo   %C_VERDE%%T_COM_56%%C_FIN%
 echo(
 call :LEER_OPCION "%T_NIV_12%" "1 2 3 0" M A
+if /i "%OPCION%"=="M" set "SALIDA_M=SI"
 if /i "%OPCION%"=="M" exit /b 0
 if /i "%OPCION%"=="A" exit /b 0
 if "%OPCION%"=="4" set "OPCION=0"
@@ -3380,6 +3415,7 @@ REM  Devuelve FORMATO_OK = SI / NO.
 REM ---------------------------------------------------------------------
 :ELEGIR_FORMATO_MANUAL
 set "FORMATO_OK=NO"
+set "FORMATO_ATRAS=NO"
 cls
 call :MOSTRAR_CABECERA
 echo(
@@ -3388,14 +3424,16 @@ echo   %C_VERDE%----------------------------------------------------------------
 echo(
 if "%FIRMWARE%"=="?" echo   %C_AMARILLO%%T_FW_05%%C_RESET%
 if not "%FIRMWARE%"=="?" echo   %T_FW_02% %FIRMWARE%
-echo   %T_FW_08%
 echo     %T_FW_09%
 echo     %T_FW_10%
 echo(
 echo   %C_VERDE%%T_FW_11%%C_FIN%
 echo(
-call :LEER_OPCION "%T_FW_06%" "1 2" M
+call :LEER_OPCION "%T_FW_06%" "1 2" M A
+if /i "%OPCION%"=="M" set "SALIDA_M=SI"
 if /i "%OPCION%"=="M" exit /b 0
+if /i "%OPCION%"=="A" set "FORMATO_ATRAS=SI"
+if "%FORMATO_ATRAS%"=="SI" exit /b 0
 if "%OPCION%"=="1" set "FIRMWARE_FORMATO=GPT"
 if "%OPCION%"=="2" set "FIRMWARE_FORMATO=MBR"
 if "%OPCION%"=="1" set "FORMATO_OK=SI"
@@ -3666,8 +3704,10 @@ if /i "%OPCION%"=="M" goto DIAG_CHKDSK_MENU
 if /i "%OPCION%"=="A" exit /b 0
 set "CHK_ARGS="
 if "%OPCION%"=="1" set "CHK_ARGS=/scan"
-if "%OPCION%"=="2" set "CHK_ARGS=/f"
-if "%OPCION%"=="3" set "CHK_ARGS=/f /r"
+REM  /f /x fuerza el desmontaje logico previo: evita el codigo 11 en
+REM  unidades activas (archivos en uso) dentro de WinPE.
+if "%OPCION%"=="2" set "CHK_ARGS=/f /x"
+if "%OPCION%"=="3" set "CHK_ARGS=/f /x /r"
 if not defined CHK_ARGS goto DIAG_CHKDSK_MODO
 set "CHK_MODO=%OPCION%"
 goto DIAG_CHKDSK_LISTA
@@ -4622,7 +4662,7 @@ set "T_AYU1_16=convert mbr                  pasa el disco a esquema MBR"
 set "T_AYU1_17=create partition primary     crea una partición primaria"
 set "T_AYU1_18=(opcional: size=100000 en MB)"
 set "T_AYU1_19=format fs=ntfs quick         formateo rápido en NTFS"
-set "T_AYU1_20=(opcional: label=SISTEMA)"
+set "T_AYU1_20=(opcional: label=SYSTEM)"
 set "T_AYU1_21=assign letter=Z              asigna una letra concreta"
 set "T_AYU1_22=('assign' solo = letra libre)"
 set "T_AYU1_23=exit                         salir de diskpart"
@@ -4722,7 +4762,7 @@ set "T_COM_19=   Indique el número de disco:  "
 set "T_COM_24=   ¿Qué hacemos? [1=Corregir / 2=Continuar / 3=Cancelar]:  "
 set "T_COM_25=VERIFICACIÓN FINAL: este es el estado ACTUAL del equipo."
 set "T_COM_26=[Ayuda] Cómo comprobar el resultado:"
-set "T_COM_27=en 'list volume', un volumen SISTEMA en NTFS con su letra."
+set "T_COM_27=en 'list volume', un volumen SYSTEM en NTFS con su letra."
 set "T_COM_28=(sin particiones ni volúmenes). Eso es lo correcto."
 set "T_COM_29=- Si el disco no muestra el resultado esperado, revisa el aviso"
 set "T_COM_30=que dio diskpart antes de repetir cualquier operación."
@@ -4760,7 +4800,7 @@ set "T_D1_13=Todo lo que hubiera en él dejará de ser visible de inmediato."
 set "T_D1_14=Siguiente: se carga el listado de discos con diskpart (solo lectura)..."
 set "T_D1_15=[1] OPERACIONES SOBRE DISCOS Y PARTICIONES - RESUMEN Y CONFIRMACIÓN"
 set "T_D1_16=Acción:         borrar la tabla de particiones y crear una única"
-set "T_D1_17=partición NTFS (GPT o MBR elegido por el técnico) con etiqueta SISTEMA."
+set "T_D1_17=partición NTFS (GPT o MBR elegido por el técnico) con etiqueta "
 set "T_D1_18=ejecución. La protección de arranque bloquea el disco del sistema"
 set "T_D1_19=cuando consigue identificarlo; si arriba no aparece como protegido,"
 set "T_D1_20=el riesgo es tuyo: ante la mínima duda, cancela (letra C:)."
@@ -4769,7 +4809,7 @@ set "T_D1_23=- Maquetación (opción 1): el Disco"
 set "T_D1_24=[!] Estás en Windows COMPLETO, no en WinPE: hay un sistema en"
 set "T_D1_25=debe mostrar Gpt y,"
 set "T_D1_27=  3) create partition primary"
-set "T_D1_28=  4) format fs=ntfs quick label=SISTEMA"
+set "T_D1_28=  4) format fs=ntfs quick label=SYSTEM"
 set "T_D1_29=  5) assign (letra libre que Windows elija)"
 set "T_D2_01=[2] BORRADO SEGURO / SANITIZACIÓN"
 set "T_D2_12=[2] BORRADO SEGURO - RESUMEN Y CONFIRMACIÓN"
@@ -4894,8 +4934,8 @@ set "T_DIAG_13=La letra debe ser una unidad montada (C:, D:, E:...)."
 set "T_DIAG_14=   Letra de unidad (ej. C):  "
 set "T_DIAG_15=Unidad seleccionada:"
 set "T_DIAG_16=  [1] Análisis rápido (/scan)      no desmonta la unidad"
-set "T_DIAG_17=  [2] Reparar errores (/f)         puede pedir reinicio"
-set "T_DIAG_18=  [3] Reparar + sectores (/f /r)   muy lento, para HDD"
+set "T_DIAG_17=  [2] Reparar errores (/f /x)      desmonta la unidad primero"
+set "T_DIAG_18=  [3] Reparar + sectores (/f /x /r)  muy lento, para HDD"
 set "T_DIAG_20=   Modo [1-3]:  "
 set "T_DIAG_21=   ¿Ejecutar chkdsk con estas opciones? [S/N]:  "
 set "T_DIAG_22=Comando:"
@@ -4934,10 +4974,9 @@ set "T_FW_02=Firmware detectado:"
 set "T_FW_03=Esquema de particionado:"
 set "T_FW_05=[!] Firmware SIN VERIFICAR (ni registro ni BCD): elige el esquema."
 set "T_FW_06=   Esquema [1=GPT / 2=MBR]:  "
-set "T_FW_08=   Elige el esquema manualmente (no se aplica ninguno automaticamente):"
 set "T_FW_09=     [1] GPT  -  recomendado para UEFI"
 set "T_FW_10=     [2] MBR  -  recomendado para BIOS Legacy"
-set "T_FW_11= [M] Menú principal"
+set "T_FW_11=A = Paso anterior   ^|   M = Menú principal"
 set "T_DP_01=EJECUTANDO DISKPART. No pulses teclas, no cierres la ventana y no"
 set "T_DP_02=apagues el equipo mientras el comando esté en curso."
 set "T_DP_03=Nota: diskpart escribe en el idioma del sistema. Si ves caracteres"
@@ -4951,11 +4990,12 @@ set "T_MENU_06=[5]  Ayuda y documentación técnica            manual y guía de
 set "T_MENU_15=[6]  Herramientas y utilidades de terceros    sección en desarrollo"
 set "T_MENU_16=[7]  Apagar o reiniciar el equipo"
 set "T_MENU_07=Aviso: [1] y [2] modifican DISCOS de verdad y piden DOS confirmaciones"
-set "T_MENU_08=seguidas con una tecla S/N. Las opciones [3] a [7] no tocan el hardware solas."
+set "T_MENU_08=        seguidas con una tecla S/N. Las opciones [3] a [7] no tocan el hardware solas."
 set "T_MENU_11=   Su opción [1-7]:  "
 set "T_MENU_12=Fecha y hora:"
 set "T_MENU_13=Modo de entrada:"
 set "T_MENU_14=Firmware:"
+set "T_MENU_17=Registro BCD:"
 set "T_TER_01=[6] HERRAMIENTAS Y UTILIDADES DE TERCEROS"
 set "T_TER_02=En desarrollo: se integrarán herramientas portables en una próxima versión."
 set "T_TER_03=  - Recuperación de datos: rescatar archivos de discos dañados o formateados."
@@ -5104,7 +5144,7 @@ set "T_AYU1_16=convert mbr                  converts the disk to MBR layout"
 set "T_AYU1_17=create partition primary     creates one primary partition"
 set "T_AYU1_18=(optional: size=100000 in MB)"
 set "T_AYU1_19=format fs=ntfs quick         quick NTFS format"
-set "T_AYU1_20=(optional: label=SISTEMA)"
+set "T_AYU1_20=(optional: label=SYSTEM)"
 set "T_AYU1_21=assign letter=Z              assigns a specific drive letter"
 set "T_AYU1_22=('assign' alone = next free letter)"
 set "T_AYU1_23=exit                         leaves diskpart"
@@ -5204,7 +5244,7 @@ set "T_COM_19=   Enter the disk number:  "
 set "T_COM_24=   What do we do? [1=Fix / 2=Continue / 3=Cancel]:  "
 set "T_COM_25=FINAL CHECK: this is the CURRENT state of the machine."
 set "T_COM_26=[Help] How to check the result:"
-set "T_COM_27=in 'list volume', a SISTEMA volume in NTFS with its letter."
+set "T_COM_27=in 'list volume', a SYSTEM volume in NTFS with its letter."
 set "T_COM_28=(with no partitions or volumes). That is correct."
 set "T_COM_29=- If the disk does not show the expected result, check the"
 set "T_COM_30=warning diskpart gave before repeating any operation."
@@ -5242,7 +5282,7 @@ set "T_D1_13=Everything on it stops being visible immediately."
 set "T_D1_14=Next: the disk listing is loaded with diskpart (read only)..."
 set "T_D1_15=[1] DISK AND PARTITION OPERATIONS - SUMMARY AND CONFIRMATION"
 set "T_D1_16=Action:         erase the partition table and create one single"
-set "T_D1_17=NTFS partition (GPT or MBR chosen by the technician) with SISTEMA label."
+set "T_D1_17=NTFS partition (GPT or MBR chosen by the technician) with label "
 set "T_D1_18=here. The boot protection blocks the system disk when it"
 set "T_D1_19=can identify it; if it does not appear as protected above,"
 set "T_D1_20=the risk is yours: at the slightest doubt, cancel (drive C:)."
@@ -5251,7 +5291,7 @@ set "T_D1_23=- Layout (option 1): Disk"
 set "T_D1_24=[!] You are in FULL Windows, not in WinPE: a system is running"
 set "T_D1_25=must show Gpt and,"
 set "T_D1_27=  3) create partition primary"
-set "T_D1_28=  4) format fs=ntfs quick label=SISTEMA"
+set "T_D1_28=  4) format fs=ntfs quick label=SYSTEM"
 set "T_D1_29=  5) assign (free letter chosen by Windows)"
 set "T_D2_01=[2] SECURE ERASE / SANITIZATION"
 set "T_D2_12=[2] SECURE ERASE - SUMMARY AND CONFIRMATION"
@@ -5376,8 +5416,8 @@ set "T_DIAG_13=The letter must be a mounted drive (C:, D:, E:...)."
 set "T_DIAG_14=   Drive letter (e.g. C):  "
 set "T_DIAG_15=Selected drive:"
 set "T_DIAG_16=  [1] Quick scan (/scan)          does not dismount the drive"
-set "T_DIAG_17=  [2] Repair errors (/f)          may ask for a restart"
-set "T_DIAG_18=  [3] Repair + sectors (/f /r)    very slow, for HDD"
+set "T_DIAG_17=  [2] Repair errors (/f /x)       dismounts the drive first"
+set "T_DIAG_18=  [3] Repair + sectors (/f /x /r)  very slow, for HDD"
 set "T_DIAG_20=   Mode [1-3]:  "
 set "T_DIAG_21=   Run chkdsk with these options? [Y/N]:  "
 set "T_DIAG_22=Command:"
@@ -5416,10 +5456,9 @@ set "T_FW_02=Detected firmware:"
 set "T_FW_03=Partition layout:"
 set "T_FW_05=[!] Firmware UNVERIFIED (no registry or BCD): choose the layout."
 set "T_FW_06=   Layout [1=GPT / 2=MBR]:  "
-set "T_FW_08=   Choose the layout manually (nothing is applied automatically):"
 set "T_FW_09=     [1] GPT  -  recommended for UEFI"
 set "T_FW_10=     [2] MBR  -  recommended for BIOS Legacy"
-set "T_FW_11= [M] Main menu"
+set "T_FW_11=A = Previous step   ^|   M = Main menu"
 set "T_DP_01=RUNNING DISKPART. Do not press keys, do not close the window and"
 set "T_DP_02=do not power off the machine while the command is running."
 set "T_DP_03=Note: diskpart writes in the system language. If you see strange"
@@ -5433,11 +5472,12 @@ set "T_MENU_06=[5]  Help and technical documentation         manual and technici
 set "T_MENU_15=[6]  Third-party tools and utilities          work in progress"
 set "T_MENU_16=[7]  Shut down or restart the computer"
 set "T_MENU_07=Warning: [1] and [2] really modify DISKS and ask for TWO"
-set "T_MENU_08=confirmations in a row with a single key (Y/N). Options [3] to [7] touch no hardware alone."
+set "T_MENU_08=        confirmations in a row with a single key (Y/N). Options [3] to [7] touch no hardware alone."
 set "T_MENU_11=   Your option [1-7]:  "
 set "T_MENU_12=Date and time:"
 set "T_MENU_13=Input mode:"
 set "T_MENU_14=Firmware:"
+set "T_MENU_17=BCD registry:"
 set "T_TER_01=[6] THIRD-PARTY TOOLS AND UTILITIES"
 set "T_TER_02=Work in progress: portable tools will be integrated in a future version."
 set "T_TER_03=  - Data recovery: rescue files from damaged or formatted disks."

@@ -86,6 +86,7 @@ echo.
 echo  JAH-WinPe: arrancando el menu desde  %MENU_RUTA%
 echo.
 REM  Se abre una consola NUEVA para que nazca con la fuente configurada.
+REM  /max inicia la ventana maximizada (pantalla completa) por defecto.
 REM  /wait mantiene startnet vivo y, al cerrar menu.bat, se reinicia.
 start "JAH-WinPe" /max /wait cmd /c "%MENU_RUTA%"
 if errorlevel 1 goto LANZAR_ACTUAL
