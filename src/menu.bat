@@ -79,7 +79,7 @@ REM                -^> [2] OP_SANITIZAR ..... borrado 3 NIVELES: clean/TRIM/clea
 REM                -^> [3] OP_INVENTARIO ... diagnostico y salud de hardware
 REM                -^> [4] OP_CONSOLA ....... consola de comandos (CMD)
 REM                -^> [5] OP_AYUDA ......... ayuda y documentacion tecnica
-REM                -^> [6] OP_TERCEROS ..... herramientas de terceros (en desarrollo)
+REM                -^> [6] OP_UTILIDADES ... herramientas y utilidades (USB)
 REM                -^> [7] OP_SALIR ......... apagar o reiniciar el equipo
 REM    FIN_SCRIPT  -^> salida limpia del script
 REM    FIN_APAGADO -^> salida tras solicitar el apagado
@@ -619,7 +619,7 @@ REM dentro de bloques (que exigen expansion retrasada).
 REM
 REM ALTERNATIVA classica, si despacharamos directamente con choice:
 REM     if errorlevel 7 goto OP_SALIR
-REM     if errorlevel 6 goto OP_TERCEROS
+REM     if errorlevel 6 goto OP_UTILIDADES
 REM     if errorlevel 5 goto OP_AYUDA
 REM     ...siempre de MAYOR a MENOR, porque 'if errorlevel N' significa
 REM     "errorlevel MAYOR O IGUAL que N" y no "igual a N".
@@ -630,7 +630,7 @@ if "%OPCION%"=="2" goto OP_SANITIZAR
 if "%OPCION%"=="3" goto OP_INVENTARIO
 if "%OPCION%"=="4" goto OP_CONSOLA
 if "%OPCION%"=="5" goto OP_AYUDA
-if "%OPCION%"=="6" goto OP_TERCEROS
+if "%OPCION%"=="6" goto OP_UTILIDADES
 if "%OPCION%"=="7" goto OP_SALIR
 
 REM Si llegamos aqui, la entrada no fue un digito valido del 1 al 7.
@@ -979,33 +979,179 @@ if "%AYU_DESTINO%"=="MENU" goto MENU
 goto OP_AYUDA
 
 REM =====================================================================
-REM  PASO 9.1 - OPCION [6] HERRAMIENTAS DE TERCEROS (contenedor)
+REM  PASO 9.1 - OPCION [6] HERRAMIENTAS Y UTILIDADES (hot-plug USB)
 REM =====================================================================
-REM  Pantalla informativa: de momento NO ejecuta binarios externos. A y M
-REM  vuelven siempre al menu principal, de modo que esta pantalla no puede
-REM  caer nunca a un prompt de System32.
+REM  Las utilidades pesadas NO viajan en la RAM: permanecen en el pendrive
+REM  USB. Al entrar aqui se detecta el dispositivo en caliente; si no esta,
+REM  se pide que se conecte y se reintenta. Si esta, se listan los .exe,
+REM  .bat y .cmd de la carpeta Tools y se ejecutan directamente desde el USB.
 REM =====================================================================
-:OP_TERCEROS
+:OP_UTILIDADES
 cls
+call :CONSOLA_LARGA
 call :MOSTRAR_CABECERA
 echo(
-echo   %C_VERDE%%T_TER_01%%C_FIN%
+echo   %C_VERDE%%T_UTL_01%%C_FIN%
 echo   %C_VERDE%------------------------------------------------------------------%C_FIN%
 echo(
-echo   %C_VERDE%%T_TER_02%%C_FIN%
-echo(
-echo     %C_BLANCO%%T_TER_03%%C_FIN%
-echo     %C_BLANCO%%T_TER_04%%C_FIN%
-echo     %C_BLANCO%%T_TER_05%%C_FIN%
-echo(
-echo   %C_BLANCO%%T_TER_06%%C_FIN%
+echo   %T_UTL_02%
 echo(
 echo   %C_VERDE%%T_COM_56%%C_FIN%
 echo(
-call :LEER_OPCION "%T_TER_07%" "1" M A
-REM A (paso anterior) y M (menu principal) regresan al MENU. Cualquier
-REM otra salida de la captura tambien vuelve aqui: no hay caida a System32.
-goto MENU
+call :DETECTAR_USB_UTILIDADES
+if not "%UTILIDADES_OK%"=="SI" goto OP_UTILIDADES_SIN_USB
+call :LISTAR_UTILIDADES
+if "%UTILIDADES_COUNT%"=="0" goto OP_UTILIDADES_VACIA
+call :ELEGIR_UTILIDAD
+goto OP_UTILIDADES
+
+:OP_UTILIDADES_SIN_USB
+cls
+call :MOSTRAR_CABECERA
+echo(
+echo   %C_AMARILLO%%T_UTL_03%%C_FIN%
+echo(
+echo   %T_UTL_04%
+echo(
+echo   %C_VERDE%%T_COM_56%%C_FIN%
+echo(
+set "UTL_TECLA="
+set /p "UTL_TECLA=%C_VERDE%%T_UTL_11%%C_FIN%"
+if not defined UTL_TECLA goto OP_UTILIDADES
+set "UTL_TECLA=%UTL_TECLA:"=%"
+set "UTL_TECLA=%UTL_TECLA: =%"
+if /i "%UTL_TECLA%"=="M" goto MENU
+goto OP_UTILIDADES
+
+:OP_UTILIDADES_VACIA
+cls
+call :MOSTRAR_CABECERA
+echo(
+echo   %C_AMARILLO%%T_UTL_05%%C_FIN%
+echo(
+echo   %C_VERDE%%T_COM_56%%C_FIN%
+echo(
+call :PULSA_TECLA "%T_UTL_10%"
+goto OP_UTILIDADES
+
+REM ---------------------------------------------------------------------
+REM  DETECTAR_USB_UTILIDADES - busca el pendrive con la carpeta Tools.
+REM  -------------------------------------------------------------------
+REM  Escanea todas las unidades (excepto X:, la RAM de WinPE) buscando:
+REM    <letra>:\JAH-WinPe\Tools  (estructura estandar)
+REM    <letra>:\JAH\Tools        (compatibilidad con estructura anterior)
+REM  La primera coincidencia fija UTILIDADES_PATH y UTILIDADES_OK=SI.
+REM  El nombre raiz del USB se puede heredar por entorno (JAH_USB_NOMBRE);
+REM  si no existe, se prueban ambos nombres.
+REM ---------------------------------------------------------------------
+:DETECTAR_USB_UTILIDADES
+REM  Si el llamante ya fijo una ruta (test/harness) no la sobreescribimos.
+if "%UTILIDADES_OK%"=="SI" if defined UTILIDADES_PATH exit /b 0
+set "UTILIDADES_OK=NO"
+set "UTILIDADES_PATH="
+set "JAH_USB_NOMBRE_LOCAL=%JAH_USB_NOMBRE%"
+if not defined JAH_USB_NOMBRE_LOCAL set "JAH_USB_NOMBRE_LOCAL=JAH-WinPe"
+for %%L in (A B C D E F G H I J K L M N O P Q R S T U V W Y Z) do (
+    if not defined UTILIDADES_PATH (
+        if /i not "%%L:"=="X:" (
+            if exist "%%L:\%JAH_USB_NOMBRE_LOCAL%\Tools\" set "UTILIDADES_PATH=%%L:\%JAH_USB_NOMBRE_LOCAL%\Tools"
+            if not defined UTILIDADES_PATH if exist "%%L:\JAH-WinPe\Tools\" set "UTILIDADES_PATH=%%L:\JAH-WinPe\Tools"
+            if not defined UTILIDADES_PATH if exist "%%L:\JAH\Tools\" set "UTILIDADES_PATH=%%L:\JAH\Tools"
+        )
+    )
+)
+if defined UTILIDADES_PATH set "UTILIDADES_OK=SI"
+exit /b 0
+
+REM ---------------------------------------------------------------------
+REM  LISTAR_UTILIDADES - enumera .exe/.bat/.cmd de UTILIDADES_PATH.
+REM  -------------------------------------------------------------------
+REM  Rellena UTILIDADES_COUNT y UTIL_N_1..UTIL_N_N. Solo el primer nivel;
+REM  carpetas tambien se listan (por si una utilidad es portable en una
+REM  carpeta con su lanzador). Se limita a 30 entradas para no desbordar.
+REM ---------------------------------------------------------------------
+:LISTAR_UTILIDADES
+set "UTILIDADES_COUNT=0"
+set "UTIL_N_1="
+if not exist "%UTILIDADES_PATH%" exit /b 0
+for %%F in ("%UTILIDADES_PATH%\*.exe" "%UTILIDADES_PATH%\*.bat" "%UTILIDADES_PATH%\*.cmd") do (
+    call :AGREGAR_UTILIDAD "%%~nxF"
+)
+for /d %%D in ("%UTILIDADES_PATH%\*") do call :AGREGAR_UTILIDAD "%%~nxD\"
+exit /b 0
+
+:AGREGAR_UTILIDAD
+if %UTILIDADES_COUNT% geq 30 exit /b 0
+set /a UTILIDADES_COUNT+=1
+set "UTIL_N_%UTILIDADES_COUNT%=%~1"
+exit /b 0
+
+REM ---------------------------------------------------------------------
+REM  ELEGIR_UTILIDAD - muestra la lista y ejecuta la elegida.
+REM ---------------------------------------------------------------------
+:ELEGIR_UTILIDAD
+cls
+call :MOSTRAR_CABECERA
+echo(
+echo   %C_VERDE%%T_UTL_01%%C_FIN%
+echo   %C_VERDE%------------------------------------------------------------------%C_FIN%
+echo(
+echo   %T_UTL_06%
+echo(
+for /L %%I in (1,1,%UTILIDADES_COUNT%) do (
+    call :MOSTRAR_UTILIDAD_LINEA %%I
+)
+echo(
+echo   %C_VERDE%%T_COM_56%%C_FIN%
+echo(
+set "UTL_ELEGIDA="
+set /p "UTL_ELEGIDA=%C_VERDE%%T_UTL_07%%C_FIN%"
+if not defined UTL_ELEGIDA goto OP_UTILIDADES
+set "UTL_ELEGIDA=%UTL_ELEGIDA:"=%"
+set "UTL_ELEGIDA=%UTL_ELEGIDA: =%"
+if /i "%UTL_ELEGIDA%"=="M" goto MENU
+set "UTL_NUM="
+for /f "delims=0123456789" %%a in ("%UTL_ELEGIDA%") do set "UTL_NUM=%%a"
+if defined UTL_NUM (
+    echo   %C_AMARILLO%%T_UTL_09%%C_FIN%
+    call :PULSA_TECLA "%T_UTL_10%"
+    goto ELEGIR_UTILIDAD
+)
+set /a UTL_IDX=%UTL_ELEGIDA% 2>nul
+if "%UTL_IDX%"=="0" goto ELEGIR_UTILIDAD
+if %UTL_IDX% lss 1 goto ELEGIR_UTILIDAD
+if %UTL_IDX% gtr %UTILIDADES_COUNT% (
+    echo   %C_AMARILLO%%T_UTL_09%%C_FIN%
+    call :PULSA_TECLA "%T_UTL_10%"
+    goto ELEGIR_UTILIDAD
+)
+call :EJECUTAR_UTILIDAD %UTL_IDX%
+goto OP_UTILIDADES
+
+:MOSTRAR_UTILIDAD_LINEA
+set "UTL_IDX_L=%~1"
+call set "UTL_LINEA=%%UTIL_N_%UTL_IDX_L%%%"
+echo      [%1] %UTL_LINEA%
+exit /b 0
+
+:EJECUTAR_UTILIDAD
+set "UTL_NOMBRE="
+set "UTL_IDX_E=%~1"
+call set "UTL_NOMBRE=%%UTIL_N_%UTL_IDX_E%%%"
+if not defined UTL_NOMBRE exit /b 0
+set "UTL_RUTA=%UTILIDADES_PATH%\%UTL_NOMBRE%"
+echo(
+echo   %T_UTL_08% %UTL_NOMBRE%
+echo   %C_VERDE%%T_COM_56%%C_FIN%
+echo(
+REM  Si es un .bat/.cmd lo ejecutamos dentro de la misma consola para no
+REM  dejar ventanas huerfanas; los .exe se lanzan con start en su carpeta.
+if /i "%UTL_NOMBRE:~-4%"==".bat" call "%UTL_RUTA%" & goto EJECUTAR_UTILIDAD_FIN
+if /i "%UTL_NOMBRE:~-4%"==".cmd" call "%UTL_RUTA%" & goto EJECUTAR_UTILIDAD_FIN
+start "" /d "%UTILIDADES_PATH%" "%UTL_RUTA%"
+:EJECUTAR_UTILIDAD_FIN
+call :PULSA_TECLA "%T_UTL_10%"
+exit /b 0
 
 REM =====================================================================
 REM  PASO 10 - OPCION [7] SALIR / APAGAR EQUIPO
@@ -1168,7 +1314,10 @@ echo   %C_VERDE%%T_LOG_03%%C_FIN%
 if "%MODO_ENTRADA%"=="CHOICE" goto PULSA_TECLA_LOG_CHOICE
 :PULSA_TECLA_LOG_BUCLE
 set "TECLA_LOG="
-set /p "TECLA_LOG=%C_VERDE%%T_LOG_04%%C_FIN%"
+REM  El prompt se imprime en una linea aparte (sin codigos ANSI) para evitar
+REM  que la combinacion de colores + acentos desplace el caracter tecleado
+REM  a la izquierda o lo muestre "dado la vuelta" en consolas RTL/bidi.
+set /p "TECLA_LOG=%T_LOG_04%"
 if not defined TECLA_LOG goto PULSA_TECLA_LOG_BUCLE
 set "TECLA_LOG=%TECLA_LOG:"=%"
 if not defined TECLA_LOG goto PULSA_TECLA_LOG_BUCLE
@@ -1177,11 +1326,10 @@ if /i "%TECLA_LOG%"=="M" exit /b 0
 if /i "%TECLA_LOG%"=="L" goto PULSA_TECLA_LOG_VER
 goto PULSA_TECLA_LOG_BUCLE
 :PULSA_TECLA_LOG_CHOICE
-REM  En modo choice, M/L se capturan sin ENTER y sin eco: imprimimos el
-REM  prompt con 'set /p <nul' y mandamos la salida de choice a NUL. Asi
-REM  'l' y 'L' (igual que 'm' y 'M') no dejan caracteres ni restos
-REM  graficos sobre la linea; choice sigue leyendo del teclado.
-set /p "TECLA_LOG=%C_VERDE%%T_LOG_04%%C_FIN%" <nul
+REM  En modo choice, M/L se capturan sin ENTER y sin eco. Imprimimos el
+REM  prompt en una linea plana (sin ANSI) para evitar que el caracter
+REM  tecleado aparezca reflejado o desplazado en consolas RTL/bidi.
+echo   %T_LOG_04%
 choice /c ML /n >nul 2>&1
 if "%errorlevel%"=="0" goto PULSA_TECLA_LOG_MENU
 if "%errorlevel%"=="255" goto PULSA_TECLA_LOG_MENU
@@ -5019,7 +5167,7 @@ set "T_MENU_03=[2]  Sanitización y borrado seguro            3 niveles (estruct
 set "T_MENU_04=[3]  Diagnóstico y salud de hardware          consulta sin modificar nada"
 set "T_MENU_05=[4]  Consola de comandos                      CMD interactivo"
 set "T_MENU_06=[5]  Ayuda y documentación técnica            manual y guía del técnico"
-set "T_MENU_15=[6]  Herramientas y utilidades de terceros    sección en desarrollo"
+set "T_MENU_15=[6]  Herramientas y Utilidades                 ejecuta desde USB"
 set "T_MENU_16=[7]  Apagar o reiniciar el equipo"
 set "T_MENU_07=Aviso: [1] y [2] modifican DISCOS de verdad y piden DOS confirmaciones"
 set "T_MENU_08=        seguidas con una tecla S/N. Las opciones [3] a [7] no tocan el hardware solas."
@@ -5028,13 +5176,17 @@ set "T_MENU_12=Fecha y hora:"
 set "T_MENU_13=Modo de entrada:"
 set "T_MENU_14=Firmware:"
 set "T_MENU_17=Registro BCD:"
-set "T_TER_01=[6] HERRAMIENTAS Y UTILIDADES DE TERCEROS"
-set "T_TER_02=En desarrollo: se integrarán herramientas portables en una próxima versión."
-set "T_TER_03=  - Recuperación de datos: rescatar archivos de discos dañados o formateados."
-set "T_TER_04=  - Gestión BCD: reparar o reconstruir el arranque de Windows."
-set "T_TER_05=  - Análisis avanzado: clonado, particionado y diagnóstico de discos."
-set "T_TER_06=De momento no se ejecuta ninguna herramienta: esta pantalla es solo informativa."
-set "T_TER_07=   Su opción [A/M]:  "
+set "T_UTL_01=[6] HERRAMIENTAS Y UTILIDADES"
+set "T_UTL_02=Conecte el pendrive USB de JAH-WinPe para listar y ejecutar utilidades."
+set "T_UTL_03=[!] Dispositivo USB no detectado."
+set "T_UTL_04=Conecte el pendrive y pulse una tecla para reintentar, o teclee M para volver al menu."
+set "T_UTL_05=No se encontraron utilidades en la carpeta Tools del pendrive."
+set "T_UTL_06=Utilidades disponibles:"
+set "T_UTL_07=   Su opcion [Numero / M]:  "
+set "T_UTL_08=Ejecutando:"
+set "T_UTL_09=[!] Opcion no valida."
+set "T_UTL_10=Pulsa una tecla para continuar..."
+set "T_UTL_11=   [M] Menu  /  otra tecla = reintentar:  "
 set "T_LOG_01=Registro (log): PERSISTENTE en"
 set "T_LOG_02=Registro (log): solo en RAM (se perdera al reiniciar):"
 set "T_LOG_03= [M] Menú principal   ^|   [L] Ver registro de logs (Log)"
@@ -5501,7 +5653,7 @@ set "T_MENU_03=[2]  Sanitization and secure erase            3 levels (structure
 set "T_MENU_04=[3]  Hardware diagnostics and health          read-only machine info"
 set "T_MENU_05=[4]  Command console                          interactive CMD"
 set "T_MENU_06=[5]  Help and technical documentation         manual and technician guide"
-set "T_MENU_15=[6]  Third-party tools and utilities          work in progress"
+set "T_MENU_15=[6]  Tools and Utilities                      run from USB"
 set "T_MENU_16=[7]  Shut down or restart the computer"
 set "T_MENU_07=Warning: [1] and [2] really modify DISKS and ask for TWO"
 set "T_MENU_08=        confirmations in a row with a single key (Y/N). Options [3] to [7] touch no hardware alone."
@@ -5510,13 +5662,17 @@ set "T_MENU_12=Date and time:"
 set "T_MENU_13=Input mode:"
 set "T_MENU_14=Firmware:"
 set "T_MENU_17=BCD registry:"
-set "T_TER_01=[6] THIRD-PARTY TOOLS AND UTILITIES"
-set "T_TER_02=Work in progress: portable tools will be integrated in a future version."
-set "T_TER_03=  - Data recovery: rescue files from damaged or formatted disks."
-set "T_TER_04=  - BCD management: repair or rebuild the Windows boot."
-set "T_TER_05=  - Advanced analysis: cloning, partitioning and disk diagnostics."
-set "T_TER_06=No tool is executed yet: this screen is informative only."
-set "T_TER_07=   Your option [A/M]:  "
+set "T_UTL_01=[6] TOOLS AND UTILITIES"
+set "T_UTL_02=Connect the JAH-WinPe USB drive to list and run utilities."
+set "T_UTL_03=[!] USB device not detected."
+set "T_UTL_04=Connect the USB drive and press any key to retry, or type M to return to the menu."
+set "T_UTL_05=No utilities were found in the Tools folder on the USB drive."
+set "T_UTL_06=Available utilities:"
+set "T_UTL_07=   Your option [Number / M]:  "
+set "T_UTL_08=Running:"
+set "T_UTL_09=[!] Invalid option."
+set "T_UTL_10=Press any key to continue..."
+set "T_UTL_11=   [M] Menu  /  any other key = retry:  "
 set "T_LOG_01=Activity log: PERSISTENT at"
 set "T_LOG_02=Activity log: RAM only (lost on reboot):"
 set "T_LOG_03= [M] Main menu   ^|   [L] View activity log (Log)"
